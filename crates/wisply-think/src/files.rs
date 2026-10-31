@@ -1,26 +1,10 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
-pub const SKIP_DIRS: &[&str] = &[
-    ".git",
-    "target",
-    "build",
-    "out",
-    "dist",
-    "node_modules",
-    ".gradle",
-    ".idea",
-    ".vscode",
-    "__pycache__",
-    ".venv",
-    "venv",
-    ".mvn",
-    ".pytest_cache",
-    ".next",
-    "coverage",
-    ".claude",
-];
+pub const SKIP_DIRS: &[&str] = &["target", "build", "out", "dist", "node_modules", "__pycache__", "venv", "coverage"];
+const KEEP_DOT_DIRS: &[&str] = &[".github"];
 pub const CODE_EXT: &[&str] =
     &["rs", "java", "kt", "py", "js", "ts", "tsx", "jsx", "mjs", "cjs", "go", "cs", "lua", "vue", "svelte", "sh"];
 pub const WEB_EXT: &[&str] = &["html", "htm", "css", "scss", "vue", "svelte", "jsx", "tsx"];
@@ -75,8 +59,74 @@ const MARKERS: &[&str] = &[
     "fabric.mod.json",
     ".git",
 ];
-const WALK_MAX: usize = 20_000;
+pub const WALK_MAX: usize = 20_000;
 const READ_MAX: u64 = 2_000_000;
+
+#[derive(Clone)]
+struct Ignore {
+    pat: String,
+    ext: bool,
+    dir_only: bool,
+    keep: bool,
+    anchored: bool,
+}
+
+fn parse_ignore(text: &str) -> Vec<Ignore> {
+    let glob = ['*', '?', '[', '/', '\\'];
+    text.lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            if l.is_empty() || l.starts_with('#') {
+                return None;
+            }
+            let (keep, l) = l.strip_prefix('!').map_or((false, l), |r| (true, r));
+            let (dir_only, l) = l.strip_suffix('/').map_or((false, l), |r| (true, r));
+            let l = l.strip_prefix("**/").unwrap_or(l);
+            let (anchored, l) = l.strip_prefix('/').map_or((false, l), |r| (true, r));
+            if let Some(e) = l.strip_prefix("*.")
+                && !e.is_empty()
+                && !e.contains(glob)
+            {
+                return Some(Ignore { pat: format!(".{e}"), ext: true, dir_only, keep, anchored });
+            }
+            (!l.is_empty() && !l.contains(glob)).then(|| Ignore {
+                pat: l.to_string(),
+                ext: false,
+                dir_only,
+                keep,
+                anchored,
+            })
+        })
+        .collect()
+}
+
+fn ignored(list: &[Ignore], name: &str, dir: bool) -> bool {
+    list.iter()
+        .rev()
+        .find(|i| (!i.dir_only || dir) && if i.ext { name.ends_with(&i.pat) } else { name == i.pat })
+        .is_some_and(|i| !i.keep)
+}
+
+type Rules = Rc<Vec<Ignore>>;
+
+fn with_local(dir: &Path, names: &[(PathBuf, String, bool)], up: &Rules) -> (Rules, Rules) {
+    let has = |n: &str, d: bool| names.iter().any(|(_, name, is_dir)| name == n && *is_dir == d);
+    let mut extra = Vec::new();
+    for (on, file) in [
+        (has(".git", true), dir.join(".git").join("info").join("exclude")),
+        (has(".gitignore", false), dir.join(".gitignore")),
+    ] {
+        if on && let Ok(t) = fs::read_to_string(file) {
+            extra.extend(parse_ignore(&t));
+        }
+    }
+    if extra.is_empty() {
+        return (Rc::clone(up), Rc::clone(up));
+    }
+    let here: Vec<Ignore> = up.iter().chain(&extra).cloned().collect();
+    let down: Vec<Ignore> = up.iter().chain(extra.iter().filter(|i| !i.anchored)).cloned().collect();
+    (Rc::new(here), Rc::new(down))
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum Pack {
@@ -136,27 +186,37 @@ pub fn has_ext(p: &Path, list: &[&str]) -> bool {
 
 pub fn walk(paths: &[PathBuf]) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    let mut todo: Vec<PathBuf> = paths.to_vec();
-    while let Some(p) = todo.pop() {
+    let mut todo: Vec<(PathBuf, Rules)> = Vec::new();
+    for p in paths {
+        if p.is_file() {
+            out.push(p.clone());
+        } else {
+            todo.push((p.clone(), Rc::default()));
+        }
+    }
+    while let Some((dir, up)) = todo.pop() {
         if out.len() >= WALK_MAX {
             break;
         }
-        if p.is_file() {
-            out.push(p);
-            continue;
-        }
-        let Ok(list) = fs::read_dir(&p) else { continue };
-        for e in list.flatten() {
-            let path = e.path();
-            let name = e.file_name().to_string_lossy().to_string();
-            match e.file_type() {
-                Ok(t) if t.is_dir() => {
-                    if !SKIP_DIRS.contains(&name.as_str()) {
-                        todo.push(path);
-                    }
-                }
-                Ok(t) if t.is_file() => out.push(path),
-                _ => {}
+        let Ok(list) = fs::read_dir(&dir) else { continue };
+        let names: Vec<(PathBuf, String, bool)> = list
+            .flatten()
+            .filter_map(|e| {
+                let t = e.file_type().ok()?;
+                (t.is_dir() || t.is_file()).then(|| (e.path(), e.file_name().to_string_lossy().to_string(), t.is_dir()))
+            })
+            .collect();
+        let (here, down) = with_local(&dir, &names, &up);
+        for (path, name, is_dir) in names {
+            if ignored(&here, &name, is_dir) {
+                continue;
+            }
+            if !is_dir {
+                out.push(path);
+            } else if !SKIP_DIRS.contains(&name.as_str())
+                && (!name.starts_with('.') || KEEP_DOT_DIRS.contains(&name.as_str()))
+            {
+                todo.push((path, Rc::clone(&down)));
             }
         }
     }
@@ -185,6 +245,36 @@ pub fn root_of(p: &Path) -> PathBuf {
     start
 }
 
+fn workspace(d: &Path) -> bool {
+    let has = |f: &str, needle: &str| fs::read_to_string(d.join(f)).is_ok_and(|t| t.contains(needle));
+    has("Cargo.toml", "[workspace]")
+        || has("pom.xml", "<modules>")
+        || has("settings.gradle", "include")
+        || has("settings.gradle.kts", "include")
+        || has("package.json", "\"workspaces\"")
+}
+
+pub fn root_for(paths: &[PathBuf]) -> Option<PathBuf> {
+    let first = paths.first()?;
+    let mut common = if first.is_dir() { first.clone() } else { first.parent()?.to_path_buf() };
+    for p in &paths[1..] {
+        while !p.starts_with(&common) && common.pop() {}
+    }
+    let base = root_of(&common);
+    if base.join(".git").exists() {
+        return Some(base);
+    }
+    for d in base.ancestors().skip(1) {
+        if workspace(d) {
+            return Some(d.to_path_buf());
+        }
+        if d.join(".git").exists() {
+            break;
+        }
+    }
+    Some(base)
+}
+
 pub fn is_test(p: &Path) -> bool {
     let s = slashed(p).to_lowercase();
     s.contains("/tests/")
@@ -192,6 +282,10 @@ pub fn is_test(p: &Path) -> bool {
         || s.contains(".test.")
         || s.contains("_test.")
         || s.contains(".spec.")
+}
+
+pub fn is_minified(p: &Path) -> bool {
+    p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(".min."))
 }
 
 pub fn slashed(p: &Path) -> String {
@@ -303,5 +397,52 @@ mod tests {
         assert_eq!(Pack::from_name(" Web "), Some(Pack::Web));
         assert!(is_test(Path::new("crates/x/tests/a.rs")) && !is_test(Path::new("src/a.rs")));
         assert_eq!(rel(Path::new("/p"), Path::new("/p/src/a.rs")), "src/a.rs");
+    }
+
+    #[test]
+    fn walk_skips_ignored_and_dot_folders_and_roots_find_the_workspace() {
+        let base = std::env::temp_dir().join(format!("wisply-think-walk-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let put = |p: &str, body: &str| {
+            let f = base.join(p);
+            fs::create_dir_all(f.parent().unwrap()).unwrap();
+            fs::write(f, body).unwrap();
+        };
+        put("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n");
+        put(".gitignore", "# c\n/gen/\n*.log\n!keep.log\nnotes\n");
+        put(".git/info/exclude", "SPEC.md\n");
+        put(".github/workflows/ci.yml", "x");
+        put(".graphify/a.js", "x");
+        put("gen/a.rs", "x");
+        put("SPEC.md", "x");
+        put("a.log", "x");
+        put("keep.log", "x");
+        put("notes/n.md", "x");
+        put("crates/a/Cargo.toml", "[package]\n");
+        put("crates/a/src/lib.rs", "x");
+        put("crates/a/.gitignore", "lib.rs\n");
+        put("crates/b/Cargo.toml", "[package]\n");
+        put("crates/b/src/main.rs", "x");
+        put("crates/b/gen/x.rs", "x");
+        let got: Vec<String> = walk(std::slice::from_ref(&base)).iter().map(|p| rel(&base, p)).collect();
+        assert_eq!(
+            got,
+            [
+                ".github/workflows/ci.yml".to_string(),
+                ".gitignore".into(),
+                "Cargo.toml".into(),
+                "crates/a/.gitignore".into(),
+                "crates/a/Cargo.toml".into(),
+                "crates/b/Cargo.toml".into(),
+                "crates/b/gen/x.rs".into(),
+                "crates/b/src/main.rs".into(),
+                "keep.log".into(),
+            ]
+        );
+        let a = base.join("crates/a/src/lib.rs");
+        assert_eq!(root_for(std::slice::from_ref(&a)), Some(base.clone()));
+        assert_eq!(root_for(&[a, base.join("crates/b/src/main.rs")]), Some(base.clone()));
+        assert_eq!(root_of(&base.join("crates/a/src/lib.rs")), base.join("crates/a"));
+        let _ = fs::remove_dir_all(&base);
     }
 }

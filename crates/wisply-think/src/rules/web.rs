@@ -123,23 +123,21 @@ fn css(text: &str, out: &mut Vec<Finding>) {
             break;
         }
     }
+    let mut low: Vec<(f64, usize, String)> = Vec::new();
     for c in RULE.captures_iter(text) {
         let body = &c[2];
         let (Some(fg), Some(bg)) = (FG.captures(body), BG.captures(body)) else { continue };
         let Some(ratio) = contrast(&fg[1], &bg[1]) else { continue };
         if ratio < CONTRAST_MIN {
             let at = line_of(text, c.get(0).map_or(0, |m| m.start()));
-            out.push(
-                Finding::new(
-                    "contrast",
-                    Pack::Web,
-                    at,
-                    format!("{} on {} is {ratio:.1}:1 in {}", &fg[1], &bg[1], c[1].trim()),
-                    format!("make it at least {CONTRAST_MIN}:1"),
-                )
-                .rate(2, 3, 1),
-            );
+            low.push((ratio, at, format!("{} on {} is {ratio:.1}:1 in {}", &fg[1], &bg[1], c[1].trim())));
         }
+    }
+    if let Some((_, at, why)) = low.iter().min_by(|a, b| a.0.total_cmp(&b.0)) {
+        let why = if low.len() > 1 { format!("{why} (+{} more)", low.len() - 1) } else { why.clone() };
+        out.push(
+            Finding::new("contrast", Pack::Web, *at, why, format!("make it at least {CONTRAST_MIN}:1")).rate(2, 3, 1),
+        );
     }
     let important = text.matches("!important").count();
     if important > IMPORTANT_MAX {
@@ -184,6 +182,9 @@ mod tests {
         let style = ".a { color: #777; background: #888; font-size: 10px }\n.b { color: #000; background-color: #fff }";
         let got: Vec<String> = check("css", style).iter().map(|f| f.rule.clone()).collect();
         assert_eq!(got, ["tiny-font", "contrast"]);
+        let many = ".a { color: #777; background: #888 }\n.b { color: #fff; background: #ef4444 }\n.c { color: #000; background: #fff }";
+        let got: Vec<String> = check("css", many).iter().map(|f| f.why.clone()).collect();
+        assert_eq!(got, ["#777 on #888 is 1.3:1 in .a (+1 more)"]);
         assert!((contrast("#000", "#fff").unwrap() - 21.0).abs() < 0.01);
         assert!(
             check("html", "<html lang=en><head><meta name=\"viewport\"></head><img alt=\"\" src=a></html>").is_empty()

@@ -7,19 +7,34 @@ use super::Finding;
 use crate::files::Pack;
 
 const SENTENCE_WORDS: usize = 35;
+const GRAMMATICAL: &[&str] = &["die", "der", "das", "den", "dem", "sie", "that", "had"];
 
 static LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\]\(([^)\s]+)\)").expect("link pattern"));
 static WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[^\W\d_][\w'-]*").expect("word pattern"));
+
+fn first_lower(w: &str) -> String {
+    let mut c = w.chars();
+    c.next().map(|f| f.to_lowercase().chain(c).collect()).unwrap_or_default()
+}
+
+fn in_path(line: &str, s: usize, e: usize) -> bool {
+    line[..s].ends_with(['/', '\\'])
+        || line[e..].starts_with(['/', '\\'])
+        || line[e..].strip_prefix('.').is_some_and(|r| r.starts_with(char::is_alphanumeric))
+}
 
 pub fn repeats(line: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     let mut last: Option<(usize, usize, String)> = None;
     for m in WORD.find_iter(line) {
-        let w = m.as_str().to_lowercase();
+        let w = first_lower(m.as_str());
         if let Some((s, e, prev)) = &last
             && *prev == w
             && w.chars().count() > 1
+            && !GRAMMATICAL.contains(&w.to_lowercase().as_str())
             && line[*e..m.start()].chars().all(char::is_whitespace)
+            && !in_path(line, *s, *e)
+            && !in_path(line, m.start(), m.end())
         {
             out.push((*s, m.end()));
         }
@@ -67,19 +82,22 @@ pub fn check(path: &Path, root: &Path, text: &str) -> Vec<Finding> {
             continue;
         }
         let line = lines[i];
-        let plain = strip_code(line);
+        let plain = strip_code(line, "");
         for c in LINK.captures_iter(&plain) {
             let target = c[1].split('#').next().unwrap_or("");
             if target.is_empty() || target.contains("://") || target.starts_with("mailto:") || target.starts_with('<') {
                 continue;
             }
-            let file = if let Some(abs) = target.strip_prefix('/') { root.join(abs) } else { dir.join(target) };
+            let plain_target = decoded(target);
+            let file =
+                if let Some(abs) = plain_target.strip_prefix('/') { root.join(abs) } else { dir.join(&plain_target) };
             if !file.exists() {
                 broken.push((i + 1, target.to_string()));
             }
         }
-        if let Some((s, e)) = repeats(&plain).first() {
-            doubled.push((i + 1, plain[*s..*e].to_string()));
+        let spoken = strip_code(line, "·");
+        if let Some((s, e)) = repeats(&spoken).first() {
+            doubled.push((i + 1, spoken[*s..*e].to_string()));
         }
         let hashes = line.chars().take_while(|c| *c == '#').count();
         if hashes > 0 && line[hashes..].starts_with(' ') {
@@ -152,11 +170,36 @@ pub fn check(path: &Path, root: &Path, text: &str) -> Vec<Finding> {
     out
 }
 
-fn strip_code(line: &str) -> String {
+fn decoded(s: &str) -> String {
+    let mut out = Vec::with_capacity(s.len());
+    let mut rest = s.as_bytes();
+    while let Some((&c, tail)) = rest.split_first() {
+        let hex = tail
+            .get(..2)
+            .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|h| u8::from_str_radix(std::str::from_utf8(h).ok()?, 16).ok());
+        match hex.filter(|_| c == b'%') {
+            Some(v) => {
+                out.push(v);
+                rest = &tail[2..];
+            }
+            None => {
+                out.push(c);
+                rest = tail;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn strip_code(line: &str, mark: &str) -> String {
     let mut out = String::new();
     let mut inside = false;
     for c in line.chars() {
         if c == '`' {
+            if !inside {
+                out.push_str(mark);
+            }
             inside = !inside;
         } else if !inside {
             out.push(c);
@@ -174,9 +217,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("wisply-think-docs-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("ok.md"), "x").unwrap();
+        std::fs::write(dir.join("my notes.md"), "x").unwrap();
         let long = "word ".repeat(40);
         let text = format!(
-            "# A\n\n### C\n\nSee [ok](ok.md) and [gone](gone.md#x) and [web](https://x.y).\nThis is is wrong.\n{long}.\n```\nthe the\n```\n"
+            "# A\n\n### C\n\nSee [ok](ok.md) and [gone](gone.md#x) and [web](https://x.y) and [n](my%20notes.md).\n\
+             This is is wrong.\n{long}.\n```\nthe the\n```\n"
         );
         let got: Vec<(String, usize)> =
             check(&dir.join("README.md"), &dir, &text).into_iter().map(|f| (f.rule, f.line)).collect();
@@ -190,7 +235,17 @@ mod tests {
             ]
         );
         assert_eq!(drop_repeats("This is is wrong, the the end"), "This is wrong, the end");
+        assert_eq!(decoded("a%20b%C3%A4%+1%2"), "a bä%+1%2");
         assert!(repeats("a a b").is_empty());
+        let fine =
+            "Kinder, die die Schule besuchen. Das, was das das Team will. I know that that works. She had had enough.";
+        assert!(repeats(fine).is_empty());
+        assert_eq!(drop_repeats(fine), fine);
+        assert!(repeats(&strip_code("Don't depend on `setRespawnLocation` on Folia.", "·")).is_empty());
+        let names =
+            "tests Tests/DIWindowTests.cpp, Refs refs/backup/x, Virtual Cable CABLE Output, toggle-off/on on local";
+        assert!(repeats(names).is_empty() && repeats("open file file.txt").is_empty());
+        assert_eq!(repeats("The the end").len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

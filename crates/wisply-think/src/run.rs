@@ -153,6 +153,9 @@ impl Home {
             Some(i) => i.to_string(),
             None => self.current_id().ok_or("no run yet; start one: wisply think start \"<name>\" <path>")?,
         };
+        if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return Err(format!("run id '{id}' is not valid (wisply think runs)"));
+        }
         let dir = self.runs().join(&id);
         let raw = fs::read_to_string(dir.join("state.json"))
             .map_err(|_| format!("run {id} not found (wisply think runs)"))?;
@@ -307,20 +310,28 @@ impl Run {
         self.list("ideas").iter_mut().find(|i| int(i, "id") == id)
     }
 
+    fn idea_count(&self) -> usize {
+        self.s.get("ideas").and_then(Value::as_array).map_or(0, Vec::len)
+    }
+
     pub fn add_idea(&mut self, mut idea: Value, force: bool) -> Result<i64, String> {
-        let title = text(&idea, "title").to_string();
-        let twin = self
-            .ideas()
-            .into_iter()
-            .map(|i| (int(&i, "id"), similar(text(&i, "title"), &title)))
-            .max_by(|a, b| a.1.total_cmp(&b.1));
-        if !force
-            && let Some((id, sim)) = twin
-            && sim >= DEDUPE
-        {
-            return Err(format!("#{id}"));
+        if !force {
+            let title = text(&idea, "title");
+            let twin = self
+                .s
+                .get("ideas")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|i| (int(i, "id"), similar(text(i, "title"), title)))
+                .max_by(|a, b| a.1.total_cmp(&b.1));
+            if let Some((id, sim)) = twin
+                && sim >= DEDUPE
+            {
+                return Err(format!("#{id}"));
+            }
         }
-        let id = self.ideas().len() as i64 + 1;
+        let id = self.idea_count() as i64 + 1;
         let round = self.round();
         let p = points(&idea);
         let m = idea.as_object_mut().expect("idea is an object");
@@ -371,6 +382,7 @@ mod tests {
         let back = home.load(None).unwrap();
         assert_eq!(points(&back.ideas()[0]), 6.0);
         assert_eq!(home.all().len(), 1);
+        assert!(home.load(Some("../../x")).err().unwrap_or_default().contains("not valid"));
         assert!(learn(&home, "Measure before you change", "plan").starts_with("lesson saved (1/40)"));
         assert!(learn(&home, "measure before changing", "").starts_with("lesson confirmed (2x)"));
         assert!(home.lessons()[0].contains("[plan] Measure before you change (2x)"));

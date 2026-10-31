@@ -7,25 +7,77 @@ use wisply_core::Call;
 
 use crate::files::{self, Pack};
 use crate::fix::{self, Plan};
+use crate::prove::{build_proof, ok, test_proof, tests_after};
 use crate::rules::{self, Finding, Scope};
-use crate::run::{self, Home, Run, int, text};
+use crate::run::{Home, Run, int, text};
 use crate::{Env, measure, personal, safety, skill};
 
 const SCAN_SHOWN: usize = 25;
+const ALL_MAX: usize = 500;
 
-fn findings(env: &Env, r: &Run) -> (Vec<Finding>, BTreeSet<Pack>) {
+struct Scanned {
+    found: Vec<Finding>,
+    packs: BTreeSet<Pack>,
+    checked: BTreeSet<String>,
+    total: usize,
+    left: usize,
+}
+
+impl Scanned {
+    fn complete(&self) -> bool {
+        self.left == 0 && self.total < files::WALK_MAX
+    }
+}
+
+fn findings(env: &Env, r: &Run) -> Scanned {
     let root = r.root();
     let list = files::walk(&r.paths());
     let packs = env.packs(&root, &list);
     let mine = personal::load(&env.user, &root, &env.profile_packs());
     let scope = Scope { root: &root, packs: &packs, rules: &mine };
-    (rules::scan(&scope, &list), packs)
+    let rules::Report { found, checked, left } = rules::scan(&scope, &list);
+    Scanned { found, packs, checked, total: list.len(), left }
 }
 
 fn as_idea(f: &Finding) -> Value {
     json!({"title": format!("{}: {}", f.rule, f.why), "lens": f.pack.name(), "tool": f.rule, "impact": f.impact,
            "sure": f.sure, "effort": f.effort, "kind": "safe", "by": "wisply",
-           "place": f.place(), "fix": f.fix, "fixer": f.fixer})
+           "place": f.place(), "fix": f.fix, "fixer": f.fixer, "key": f.key()})
+}
+
+fn idea_key(i: &Value) -> String {
+    let (key, place, rule) = (text(i, "key"), text(i, "place"), text(i, "tool"));
+    if !key.is_empty() || place.is_empty() || text(i, "by") != "wisply" {
+        return key.to_string();
+    }
+    let file = place
+        .rsplit_once(':')
+        .filter(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        .map_or(place, |(f, _)| f);
+    let why = text(i, "title").strip_prefix(&format!("{rule}: ")).unwrap_or_default();
+    rules::key_of(rule, file, why)
+}
+
+fn close_gone(r: &mut Run, s: &Scanned) -> usize {
+    if !s.complete() {
+        return 0;
+    }
+    let now: BTreeSet<String> = s.found.iter().map(Finding::key).collect();
+    let gone: Vec<i64> = r
+        .ideas()
+        .iter()
+        .filter(|i| {
+            let key = idea_key(i);
+            let file = key.split('|').nth(1).unwrap_or_default();
+            let checked = Pack::from_name(text(i, "lens")).is_some_and(|p| s.packs.contains(&p));
+            text(i, "status") == "new" && !key.is_empty() && checked && s.checked.contains(file) && !now.contains(&key)
+        })
+        .map(|i| int(i, "id"))
+        .collect();
+    for id in &gone {
+        mark(r, *id, "done", "proof", "wisply scan: the finding is gone");
+    }
+    gone.len()
 }
 
 pub fn scan(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
@@ -33,15 +85,27 @@ pub fn scan(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
     if r.paths().is_empty() {
         return Err("this run has no path; start it with one: wisply think start \"<name>\" <path>".into());
     }
-    let (found, packs) = findings(env, &r);
-    let room = if c.on("all") { usize::MAX } else { (int(&r.s, "idea_goal").max(10) / 2) as usize };
+    let scanned = findings(env, &r);
+    let closed = close_gone(&mut r, &scanned);
+    let stopped = (!scanned.complete()).then(|| {
+        format!(
+            "stopped early: {} of {}{} files checked (limits: {} s, {} files) -> open ideas stay open; scan a smaller folder for the rest",
+            scanned.total - scanned.left,
+            scanned.total,
+            if scanned.total >= files::WALK_MAX { "+" } else { "" },
+            rules::SCAN_BUDGET.as_secs(),
+            files::WALK_MAX
+        )
+    });
+    let Scanned { found, packs, .. } = scanned;
+    let room = if c.on("all") { ALL_MAX } else { (int(&r.s, "idea_goal").max(10) / 2) as usize };
+    let mut listed: BTreeSet<String> = r.ideas().iter().map(idea_key).collect();
     let (mut added, mut known) = (0, 0);
     for f in &found {
         if added >= room {
             break;
         }
-        let place = f.place();
-        if r.ideas().iter().any(|i| text(i, "place") == place && text(i, "tool") == f.rule) {
+        if !listed.insert(f.key()) {
             known += 1;
             continue;
         }
@@ -76,11 +140,14 @@ pub fn scan(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
     if found.len() > SCAN_SHOWN {
         out.push(format!("  ... +{} more (wisply think idea list --all)", found.len() - SCAN_SHOWN));
     }
+    out.extend(stopped);
     out.push(format!(
-        "+{added} ideas from wisply{}{}",
+        "+{added} ideas from wisply{}{}{}",
+        if closed > 0 { format!(", {closed} closed (finding gone)") } else { String::new() },
         if known > 0 { format!(", {known} already listed") } else { String::new() },
         if found.len() > added + known {
-            format!(", {} left out (--all adds them)", found.len() - added - known)
+            let more = if c.on("all") { String::new() } else { format!(" (--all adds up to {ALL_MAX})") };
+            format!(", {} left out{more}", found.len() - added - known)
         } else {
             String::new()
         }
@@ -91,65 +158,20 @@ pub fn scan(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
     Ok(out.join("\n"))
 }
 
-fn build_proof(env: &Env, r: &Run) -> Option<Value> {
-    let root = r.root();
-    let (build, _) = measure::commands(text(&r.s, "kind"), &root);
-    let cmd = build?;
-    Some(measure_once(env, r, &cmd, 1))
-}
-
-fn measure_once(env: &Env, r: &Run, cmd: &str, runs: usize) -> Value {
-    let root = r.root();
-    match cmd {
-        "lint-skill" => {
-            let (errs, warns) = skill::lint(&root);
-            let mut v = json!({"cmd": cmd, "exit": i32::from(!errs.is_empty()), "errors": errs.len(), "warnings": warns.len(), "at": run::now()});
-            if !errs.is_empty() || !warns.is_empty() {
-                v["tail"] = json!([errs, warns].concat().join("\n"));
-            }
-            v
-        }
-        "selftest" => {
-            let script = root.join("scripts").join("selftest.py");
-            if !script.exists() {
-                return json!({"skipped": "no scripts/selftest.py", "cmd": cmd});
-            }
-            let ran = measure::run(&format!("python -B \"{}\"", script.display()), &root, measure::TIMEOUT);
-            measure::result(cmd, &[ran])
-        }
-        _ => {
-            let _ = env;
-            let mut all = Vec::new();
-            for _ in 0..runs.max(1) {
-                let ran = measure::run(cmd, &root, measure::TIMEOUT);
-                let failed = ran.code != 0;
-                all.push(ran);
-                if failed {
-                    break;
-                }
-            }
-            measure::result(cmd, &all)
-        }
-    }
-}
-
-fn ok(m: &Value) -> bool {
-    m.get("exit").and_then(Value::as_i64) == Some(0)
-}
-
 pub fn fix(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
     let mut r = home.load(c.val("run"))?;
     if r.paths().is_empty() {
         return Err("this run has no path to fix".into());
     }
-    let (found, packs) = findings(env, &r);
+    let Scanned { found, packs, .. } = findings(env, &r);
     let root = r.root();
-    let plans: Vec<Plan> = fix::plans(&root, &found, &packs, c.on("deep"));
+    let plans: Vec<Plan> = fix::plans(&root, &found, &packs, c.on("deep"), &r.paths());
     if plans.is_empty() {
         return Ok("nothing Wisply can fix itself; the findings are ideas for Claude (wisply think idea list)".into());
     }
     let before_ok = r.s.pointer("/measures/before").is_none_or(ok);
-    let mut out = Vec::new();
+    let tests_before = test_proof(&r);
+    let (mut out, mut kept) = (Vec::new(), Vec::new());
     for plan in plans {
         let id = r.add_idea(
             json!({"title": plan.title, "lens": "fix", "tool": plan.fixer, "impact": 1, "sure": 3, "effort": 1,
@@ -171,11 +193,12 @@ pub fn fix(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
                 continue;
             }
         };
-        let proof = if plan.fixer == "png" { None } else { build_proof(env, &r) };
+        let proof = if plan.fixer == "png" { None } else { build_proof(&r) };
         match proof {
             Some(m) if m.get("skipped").is_some() => {
                 set(&mut r, id, "unchecked", "proof", &did);
                 safety::mark_after(&r, id);
+                kept.push(id);
                 out.push(format!("#{id} {}: {did}; build not run ({}) -> unchecked", plan.title, text(&m, "skipped")));
             }
             Some(m) if !ok(&m) && before_ok => {
@@ -184,20 +207,32 @@ pub fn fix(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
                 set(&mut r, id, "dropped", "why", &why);
                 out.push(format!("#{id} {}: {why} -> reverted", plan.title));
             }
+            Some(m) if !ok(&m) => {
+                let p = format!("{did}; build was red before and still is: {}", measure::line(&m));
+                set(&mut r, id, "unchecked", "proof", &p);
+                safety::mark_after(&r, id);
+                kept.push(id);
+                out.push(format!("#{id} {}: {p} -> unchecked", plan.title));
+            }
             Some(m) => {
                 let p = format!("{did}; {}: {}", text(&m, "cmd"), measure::line(&m));
                 set(&mut r, id, "done", "proof", &p);
                 safety::mark_after(&r, id);
                 covered(&mut r, id, plan.fixer);
+                kept.push(id);
                 out.push(format!("#{id} {}: {p}", plan.title));
             }
             None => {
                 set(&mut r, id, "done", "proof", &did);
                 safety::mark_after(&r, id);
                 covered(&mut r, id, plan.fixer);
+                kept.push(id);
                 out.push(format!("#{id} {}: {did}", plan.title));
             }
         }
+    }
+    if let Some(before) = tests_before.filter(|_| !kept.is_empty()) {
+        out.extend(tests_after(&mut r, &before, &kept));
     }
     r.save()?;
     out.push("next: wisply think diff, then review the change".into());
@@ -216,61 +251,18 @@ fn covered(r: &mut Run, by: i64, fixer: &str) {
     }
 }
 
-fn set(r: &mut Run, id: i64, status: &str, key: &str, val: &str) {
+pub(crate) fn mark(r: &mut Run, id: i64, status: &str, key: &str, val: &str) {
     let round = r.round();
     if let Some(i) = r.idea_mut(id) {
         i["status"] = json!(status);
         i[key] = json!(val);
         i["round_status"] = json!(round);
     }
+}
+
+fn set(r: &mut Run, id: i64, status: &str, key: &str, val: &str) {
+    mark(r, id, status, key, val);
     let _ = r.save();
-}
-
-pub fn measure_cmd(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
-    let mut r = home.load(c.val("run"))?;
-    let label =
-        c.pos.get(1).cloned().ok_or("wisply think measure <label> [--cmd \"...\"] [--runs 5] [--test] [--metrics]")?;
-    let root = r.root();
-    let (build, test) = measure::commands(text(&r.s, "kind"), &root);
-    let cmd = c.val("cmd").map(str::to_string).or(if c.on("test") { test } else { build });
-    let res = match cmd {
-        None => json!({"skipped": format!("no check command for project kind '{}', use --cmd", text(&r.s, "kind"))}),
-        Some(cmd) => {
-            if root.as_os_str().is_empty() {
-                return Err("this run has no project folder; use --cmd with a run that has a path".into());
-            }
-            let runs = c.val("runs").and_then(|n| n.parse().ok()).unwrap_or(1);
-            measure_once(env, &r, &cmd, runs)
-        }
-    };
-    let mut out = vec![format!("{label}: {}", measure::line(&res))];
-    if let Some(t) = res.get("tail").and_then(Value::as_str) {
-        out.push(t.to_string());
-    }
-    r.s["measures"][&label] = res;
-    if c.on("metrics") && !r.paths().is_empty() {
-        let m = measure::metrics(&r.paths());
-        out.push(format!("metrics: {}", measure::metrics_line(&m)));
-        r.s["metrics"][&label] = m;
-    }
-    r.save()?;
-    Ok(out.join("\n"))
-}
-
-pub fn compare(home: &Home, c: &Call) -> Result<String, String> {
-    let r = home.load(c.val("run"))?;
-    let a = c.pos.get(1).map_or("before", String::as_str);
-    let b = c.pos.get(2).map_or("after", String::as_str);
-    let m = |l: &str| r.s.pointer(&format!("/measures/{l}")).cloned().unwrap_or(Value::Null);
-    let mut out = measure::compare(&m(a), &m(b));
-    let mt = |l: &str| r.s.pointer(&format!("/metrics/{l}")).cloned();
-    if let (Some(x), Some(y)) = (mt(a), mt(b)) {
-        out.push_str(&format!(
-            "\nlines: {} -> {} | files: {} -> {} | complexity max: {} -> {} | over 10: {} -> {}",
-            x["lines"], y["lines"], x["files"], y["files"], x["ccn_max"], y["ccn_max"], x["ccn_over"], y["ccn_over"]
-        ));
-    }
-    Ok(out)
 }
 
 pub fn checkpoint(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
@@ -329,69 +321,6 @@ pub fn diff(home: &Home, c: &Call) -> Result<String, String> {
         "diff: {} ({n} files, +{plus} -{minus}) - read it line by line against the checklist",
         files::slashed(&file)
     ))
-}
-
-pub fn save(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
-    let r = home.load(c.val("run"))?;
-    let label = c.pos.get(1).ok_or("wisply think save <label> [--file f] (or the text on stdin)")?;
-    let dir = r.dir.join("text");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let ext = c.val("ext").unwrap_or("md").trim_start_matches('.').to_string();
-    let target = dir.join(format!("{}.{ext}", run::slug(label, 40)));
-    if let Some(f) = c.val("file") {
-        fs::copy(env.path(f), &target).map_err(|e| format!("cannot copy {f}: {e}"))?;
-    } else {
-        let body = c.val("input").unwrap_or("");
-        if body.trim().is_empty() {
-            return Err("text missing: pipe it in (<<'EOF') or use --file <path>".into());
-        }
-        fs::write(&target, body).map_err(|e| e.to_string())?;
-    }
-    Ok(format!("version saved: {}", files::slashed(&target)))
-}
-
-pub fn blind(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
-    let mut r = home.load(c.val("run"))?;
-    let (Some(a), Some(b)) = (c.pos.get(1), c.pos.get(2)) else {
-        return Err("wisply think blind <before file> <after file>".into());
-    };
-    let e = safety::blind(&mut r, &env.path(a), &env.path(b))?;
-    r.save()?;
-    Ok(format!(
-        "blind comparison {} ready: the user picks in the Wisply window (wisply ui -> Blind), or in the chat:\n  version 1 = {}\n  version 2 = {}\nnever say which one is new; then: wisply think blind-result {} 1|2|same",
-        e["n"],
-        text(&e["paths"], "1"),
-        text(&e["paths"], "2"),
-        e["n"]
-    ))
-}
-
-pub fn blind_result(home: &Home, c: &Call) -> Result<String, String> {
-    let mut r = home.load(c.val("run"))?;
-    let n: i64 = c.pos.get(1).and_then(|s| s.parse().ok()).ok_or("wisply think blind-result <n> 1|2|same")?;
-    let verdict = c.pos.get(2).map(String::as_str).unwrap_or("");
-    if !["1", "2", "same"].contains(&verdict) {
-        return Err("verdict is 1, 2 or same".into());
-    }
-    let winner = safety::blind_result(&mut r, n, verdict)?;
-    r.save()?;
-    Ok(match winner.as_str() {
-        "after" => "AFTER picked -> better".into(),
-        "before" => "BEFORE picked -> revert the change".into(),
-        _ => "TIE -> the original stays".into(),
-    })
-}
-
-pub fn blind_open(home: &Home) -> Value {
-    let mut out = Vec::new();
-    for r in home.all() {
-        for e in r.s.get("blind").and_then(Value::as_array).cloned().unwrap_or_default() {
-            if e.get("winner").is_none() {
-                out.push(json!({"run": r.id(), "name": text(&r.s, "name"), "n": e["n"], "paths": e["paths"]}));
-            }
-        }
-    }
-    Value::Array(out)
 }
 
 pub fn profile(env: &Env, c: &Call) -> Result<String, String> {
@@ -460,4 +389,88 @@ pub fn lint_skill(env: &Env, c: &Call) -> Result<String, String> {
         format!("{} errors, {} warnings", errs.len(), warns.len())
     });
     Ok(out.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+
+    use super::*;
+    use crate::flow;
+    use crate::prove::worse;
+
+    fn env_in(base: &std::path::Path, cwd: &std::path::Path) -> Env {
+        Env {
+            home: base.join("wisply"),
+            user: base.join("user"),
+            sid: "s".into(),
+            cwd: cwd.to_path_buf(),
+            playing: String::new(),
+            cwds: Vec::new(),
+            notes: RefCell::new(Vec::new()),
+        }
+    }
+
+    fn call(args: &[&str]) -> Call {
+        let argv: Vec<String> = std::iter::once("think").chain(args.iter().copied()).map(str::to_string).collect();
+        wisply_core::parse(&argv)
+    }
+
+    #[test]
+    fn scan_lists_each_finding_once_and_closes_what_is_gone() {
+        let base = std::env::temp_dir().join(format!("wisply-think-scan-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let proj = base.join("proj");
+        fs::create_dir_all(proj.join(".git")).unwrap();
+        let doc = proj.join("README.md");
+        fs::write(&doc, "# A\n\nThis is is wrong.\nSee [gone](gone.md).\n").unwrap();
+        let env = env_in(&base, &proj);
+        let home = Home::new(&env.home, "s");
+        flow::start(&env, &home, &call(&["start", "t", &files::slashed(&proj)])).unwrap();
+        let first = scan(&env, &home, &call(&["scan"])).unwrap();
+        assert!(first.contains("+2 ideas from wisply"), "{first}");
+        let again = scan(&env, &home, &call(&["scan"])).unwrap();
+        assert!(again.contains("+0 ideas from wisply, 2 already listed"), "{again}");
+        let mut r = home.load(None).unwrap();
+        let link = r.ideas().iter().find(|i| text(i, "tool") == "broken-link").map(|i| int(i, "id")).unwrap();
+        r.idea_mut(link).unwrap().as_object_mut().unwrap().remove("key");
+        r.save().unwrap();
+        fs::write(&doc, "# A\n\nThis is wrong.\nSee [gone](gone.md) and [also](also.md).\n").unwrap();
+        let fixed = scan(&env, &home, &call(&["scan"])).unwrap();
+        assert!(fixed.contains("+0 ideas from wisply, 1 closed (finding gone), 1 already listed"), "{fixed}");
+        let r = home.load(None).unwrap();
+        let status: Vec<(String, String)> =
+            r.ideas().iter().map(|i| (text(i, "tool").to_string(), text(i, "status").to_string())).collect();
+        assert!(status.contains(&("repeated-word".into(), "done".into())), "{status:?}");
+        assert!(status.contains(&("broken-link".into(), "new".into())), "{status:?}");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn fixes_that_make_the_tests_worse_are_taken_back() {
+        let a = json!({"exit": 0, "tests": {"passed": 5, "total": 5}});
+        let b = json!({"exit": 1, "tests": {"passed": 4, "total": 5}});
+        let c = json!({"exit": 1, "tests": {"passed": 3, "total": 5}});
+        assert!(worse(&a, &b) && worse(&b, &c) && !worse(&b, &b) && !worse(&b, &a));
+        if measure::run("python --version", std::path::Path::new("."), std::time::Duration::from_secs(30)).code != 0 {
+            return;
+        }
+        let base = std::env::temp_dir().join(format!("wisply-think-fixtest-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let proj = base.join("skill");
+        fs::create_dir_all(proj.join("scripts")).unwrap();
+        fs::write(proj.join("SKILL.md"), "---\nname: t\ndescription: test skill\n---\n\nBody.\n").unwrap();
+        fs::write(proj.join("data.yml"), "a: 1  \n").unwrap();
+        let check = "import sys\nok = open('data.yml').read().startswith('a: 1  ')\nprint('1/1 green' if ok else '0/1 green')\nsys.exit(0 if ok else 1)\n";
+        fs::write(proj.join("scripts/selftest.py"), check).unwrap();
+        let env = env_in(&base, &proj);
+        let home = Home::new(&env.home, "s");
+        flow::start(&env, &home, &call(&["start", "t", &files::slashed(&proj)])).unwrap();
+        let said = fix(&env, &home, &call(&["fix"])).unwrap();
+        assert!(said.contains("reverted (tests got worse)") && said.contains("tests now: OK"), "{said}");
+        assert_eq!(fs::read_to_string(proj.join("data.yml")).unwrap(), "a: 1  \n");
+        let r = home.load(None).unwrap();
+        assert!(r.ideas().iter().any(|i| text(i, "fixer") == "spaces" && text(i, "status") == "dropped"));
+        let _ = fs::remove_dir_all(&base);
+    }
 }

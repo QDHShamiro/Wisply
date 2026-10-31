@@ -8,6 +8,7 @@ use super::Finding;
 use crate::files::{self, Pack};
 
 const DRIVERS: &[&str] = &["sqlite-jdbc", "HikariCP", "mysql-connector-j"];
+const FILLER_KEYS: &[&str] = &["fill", "background", "border", "decoration", "frame"];
 
 static DEP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<dependency>(.*?)</dependency>").expect("dep pattern"));
 static SLOT: LazyLock<Regex> =
@@ -62,18 +63,36 @@ fn slots(spec: &str) -> Vec<u32> {
     out
 }
 
+fn fillers(text: &str) -> BTreeSet<usize> {
+    let mut stack: Vec<(usize, &str)> = Vec::new();
+    let mut out = BTreeSet::new();
+    for e in entries(text) {
+        while stack.last().is_some_and(|(i, _)| *i >= e.indent) {
+            stack.pop();
+        }
+        let owner = stack.last().map(|(_, k)| k.to_lowercase()).unwrap_or_default();
+        if matches!(e.key, "slot" | "slots") && FILLER_KEYS.iter().any(|f| owner.starts_with(f)) {
+            out.insert(e.line);
+        }
+        stack.push((e.indent, e.key));
+    }
+    out
+}
+
 fn gui(text: &str, out: &mut Vec<Finding>) {
     let size = SIZE.captures(text).and_then(|c| {
         let n: u32 = c[2].parse().ok()?;
         Some(if &c[1] == "rows" { n * 9 } else { n })
     });
+    let fill = fillers(text);
     let mut seen: HashMap<u32, usize> = HashMap::new();
     let mut double = None;
     let mut outside = None;
     for c in SLOT.captures_iter(text) {
-        let at = super::line_of(text, c.get(0).map_or(0, |m| m.start()));
+        let at = super::line_of(text, c.get(1).map_or(0, |m| m.start()));
         for s in slots(&c[1]) {
-            if let Some(first) = seen.insert(s, at)
+            if !fill.contains(&at)
+                && let Some(first) = seen.insert(s, at)
                 && first != at
                 && double.is_none()
             {
@@ -178,6 +197,11 @@ mod tests {
         let got: Vec<String> =
             check(Path::new("plugins/X/gui/shop.yml"), shop, &packs).into_iter().map(|f| f.why).collect();
         assert_eq!(got, ["slot 4 is used twice (first at line 5)", "slot 27 is outside the 27-slot GUI"]);
+        let paged =
+            "rows: 6\nitems:\n  prev_button:\n\n    slot: 45\n  filler:\n    slots: [45, 46]\n  next:\n    slot: 46\n";
+        let got: Vec<String> =
+            check(Path::new("plugins/X/gui/list.yml"), paged, &packs).into_iter().map(|f| f.why).collect();
+        assert!(got.is_empty(), "{got:?}");
         let e = entries("a:\n  b: \"x\"\n  - item\n");
         assert_eq!((e[1].key, unquote(e[1].value), e[2].key, e[2].value), ("b", "x", "-", "item"));
     }
