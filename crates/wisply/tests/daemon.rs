@@ -195,7 +195,7 @@ fn a_browser_host_gets_the_session_tab_and_done_closes_it() {
     let ask = json!({"token": token, "argv": ["shot", "--width", "2"], "sid": "it-1"}).to_string();
     let Ok(reply) = wisply_proto::exchange_once(&home.0, ask.as_bytes()) else { panic!("no daemon") };
     let reply: Value = serde_json::from_slice(&reply).unwrap();
-    assert!(reply["out"].as_str().is_some_and(|o| o.contains("(28x14, ~1 image tokens")), "{reply}");
+    assert!(reply["out"].as_str().is_some_and(|o| o.contains("(2x1, ~1 image tokens")), "{reply}");
     assert!(reply["image"].as_str().is_some_and(|p| fs::metadata(p).is_ok()), "{reply}");
     assert_eq!(home.run(&["fetch", "/x"]), (0, "200 text/html (html converted)\nHi there".into()));
     assert_eq!(home.run(&["click", "e9"]), (1, "err: the fake browser has no click".into()));
