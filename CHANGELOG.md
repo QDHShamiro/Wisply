@@ -7,6 +7,17 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Changed
+- Session notes cost about 4 to 10 times fewer model tokens: the transcript is condensed harder before the local model
+  sees it (no tool calls except edits and git/PR commands, no code blocks, no "let me ..." narration, repeats gone),
+  the prompt is shorter with a fixed format, the model gets the titles of notes it already has so it does not write
+  them twice, and sessions without edits and with a single message are skipped.
+- "merk dir ..." / "remember ..." understands more phrasings (denk dran, vergiss nicht, don't forget, keep in mind,
+  note that, ...), drops leftovers like "dass" or "that" and stores a clean sentence.
+- More secrets are cut out before anything is stored: Anthropic, Stripe, Google, npm, GitLab, GitHub fine-grained and
+  Discord bot tokens, Bearer and Authorization headers, Discord/Slack/Teams webhook URLs, passwords in URLs, private
+  key blocks, "Passwort ist ...".
+
 ### Added
 - `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
   on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with

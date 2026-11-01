@@ -17,8 +17,8 @@ pub use pages::{WIKI_KINDS, render as render_page, safe_name, template, write_dr
 pub use project::{project_of, root_of};
 pub use start::{Counts, DRAFTS_MAX, Session};
 pub use store::{Hit, NewNote, Note, Store, Todo, VEC_DIM, date, day, now};
-pub use text::{fts_query, oneline, scrub, short, similar, stop_word};
-pub use transcript::{CHUNK_CHARS, Condensed, chunks, condense, project_of_files};
+pub use text::{fact, fts_query, oneline, scrub, short, similar, stop_word};
+pub use transcript::{CHUNK_CHARS, Condensed, Style, chunks, condense, condense_as, project_of_files};
 pub use vault::{Page, claude_dirs, parse as parse_page};
 pub use wiki::{Draft, accept as accept_draft, drafts, drop_draft, rel_path};
 pub type DbResult<T> = rusqlite::Result<T>;

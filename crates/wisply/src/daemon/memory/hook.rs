@@ -34,9 +34,12 @@ const STEM: usize = 5;
 const DRAFTS_SHOWN: &str = "drafts_shown";
 
 static SAY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?is)^\s*(?:bitte\s+|please\s+)?(?:merk(?:e)?\s+dir|notier(?:e)?\s+dir|remember)\b[\s,:;-]*(?:(?:bitte|please)\s+)?(?:dass\s+|that\s+)?(.+)",
-    )
+    Regex::new(concat!(
+        r"(?is)^\s*(?:(?:bitte|please|hey|ok|okay|also)[\s,:;-]+)*",
+        r"(?:merk(?:e)?\s+dir|merk(?:e)?\s+(?:es|das)\s+dir|notier(?:e)?\s+dir|speicher(?:e)?\s+(?:dir|das\s+dir|es\s+dir)|behalte?\s+(?:im\s+kopf|in\s+erinnerung)|denk\s+dran|denk\s+daran|vergiss\s+nicht|",
+        r"remember(?:\s+this)?|don'?t\s+forget|keep\s+in\s+mind|note\s+that|make\s+a\s+note)\b",
+        r"[\s,:;-]*(.+)"
+    ))
     .expect("say pattern")
 });
 static NOT_TYPED: LazyLock<Regex> = LazyLock::new(|| {
@@ -258,13 +261,13 @@ fn memory_tip(d: &Daemon, ctx: &mut Ctx, prompt: String) -> Result<String, Fail>
         return Ok(String::new());
     }
     if let Some(m) = SAY.captures(&prompt)
-        && m[1].trim().chars().count() >= SAVED_MIN
+        && wisply_memory::fact(&m[1]).chars().count() >= SAVED_MIN
     {
-        let said = m[1].trim().trim_end_matches('.').to_string();
+        let said = wisply_memory::scrub(&wisply_memory::fact(&m[1]));
+        let shown = oneline(&said, 90);
         let id = keep(d, ctx, said, "preference", &project_of(&ctx.cwd))?;
         return Ok(format!(
-            "Wisply memory saved #{id}: \"{}\" (wisply forget {id} if that was not meant to be kept)",
-            oneline(&m[1], 90)
+            "Wisply memory saved #{id}: \"{shown}\" (wisply forget {id} if that was not meant to be kept)"
         ));
     }
     let asked = stems(&without_paths(&prompt));
@@ -318,8 +321,38 @@ mod tests {
         assert_eq!(stem("deployment"), "deplo");
         assert!(NOT_TYPED.is_match("  <system-reminder>y") && !NOT_TYPED.is_match("fix the bug"));
         let m = SAY.captures("Bitte merk dir, dass Brave der einzige Browser ist.").unwrap();
-        assert_eq!(&m[1], "Brave der einzige Browser ist.");
+        assert_eq!(wisply_memory::fact(&m[1]), "Brave der einzige Browser ist");
         assert!(SAY.captures("remembering things").is_none());
+    }
+
+    #[test]
+    fn remember_sentences_become_clean_facts() {
+        let cases = [
+            ("merk dir, dass Brave der einzige Browser ist", "Brave der einzige Browser ist"),
+            ("Merk dir Brave ist der einzige Browser.", "Brave ist der einzige Browser"),
+            ("bitte merk dir dass der Server auf Port 25565 läuft", "Der Server auf Port 25565 läuft"),
+            ("Merke dir bitte: Java 21 ist Pflicht", "Java 21 ist Pflicht"),
+            ("merk dir daß Folia Pflicht ist!", "Folia Pflicht ist!"),
+            ("notier dir, dass PRs nie ohne grünes CI gemerged werden", "PRs nie ohne grünes CI gemerged werden"),
+            ("denk dran: nie Chrome benutzen", "Nie Chrome benutzen"),
+            ("vergiss nicht, dass der Vault in E:/Wisply/vault liegt", "Der Vault in E:/Wisply/vault liegt"),
+            ("remember that the API runs on port 8080", "The API runs on port 8080"),
+            ("Remember: always use Maven", "Always use Maven"),
+            ("please remember that Brave is the only browser.", "Brave is the only browser"),
+            ("remember to run clippy before every PR", "Run clippy before every PR"),
+            ("don't forget that main needs green CI", "Main needs green CI"),
+            ("keep in mind the staging server is read-only", "The staging server is read-only"),
+            ("note that   tabs   are   banned", "Tabs are banned"),
+        ];
+        for (said, want) in cases {
+            let m = SAY.captures(said).unwrap_or_else(|| panic!("no match: {said}"));
+            assert_eq!(wisply_memory::fact(&m[1]), want, "{said}");
+        }
+        assert!(SAY.captures("remembering things").is_none() && SAY.captures("wie war das?").is_none());
+        for task in ["speicher die Datei in config.yml", "speichere das unter docs/", "behalte die alte Version", "behalt den Branch"] {
+            assert!(SAY.captures(task).is_none(), "{task}");
+        }
+        assert_eq!(wisply_memory::fact(&SAY.captures("speicher dir, dass E: eine HDD ist").unwrap()[1]), "E: eine HDD ist");
     }
 
     #[test]
