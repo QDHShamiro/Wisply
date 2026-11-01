@@ -1,5 +1,5 @@
 mod agents;
-mod claude_env;
+pub(crate) mod claude_env;
 mod migrate;
 mod place;
 #[cfg(windows)]
@@ -114,6 +114,9 @@ fn setup(home: &Path, manual: bool, global: bool, browser: Option<&str>) -> Resu
             Ok(false) => {}
             Err(e) => println!("{e}"),
         }
+        if let Some(line) = crate::statusline::install::auto(home, &file, &exe) {
+            println!("{line}");
+        }
     } else {
         println!("browser link and PATH left alone (WISPLY_HOME is set; --register writes them for this folder)");
     }
@@ -172,6 +175,13 @@ fn uninstall(home: &Path, purge: bool, global: bool) -> Result<(), String> {
         match claude_env::unpoint(&file) {
             Ok(true) => println!("removed WISPLY_BIN from {}", file.display()),
             Ok(false) => {}
+            Err(e) => println!("{e}"),
+        }
+        match crate::statusline::install::turn_off(&file, home) {
+            Ok(crate::statusline::install::Off::Removed | crate::statusline::install::Off::Restored) => {
+                println!("removed the Wisply status line from {}", file.display())
+            }
+            Ok(_) => {}
             Err(e) => println!("{e}"),
         }
     }

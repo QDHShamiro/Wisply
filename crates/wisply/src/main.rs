@@ -9,6 +9,7 @@ mod more;
 mod pipe;
 mod setup;
 mod spawn;
+mod statusline;
 #[cfg(windows)]
 mod testapp;
 mod v2;
@@ -26,6 +27,7 @@ fn main() -> ExitCode {
         "host" => host::serve(args.get(1).map(String::as_str).unwrap_or("")),
         "hook" if args.get(1).is_some_and(|a| a == "post") => hook::post(),
         origin if origin.starts_with("chrome-extension://") => host::serve(origin),
+        "statusline" => return statusline::run(&args[1..]),
         "version" | "--version" => println!("{}", env!("CARGO_PKG_VERSION")),
         "daemon" if daemon::may_serve() => return daemon::serve(),
         #[cfg(windows)]

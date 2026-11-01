@@ -379,6 +379,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
 | **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |
+| **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` |
 
 <details>
 <summary><b>All commands</b></summary>
