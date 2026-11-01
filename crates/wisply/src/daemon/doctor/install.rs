@@ -130,6 +130,19 @@ pub fn sum_for(sums: &str, name: &str) -> Option<String> {
 }
 
 pub(crate) fn download(url: &str, to: &Path, want: &str) -> Result<(), String> {
+    let got = fetch(url, to)?;
+    if got != want {
+        let _ = fs::remove_file(to);
+        return Err(format!(
+            "SHA-256 does not match the release list (got {}..., want {}...)",
+            &got[..12],
+            &want[..12]
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn fetch(url: &str, to: &Path) -> Result<String, String> {
     let mut resp = AGENT.get(url).call().map_err(|e| format!("download failed ({e})"))?;
     if resp.status().as_u16() != 200 {
         return Err(format!("download answered {}", resp.status().as_u16()));
@@ -147,16 +160,7 @@ pub(crate) fn download(url: &str, to: &Path, want: &str) -> Result<(), String> {
         out.write_all(&buf[..n]).map_err(|e| format!("cannot write {} ({e})", to.display()))?;
     }
     drop(out);
-    let got = hex(&hash.finalize());
-    if got != want {
-        let _ = fs::remove_file(to);
-        return Err(format!(
-            "SHA-256 does not match the release list (got {}..., want {}...)",
-            &got[..12],
-            &want[..12]
-        ));
-    }
-    Ok(())
+    Ok(hex(&hash.finalize()))
 }
 
 fn executable(path: &Path) {

@@ -34,6 +34,7 @@ const SYSTEM: &[&str] = &[
     "secure",
     "think",
     "update",
+    "headless",
 ];
 const MEMORY: &[&str] = &["remember", "recall", "forget", "todo", "memory", "hook", "wiki", "code"];
 const MEMORY_LANE: &[&str] = &["suggest", "tokens", "grep", "squeeze", "board"];
@@ -177,7 +178,7 @@ mod tests {
     #[test]
     fn the_known_names_are_the_2x_list_secure_and_the_window() {
         let want = "back bench brain call channels check claude click clip close code config console demo desktop dialog \
-                    dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames grep help \
+                    dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames grep headless help \
                     hover improve inbox js keep keys launch listen log memory net open phone press read recall record \
                     reload remember reply research routine routines run scroll search secure select selftest shot snap squeeze \
                     status stop tab table tabs text think todo tokens tools type ui unread update upload version viewport voice wait watch \
