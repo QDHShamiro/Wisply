@@ -377,7 +377,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
-| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` |
+| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |
 | **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` |
 

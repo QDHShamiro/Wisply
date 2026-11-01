@@ -8,6 +8,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply doctor ai [tool]`: the measuring half of Claude Code's `/doctor` for every AI CLI it finds (Claude
+  Code, Codex, Gemini, Qwen, OpenCode, Cursor, Continue), read-only and without a model. It checks the install,
+  that settings and config files parse (JSON and TOML, with line and column), instruction files and their size,
+  skill frontmatter, agent name collisions and the configured MCP servers. For Claude Code it also names unused
+  skills, plugins and MCP servers, slow hooks and hook timeouts, ranks denied tool calls and checks the default
+  permission mode. `wisply doctor` shows whether the Wisply status line is set up. `/wisply:doctor` runs both.
 - `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
   on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with
   `*` for changes and `↑2 ↓1` for ahead/behind, the GitHub pull request of the branch with its checks, model, effort,
