@@ -349,10 +349,18 @@ mod tests {
             assert_eq!(wisply_memory::fact(&m[1]), want, "{said}");
         }
         assert!(SAY.captures("remembering things").is_none() && SAY.captures("wie war das?").is_none());
-        for task in ["speicher die Datei in config.yml", "speichere das unter docs/", "behalte die alte Version", "behalt den Branch"] {
+        for task in [
+            "speicher die Datei in config.yml",
+            "speichere das unter docs/",
+            "behalte die alte Version",
+            "behalt den Branch",
+        ] {
             assert!(SAY.captures(task).is_none(), "{task}");
         }
-        assert_eq!(wisply_memory::fact(&SAY.captures("speicher dir, dass E: eine HDD ist").unwrap()[1]), "E: eine HDD ist");
+        assert_eq!(
+            wisply_memory::fact(&SAY.captures("speicher dir, dass E: eine HDD ist").unwrap()[1]),
+            "E: eine HDD ist"
+        );
     }
 
     #[test]

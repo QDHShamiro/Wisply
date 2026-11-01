@@ -22,7 +22,8 @@ const LEAN_CLAUDE: usize = 320;
 const LEAN_ERROR: usize = 160;
 const LEAN_MIN_CLAUDE: usize = 40;
 const LEAN_CMD: usize = 120;
-const KEEP_CMDS: &[&str] = &["git commit", "git merge", "git push", "gh pr", "git revert", "git reset", "git checkout -b"];
+const KEEP_CMDS: &[&str] =
+    &["git commit", "git merge", "git push", "gh pr", "git revert", "git reset", "git checkout -b"];
 
 static REMINDER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?s)<system-reminder>.*?</system-reminder>|<local-command-caveat>.*?</local-command-caveat>")
@@ -128,7 +129,8 @@ fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>, style: Style) -> Vec<S
                 };
                 let skip = lean
                     && kind != "user"
-                    && (text.chars().count() < LEAN_MIN_CLAUDE || (FILLER.is_match(&text) && !DECISION.is_match(&text)));
+                    && (text.chars().count() < LEAN_MIN_CLAUDE
+                        || (FILLER.is_match(&text) && !DECISION.is_match(&text)));
                 if text.is_empty() || skip { String::new() } else { format!("{who}{}", cut(&text, cap)) }
             }
             Some("tool_use") => {
@@ -286,9 +288,12 @@ mod tests {
         assert_eq!(chunks(&long).len(), 2);
         assert_eq!(chunks("x\ny"), ["x\ny"]);
         let lean = condense(&path, 0, None).unwrap();
-        assert_eq!(lean.text, "USER: fix the cart
+        assert_eq!(
+            lean.text,
+            "USER: fix the cart
 EDIT C:/x/a.rs
-ERROR: boom token: [secret]");
+ERROR: boom token: [secret]"
+        );
         assert_eq!((lean.users, lean.edits), (1, 1));
         let _ = fs::remove_dir_all(&dir);
     }
@@ -301,11 +306,18 @@ ERROR: boom token: [secret]");
             let path = Path::new(f);
             let name = path.file_name().map(|n| n.to_string_lossy().chars().take(8).collect::<String>());
             let t = std::time::Instant::now();
-            let full = match condense_as(path, 0, None, Style::Full) { Ok(c) => c, Err(e) => { println!("MEASURE skip {f}: {e}"); continue } };
+            let full = match condense_as(path, 0, None, Style::Full) {
+                Ok(c) => c,
+                Err(e) => {
+                    println!("MEASURE skip {f}: {e}");
+                    continue;
+                }
+            };
             let full_ms = t.elapsed().as_millis();
             let span = std::env::temp_dir().join(format!("measure-span-{}.jsonl", std::process::id()));
             let mut head = Vec::new();
-            std::io::Read::read_to_end(&mut std::io::Read::take(File::open(path).unwrap(), full.end), &mut head).unwrap();
+            std::io::Read::read_to_end(&mut std::io::Read::take(File::open(path).unwrap(), full.end), &mut head)
+                .unwrap();
             std::fs::write(&span, head).unwrap();
             let t = std::time::Instant::now();
             let lean = condense_as(&span, 0, None, Style::Lean).unwrap();
@@ -315,7 +327,14 @@ ERROR: boom token: [secret]");
                 println!("SHOW {}", lean.text.chars().take(1400).collect::<String>());
             }
             let row = [(&full, full_ms), (&lean, lean_ms)].map(|(c, ms)| {
-                format!("{} chars ~{} tok {}ms users={} edits={}", c.text.chars().count(), c.text.len() / 4, ms, c.users, c.edits)
+                format!(
+                    "{} chars ~{} tok {}ms users={} edits={}",
+                    c.text.chars().count(),
+                    c.text.len() / 4,
+                    ms,
+                    c.users,
+                    c.edits
+                )
             });
             println!("MEASURE {} | full {} | lean {}", name.unwrap_or_default(), row[0], row[1]);
         }

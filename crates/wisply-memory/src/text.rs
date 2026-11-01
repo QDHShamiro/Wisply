@@ -46,14 +46,17 @@ pub fn scrub(text: &str) -> String {
     let mut out = text.to_string();
     for rx in SECRETS.iter() {
         out = rx
-            .replace_all(&out, |m: &Captures| format!("{}[secret]{}", m.get(1).map_or("", |g| g.as_str()), m.get(2).map_or("", |g| g.as_str())))
+            .replace_all(&out, |m: &Captures| {
+                format!("{}[secret]{}", m.get(1).map_or("", |g| g.as_str()), m.get(2).map_or("", |g| g.as_str()))
+            })
             .into_owned();
     }
     out
 }
 
 static LEAD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^[\s,:;.\-–—]*(?:(?:bitte|please|mal|doch|dir|dass|daß|that|to)\b[\s,:;.\-–—]*)+").expect("lead pattern")
+    Regex::new(r"(?i)^[\s,:;.\-–—]*(?:(?:bitte|please|mal|doch|dir|dass|daß|that|to)\b[\s,:;.\-–—]*)+")
+        .expect("lead pattern")
 });
 
 pub fn fact(raw: &str) -> String {
