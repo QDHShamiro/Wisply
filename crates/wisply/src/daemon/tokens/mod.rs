@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use wisply_core::{Call, Fail, local_now};
 
 use super::{Daemon, brain, routines};
@@ -242,27 +242,78 @@ fn report(home: &Path, s: &Sum, title: &str, daily: bool) -> String {
     out.join("\n")
 }
 
-pub fn run(d: &Daemon, c: &Call) -> Result<String, Fail> {
-    let word = c.pos.first().map(|w| w.to_lowercase()).filter(|w| !w.is_empty()).unwrap_or_else(|| DAYS.to_string());
+fn span(word: &str) -> Result<(String, String, bool), Fail> {
     let today_s = local_now()[..10].to_string();
     let today = day_no(&today_s).unwrap_or(0);
-    let (since, title, daily) = match word.as_str() {
-        "claude" => return claude::run(&d.home, &c.pos[1..]),
-        "all" => (String::new(), "Wisply tokens, all logged days".to_string(), false),
-        "today" => (today_s, "Wisply tokens, today".to_string(), true),
+    match word {
+        "all" => Ok((String::new(), "Wisply tokens, all logged days".to_string(), false)),
+        "today" => Ok((today_s, "Wisply tokens, today".to_string(), true)),
         w if w.bytes().all(|b| b.is_ascii_digit()) && w.parse::<i64>().is_ok_and(|n| n > 0) => {
             let n: i64 = w.parse().unwrap_or(1);
             let first = date_of(today - n + 1);
             let title = format!("Wisply tokens, last {w} days ({} to {})", &first[5..], &date_of(today)[5..]);
-            (first, title, n <= DAILY_MAX as i64)
+            Ok((first, title, n <= DAILY_MAX as i64))
         }
-        _ => {
-            return Err(Fail::hint(
-                "which days?",
-                "wisply tokens | wisply tokens 7 | wisply tokens today | wisply tokens all | wisply tokens claude",
-            ));
-        }
-    };
+        _ => Err(Fail::hint(
+            "which days?",
+            "wisply tokens | wisply tokens 7 | wisply tokens today | wisply tokens all | wisply tokens claude",
+        )),
+    }
+}
+
+fn data(home: &Path, s: &Sum, title: &str, daily: bool) -> Value {
+    let groups: Vec<Value> = s
+        .groups
+        .iter()
+        .filter(|(_, [runs, ..])| *runs > 0)
+        .map(|(name, [runs, used, alt])| {
+            let claim = CLAIMED.contains(name) && alt > used;
+            json!({"name": name, "runs": runs, "used": used, "without": claim.then_some(*alt), "saved": claim.then_some(alt - used)})
+        })
+        .collect();
+    let (used, without) = s.groups.iter().fold((0, 0), |(u, a), (_, g)| (u + g[1], a + g[2]));
+    let series: Vec<Value> = buckets(&s.days, daily)
+        .into_iter()
+        .map(|(k, u, v)| json!({"date": date_of(k), "used": u, "saved": v}))
+        .collect();
+    let mut top: Vec<(i64, &String)> = s.cmds.iter().filter(|(_, v)| **v > 0).map(|(c, v)| (*v, c)).collect();
+    top.sort_by(|a, b| b.cmp(a));
+    let top: Vec<Value> = top.iter().take(TOP).map(|(v, c)| json!({"cmd": c, "saved": v})).collect();
+    let all = routines::load_all(home);
+    let field = |r: &Value, k: &str| int(r["stats"].get(k));
+    let (runs, saved): (i64, i64) = all.iter().fold((0, 0), |(a, b), r| (a + field(r, "runs"), b + field(r, "saved")));
+    let st = brain::stats(home);
+    let pruned = int(st.get("pruned"));
+    json!({
+        "title": title,
+        "daily": daily,
+        "runs": s.runs,
+        "used": used,
+        "without": without,
+        "saved": without - used,
+        "groups": groups,
+        "series": series,
+        "top": top,
+        "routines": (runs > 0).then(|| json!({"runs": runs, "saved": saved})),
+        "brain": (pruned > 0).then(|| json!({"snaps": pruned, "saved": int(st.get("chars")).div_euclid(4)})),
+        "trimmed": (s.trim > 0).then(|| json!({"tokens": s.trim, "since": s.trim_from})),
+        "page": PAGE,
+        "screenshot": SCREENSHOT,
+        "video": VIDEO,
+    })
+}
+
+pub fn board(d: &Daemon, word: &str) -> Result<Value, Fail> {
+    let (since, title, daily) = span(&word.to_lowercase())?;
+    Ok(data(&d.home, &summarize(&read_rows(&d.home, &since)), &title, daily))
+}
+
+pub fn run(d: &Daemon, c: &Call) -> Result<String, Fail> {
+    let word = c.pos.first().map(|w| w.to_lowercase()).filter(|w| !w.is_empty()).unwrap_or_else(|| DAYS.to_string());
+    if word == "claude" {
+        return claude::run(&d.home, &c.pos[1..]);
+    }
+    let (since, title, daily) = span(&word)?;
     Ok(report(&d.home, &summarize(&read_rows(&d.home, &since)), &title, daily))
 }
 
@@ -292,6 +343,23 @@ mod tests {
         let weeks = buckets(&s.days, false);
         assert_eq!(weeks.len(), 1);
         assert_eq!(date_of(weeks[0].0), "2026-10-26");
+    }
+
+    #[test]
+    fn the_window_gets_the_same_numbers_as_json() {
+        let rows = [
+            json!({"t": "2026-10-28 10:00:00", "cmd": "open", "ok": true, "n": 4000}),
+            json!({"t": "2026-10-29 10:00:00", "cmd": "recall", "ok": true, "n": 400}),
+        ];
+        let home = std::env::temp_dir().join(format!("wisply-tokens-{}", std::process::id()));
+        let v = data(&home, &summarize(&rows), "t", true);
+        assert_eq!(
+            (v["runs"].as_i64(), v["used"].as_i64(), v["saved"].as_i64()),
+            (Some(2), Some(1100), Some(PAGE - 1000))
+        );
+        assert_eq!(v["groups"][0]["saved"].as_i64(), Some(PAGE - 1000));
+        assert!(v["groups"][1]["saved"].is_null() && v["groups"][1]["used"].as_i64() == Some(100));
+        assert_eq!(v["series"].as_array().map(Vec::len), Some(2));
     }
 
     #[test]
