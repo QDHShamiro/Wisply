@@ -29,10 +29,12 @@ pub use data::pystr;
 pub use launch::browser_exe;
 pub use launch::{any_browser, ensure_host, installed_browsers, pick};
 pub use read::{browser_js, fetch_page, read, wants as wants_read};
+#[cfg(test)]
+pub use shot::fitted;
 #[cfg(windows)]
 pub use shot::out_path;
 pub use shot::save_picture;
-pub use shot::{distinct, save_sheet, sheet, thumb};
+pub use shot::{distinct_moved, fine, save_sheet, sheet};
 pub use url::{leak_check, local_file, normalize_url};
 pub use wait::parse_ms;
 

@@ -34,6 +34,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     if !home.join(MARKER).is_file() {
         return v2(&home, raw);
     }
+    if first == "headless" {
+        return crate::headless::run(&home, &args[1..]);
+    }
     if first == "doctor" {
         return crate::daemon::doctor(&home, &args[1..], ask);
     }

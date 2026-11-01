@@ -1,6 +1,10 @@
 use std::path::Path;
 
 pub fn detached(exe: &Path, args: &[&str], dir: &Path, log: &Path) -> bool {
+    sys::detached(exe, args, dir, log).is_some()
+}
+
+pub fn detached_pid(exe: &Path, args: &[&str], dir: &Path, log: &Path) -> Option<u32> {
     sys::detached(exe, args, dir, log)
 }
 
@@ -78,8 +82,8 @@ mod sys {
         s.encode_wide().chain(Some(0)).collect()
     }
 
-    pub fn detached(exe: &Path, args: &[&str], dir: &Path, log: &Path) -> bool {
-        let Ok(log) = OpenOptions::new().create(true).append(true).open(log) else { return false };
+    pub fn detached(exe: &Path, args: &[&str], dir: &Path, log: &Path) -> Option<u32> {
+        let log = OpenOptions::new().create(true).append(true).open(log).ok()?;
         let handle = log.as_raw_handle();
         let mut line = format!("\"{}\"", exe.display());
         for arg in args {
@@ -88,7 +92,7 @@ mod sys {
         }
         let mut command = wide(OsStr::new(&line));
         let directory = wide(dir.as_os_str());
-        let mut started = false;
+        let mut started = None;
         unsafe {
             let mut size = 0usize;
             InitializeProcThreadAttributeList(null_mut(), 1, 0, &mut size);
@@ -97,7 +101,7 @@ mod sys {
             if SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0
                 || InitializeProcThreadAttributeList(list, 1, 0, &mut size) == 0
             {
-                return false;
+                return None;
             }
             let handles = [handle];
             let listed = UpdateProcThreadAttribute(
@@ -134,7 +138,7 @@ mod sys {
                     if ok != 0 {
                         CloseHandle(info.process);
                         CloseHandle(info.thread);
-                        started = true;
+                        started = Some(info.ids[0]);
                         break;
                     }
                 }
@@ -158,8 +162,8 @@ mod sys {
         fn close(fd: i32) -> i32;
     }
 
-    pub fn detached(exe: &Path, args: &[&str], dir: &Path, log: &Path) -> bool {
-        launch(exe, args, dir, log).is_ok()
+    pub fn detached(exe: &Path, args: &[&str], dir: &Path, log: &Path) -> Option<u32> {
+        launch(exe, args, dir, log).ok().map(|c| c.id())
     }
 
     fn launch(exe: &Path, args: &[&str], dir: &Path, log: &Path) -> io::Result<Child> {

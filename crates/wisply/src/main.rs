@@ -1,5 +1,6 @@
 mod client;
 mod daemon;
+mod headless;
 mod hook;
 mod host;
 #[cfg(windows)]
