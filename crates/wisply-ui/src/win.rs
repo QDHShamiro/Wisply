@@ -1,13 +1,17 @@
+#[cfg(windows)]
 use std::sync::atomic::{AtomicIsize, Ordering};
 
+#[cfg(windows)]
 static OWNER: AtomicIsize = AtomicIsize::new(0);
 
 pub const THEMES: &[&str] = &["light", "dark", "glass"];
 
+#[cfg(windows)]
 pub fn set_owner(hwnd: isize) {
     OWNER.store(hwnd, Ordering::Relaxed);
 }
 
+#[cfg(windows)]
 pub fn owner() -> isize {
     OWNER.load(Ordering::Relaxed)
 }
