@@ -1,4 +1,4 @@
-use crate::pat::{self, ANSI, NUMS, PREFIX, RUNTIME, SUMMARY, TRACE};
+use crate::pat;
 use crate::text::{clip, head, rstrip, strip, words};
 use std::cmp::Reverse;
 use std::collections::HashMap;
@@ -19,11 +19,11 @@ const KIND_CHARS: usize = 60;
 const CUT_TAIL: usize = 20;
 
 pub(crate) fn clean(text: &str) -> Vec<String> {
-    let unix = text.replace("\r\n", "\n");
-    let plain = ANSI.replace_all(&unix, "");
+    let plain = pat::strip_ansi(text);
     let mut out: Vec<String> = plain
         .split('\n')
         .map(|line| {
+            let line = line.strip_suffix('\r').unwrap_or(line);
             let line =
                 if line.contains('\r') { line.split('\r').rfind(|p| !strip(p).is_empty()).unwrap_or("") } else { line };
             rstrip(line).to_string()
@@ -47,14 +47,13 @@ struct Line<'a> {
 
 impl<'a> Line<'a> {
     fn new(raw: &'a str) -> Self {
-        let body = PREFIX.replace(raw, "");
-        let frame = TRACE.is_match(&body);
+        let body = pat::body(raw);
+        let frame = pat::trace(body);
         let flow = frame || body.starts_with([' ', '\t']);
         let kind = pat::kind(raw);
         let hot = !frame && kind.hot;
-        let summary = !hot && SUMMARY.is_match(&body);
-        let numbered = NUMS.replace_all(&body, "#");
-        let tmpl = words(&numbered).collect::<Vec<_>>().join(" ");
+        let summary = !hot && pat::summary(body);
+        let tmpl = words(&pat::numbers(body)).collect::<Vec<_>>().join(" ");
         Line { raw, tmpl, flow, frame, hot, noise: kind.noise && !summary, summary }
     }
 
@@ -64,7 +63,7 @@ impl<'a> Line<'a> {
     }
 
     fn runtime(&self) -> bool {
-        self.frame && RUNTIME.is_match(self.raw)
+        self.frame && pat::runtime(self.raw)
     }
 }
 
@@ -181,14 +180,14 @@ fn pieces<'l, 'a>(lines: &'l [Line<'a>], keep: &[bool]) -> Vec<Item<'l, 'a>> {
     out
 }
 
-fn assemble(lines: &[Line], keep: &[bool]) -> Vec<String> {
+fn assemble(lines: &[Line], keep: &[bool]) -> Vec<(String, bool)> {
     let items = pieces(lines, keep);
-    let mut out: Vec<String> = Vec::new();
+    let mut out: Vec<(String, bool)> = Vec::new();
     let mut i = 0;
     while i < items.len() {
         let first = match &items[i] {
             Item::Gap(g) => {
-                out.push(g.clone());
+                out.push((g.clone(), false));
                 i += 1;
                 continue;
             }
@@ -219,7 +218,7 @@ fn assemble(lines: &[Line], keep: &[bool]) -> Vec<String> {
                 j = i + 1;
             }
         }
-        out.push(line);
+        out.push((line, first.hot));
         i = j;
     }
     out
@@ -231,13 +230,18 @@ pub(crate) fn squeeze(raw: &[String]) -> Vec<String> {
     for (after, trace) in [(AFTER, TRACE_LONG), (0, TRACE_TIGHT), (0, 0)] {
         out = assemble(&lines, &marked(&lines, after, trace));
         if out.len() <= LINES {
-            return out;
+            return out.into_iter().map(|(l, _)| l).collect();
         }
     }
     let top = LINES - CUT_TAIL;
-    let mut cut = out[..top].to_vec();
-    cut.push(format!("... {} more squeezed lines (see the full file)", out.len() - LINES));
-    cut.extend_from_slice(&out[out.len() - CUT_TAIL..]);
+    let end = out.len() - CUT_TAIL;
+    let mut cut: Vec<String> = out[..top].iter().map(|(l, _)| l.clone()).collect();
+    let dropped = out[top..end].iter().filter(|(_, hot)| !hot).count();
+    if dropped > 0 {
+        cut.push(format!("... {dropped} more squeezed lines (see the full file)"));
+    }
+    cut.extend(out[top..end].iter().filter(|(_, hot)| *hot).map(|(l, _)| l.clone()));
+    cut.extend(out[end..].iter().map(|(l, _)| l.clone()));
     cut
 }
 
