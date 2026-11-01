@@ -106,7 +106,11 @@ fn snap(len: u32) -> u32 {
 }
 
 pub fn fitted(img: &DynamicImage, width: u32) -> DynamicImage {
-    let w = if img.width() > width { (width / TOKEN_PX).max(1) * TOKEN_PX } else { img.width() };
+    let w = match (img.width() > width, width >= TOKEN_PX) {
+        (true, true) => width / TOKEN_PX * TOKEN_PX,
+        (true, false) => width,
+        (false, _) => img.width(),
+    };
     let h = (f64::from(img.height()) * f64::from(w) / f64::from(img.width().max(1))).round().max(1.0) as u32;
     let (w, h) = (snap(w), snap(h));
     if (w, h) == (img.width(), img.height()) {

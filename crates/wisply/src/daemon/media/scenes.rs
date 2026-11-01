@@ -25,6 +25,7 @@ const DOWNLOAD_MAX_S: f64 = 900.0;
 const READ_WIDTH: u32 = 960;
 const MAX_HEIGHT: i64 = 720;
 const GRABBERS: usize = 4;
+#[cfg(windows)]
 const READERS: usize = 4;
 const BATCH: usize = 6;
 const MIN_MOVED: f64 = 0.0008;
