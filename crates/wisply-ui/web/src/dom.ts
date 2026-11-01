@@ -16,6 +16,119 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = 
   return el;
 }
 
+const ICONS: Record<string, string> = {
+  projects: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+  graph: "M4 7a2 2 0 1 0 4 0a2 2 0 1 0-4 0M16 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M10 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M8 7l8-1M7 9l4 7M17 8l-4 8",
+  live: "M3 12h4l3-7 4 14 3-7h4",
+  tokens: "M5 20V10M12 20V4M19 20v-7",
+  learned: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v14H6.5A2.5 2.5 0 0 0 4 19.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5",
+  blind: "M4 4h16v16H4zM12 4v16",
+  settings: "M4 7h10M18 7h2M4 17h2M10 17h10M16 4v6M8 14v6",
+  search: "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM20 20l-4-4",
+  dark: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z",
+  light: "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+  glass: "M5 4h14l-1.5 16h-11zM6 9h12",
+};
+
+export function icon(name: string): SVGElement {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", ICONS[name] ?? "");
+  svg.append(path);
+  return svg;
+}
+
+export type Choice = { value: string; label: string; hint?: string };
+
+export function pick(choices: Choice[], value: string, onPick: (value: string) => void): HTMLElement {
+  let current = value;
+  let active = Math.max(0, choices.findIndex((c) => c.value === value));
+  const label = () => choices.find((c) => c.value === current)?.label ?? current;
+  const text = h("span", {}, label());
+  const list = h("ul", { role: "listbox", tabindex: "-1" });
+  const root = h("div", { class: "pick" });
+  const button = h("button", { type: "button", "aria-haspopup": "listbox", "aria-expanded": "false" }, text);
+  const outside = (e: Event) => {
+    if (!root.contains(e.target as Node)) close();
+  };
+  const draw = () =>
+    mount(
+      list,
+      ...choices.map((c, i) =>
+        h(
+          "li",
+          {
+            role: "option",
+            "aria-selected": String(c.value === current),
+            class: i === active ? "active" : "",
+            onmousemove: () => {
+              if (active !== i) {
+                active = i;
+                draw();
+              }
+            },
+            onmousedown: (e: Event) => {
+              e.preventDefault();
+              choose(i);
+            },
+          },
+          c.label,
+          c.hint ? h("span", { class: "hint" }, c.hint) : null,
+        ),
+      ),
+    );
+  const open = () => {
+    if (root.classList.contains("open")) return;
+    active = Math.max(0, choices.findIndex((c) => c.value === current));
+    draw();
+    root.append(list);
+    root.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+    document.addEventListener("mousedown", outside);
+  };
+  function close(): void {
+    list.remove();
+    root.classList.remove("open");
+    button.setAttribute("aria-expanded", "false");
+    document.removeEventListener("mousedown", outside);
+  }
+  function choose(i: number): void {
+    const c = choices[i];
+    close();
+    button.focus();
+    if (!c || c.value === current) return;
+    current = c.value;
+    text.textContent = label();
+    onPick(current);
+  }
+  button.addEventListener("click", () => (root.classList.contains("open") ? close() : open()));
+  button.addEventListener("keydown", (e) => {
+    const k = e.key;
+    const isOpen = root.classList.contains("open");
+    if (k === "ArrowDown" || k === "ArrowUp") {
+      e.preventDefault();
+      if (!isOpen) return open();
+      active = (active + (k === "ArrowDown" ? 1 : choices.length - 1)) % choices.length;
+      draw();
+    } else if ((k === "Enter" || k === " ") && isOpen) {
+      e.preventDefault();
+      choose(active);
+    } else if (k === "Escape" && isOpen) {
+      e.preventDefault();
+      close();
+    } else if (k === "Tab" && isOpen) close();
+  });
+  root.append(button);
+  return root;
+}
+
 export function mount(parent: HTMLElement, ...kids: Child[]): void {
   parent.replaceChildren(...kids.filter((k): k is Node | string => k !== null && k !== undefined && k !== false).map((k) => (typeof k === "number" ? String(k) : k)));
 }

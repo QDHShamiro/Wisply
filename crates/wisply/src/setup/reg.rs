@@ -18,6 +18,7 @@ const BROWSER_KEYS: &[(&str, &str)] = &[
     ("chrome", r"Software\Google\Chrome\NativeMessagingHosts"),
     ("edge", r"Software\Microsoft\Edge\NativeMessagingHosts"),
     ("chromium", r"Software\Chromium\NativeMessagingHosts"),
+    ("chrome-for-testing", r"Software\Google\Chrome for Testing\NativeMessagingHosts"),
 ];
 const BROADCAST_MS: u32 = 2000;
 

@@ -38,8 +38,26 @@ done
 "$L" status
 "$L" selftest | tee "$OUT"
 grep -E "^(FAIL|SKIP)" "$OUT" | sed 's/^/::warning title=selftest::/' || true
+STATUS=0
 if ! tail -1 "$OUT" | grep -qE "^([0-9]+)/\1 passed$"; then
   tail -25 "$RUNNER_TEMP/chrome.log"
   tail -40 "$HOME/.wisply/daemon.log"
-  exit 1
+  STATUS=1
 fi
+if [ -n "$EXE" ]; then
+  taskkill //F //IM chrome.exe > /dev/null 2>&1
+  HEADLESS_CHROME=$(cygpath -w "$CHROME")
+else
+  pkill -f "user-data-dir=$PROFILE" > /dev/null 2>&1
+  HEADLESS_CHROME="$CHROME"
+fi
+sleep 2
+if "$L" headless start --browser "$HEADLESS_CHROME" && "$L" open https://example.com --text | tee "$RUNNER_TEMP/headless.txt" | grep -q "Example Domain"; then
+  "$L" headless stop
+else
+  "$L" headless stop
+  tail -25 "$HOME/.wisply/headless.log"
+  tail -40 "$HOME/.wisply/daemon.log"
+  STATUS=1
+fi
+exit $STATUS

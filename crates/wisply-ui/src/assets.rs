@@ -2,12 +2,7 @@ pub const CSP: &str = "default-src 'self' wisply: http://wisply.localhost; scrip
                        style-src 'self' 'unsafe-inline' wisply: http://wisply.localhost; img-src 'self' data: wisply: http://wisply.localhost; \
                        connect-src 'none'; worker-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'";
 
-const FILES: &[(&str, &str, &[u8])] = &[
-    ("/index.html", "text/html; charset=utf-8", include_bytes!("../web/dist/index.html")),
-    ("/app.js", "text/javascript; charset=utf-8", include_bytes!("../web/dist/app.js")),
-    ("/app.css", "text/css; charset=utf-8", include_bytes!("../web/dist/app.css")),
-    ("/icon.svg", "image/svg+xml", include_bytes!("../web/dist/icon.svg")),
-];
+const FILES: &[(&str, &str, &[u8])] = include!(concat!(env!("OUT_DIR"), "/files.rs"));
 
 pub fn serve(path: &str) -> (u16, &'static str, &'static [u8]) {
     let path = if path.is_empty() || path == "/" { "/index.html" } else { path };
@@ -26,5 +21,6 @@ mod tests {
         assert!(String::from_utf8_lossy(body).contains("app.js"));
         assert_eq!(super::serve("/app.js").0, 200);
         assert_eq!(super::serve("/../secret").0, 404);
+        assert!(super::FILES.iter().filter(|(p, ..)| p.ends_with(".js")).count() > 1);
     }
 }

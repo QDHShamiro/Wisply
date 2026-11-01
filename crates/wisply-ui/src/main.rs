@@ -2,13 +2,15 @@
 
 mod assets;
 mod bridge;
+mod folder;
+mod win;
 
 use std::borrow::Cow;
 
 use tao::dpi::LogicalSize;
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
-use tao::window::{Icon, WindowBuilder};
+use tao::window::{Icon, Theme, WindowBuilder};
 use wry::WebViewBuilder;
 use wry::http::Response;
 
@@ -16,7 +18,10 @@ const TITLE: &str = "Wisply";
 const SIZE: (f64, f64) = (1280.0, 820.0);
 const MIN_SIZE: (f64, f64) = (720.0, 480.0);
 const START: &str = "wisply://localhost/";
-const BACKGROUND: (u8, u8, u8, u8) = (5, 5, 5, 255);
+const BACKGROUND: (u8, u8, u8, u8) = (0, 0, 0, 0);
+#[cfg(windows)]
+const BROWSER_ARGS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --lang=en-US --accept-lang=en-US";
 const QUIET_ENV: &str = "WISPLY_UI_QUIET";
 const HELP: &str = "the Wisply window, open it with wisply ui";
 const ICON_SMALL: &[u8] = include_bytes!("../icons/32.png");
@@ -48,6 +53,8 @@ fn main() -> wry::Result<()> {
     let proxy = event_loop.create_proxy();
     let builder = WindowBuilder::new()
         .with_title(TITLE)
+        .with_theme(Some(Theme::Dark))
+        .with_transparent(true)
         .with_window_icon(icon(if cfg!(windows) { ICON_SMALL } else { ICON_BIG }))
         .with_inner_size(LogicalSize::new(SIZE.0, SIZE.1))
         .with_min_inner_size(LogicalSize::new(MIN_SIZE.0, MIN_SIZE.1))
@@ -58,8 +65,14 @@ fn main() -> wry::Result<()> {
         builder.with_taskbar_icon(icon(ICON_BIG))
     };
     let window = builder.build(&event_loop).map_err(|e| wry::Error::Io(std::io::Error::other(e.to_string())))?;
+    #[cfg(windows)]
+    {
+        use tao::platform::windows::WindowExtWindows;
+        win::set_owner(window.hwnd());
+    }
     let builder = WebViewBuilder::new()
         .with_background_color(BACKGROUND)
+        .with_transparent(true)
         .with_custom_protocol("wisply".into(), |_, req| {
             let (status, kind, body) = assets::serve(req.uri().path());
             Response::builder()
@@ -78,6 +91,11 @@ fn main() -> wry::Result<()> {
         })
         .with_focused(std::env::var_os(QUIET_ENV).is_none())
         .with_url(START);
+    #[cfg(windows)]
+    let builder = {
+        use wry::WebViewBuilderExtWindows;
+        builder.with_additional_browser_args(BROWSER_ARGS)
+    };
     #[cfg(any(windows, target_os = "macos"))]
     let webview = builder.build(&window)?;
     #[cfg(not(any(windows, target_os = "macos")))]

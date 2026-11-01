@@ -17,14 +17,29 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - More secrets are cut out before anything is stored: Anthropic, Stripe, Google, npm, GitLab, GitHub fine-grained and
   Discord bot tokens, Bearer and Authorization headers, Discord/Slack/Teams webhook URLs, passwords in URLs, private
   key blocks, "Passwort ist ...".
+- `frames`, `watch` and `shot`: fewer image tokens, faster. Contact sheets now fit the model's 28 px token grid
+  (no second resize, no empty cells, bigger tiles when there are few), near-identical scenes are dropped instead of
+  padding the sheet to the full count, and `shot` sizes snap to whole tokens (1024 px wide became 1008). Video frames
+  come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
 
 ### Added
+- `wisply pc`: an optimizer for Windows, macOS and Linux. `pc` gives a score from 0 to 100 with the 3 biggest slowdowns
+  and a numbered fix for each; `pc fix <n|all>`, `pc clean [--dry]`, `pc startup [off|on <n>]`, `pc game`, `pc
+  afk|play|auto`, `pc net [host]`, `pc disk`, `pc updates`, `pc on|off`, `pc log [n]`. The daemon watches every 5 seconds
+  (new crate `wisply-pc`) and warns by system notification about RAM above 85 %, fast growing programs, CPU above 80 %
+  and a busy disk, naming the program. With `pc on` it lowers priorities of builds and agents and runs a game mode
+  (restored exactly, also after a daemon crash), gives memory back and cleans temp files, caches, old build folders
+  and logs with a protection list (Minecraft, open projects, `build/libs`, secrets, documents). Closing programs and
+  switching autostarts off always need a yes. The status line gets a `pc` field.
 - `wisply doctor ai [tool]`: the measuring half of Claude Code's `/doctor` for every AI CLI it finds (Claude
   Code, Codex, Gemini, Qwen, OpenCode, Cursor, Continue), read-only and without a model. It checks the install,
   that settings and config files parse (JSON and TOML, with line and column), instruction files and their size,
   skill frontmatter, agent name collisions and the configured MCP servers. For Claude Code it also names unused
   skills, plugins and MCP servers, slow hooks and hook timeouts, ranks denied tool calls and checks the default
   permission mode. `wisply doctor` shows whether the Wisply status line is set up. `/wisply:doctor` runs both.
+- `wisply headless start|stop|status|install`: a browser without a window for servers and CI. `install` downloads
+  Chrome for Testing, `start` launches it with the extension and its own profile and waits until it is connected.
+  `scripts/ci-browser.sh` now tests it on Windows, macOS and Linux.
 - `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
   on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with
   `*` for changes and `↑2 ↓1` for ahead/behind, the GitHub pull request of the branch with its checks, model, effort,
@@ -50,6 +65,10 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   Reports are saved to the vault (`Research/`) and found again by `recall`.
 
 ### Changed
+- Headroom v2: about 38% fewer characters than before on 24 real and generated outputs (cargo, Gradle, Maven, npm, tests,
+  server logs, JSON), every error and warning line kept, 7 ms at most per output. Head and tail grow with the output,
+  progress bars and download lines are dropped, framework stack frames and similar lines are folded, summaries always
+  stay, and "0 errors" no longer counts as an error. The full output is still saved and `wisply more` works as before.
 - The repository is now `QDHShamiro/Wisply` (old links redirect). The crates are `wisply`, `wisply-ui` and
   `wisply-core`, `wisply-memory`, `wisply-proto`, `wisply-code`, `wisply-squeeze`.
 

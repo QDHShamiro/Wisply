@@ -9,6 +9,7 @@ use std::process::ExitCode;
 use serde_json::json;
 
 pub use auto::{Gate, start};
+pub(crate) use release::unpack;
 pub use state::notice;
 
 const USAGE: &str = "wisply update [--check | --rollback]   (config update auto|notify|off)";

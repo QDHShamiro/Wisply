@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 
-pub const SEGMENTS: [&str; 10] =
-    ["branch", "sync", "github", "repo", "model", "effort", "context", "tokens", "limit5h", "limitweek"];
+pub const SEGMENTS: [&str; 11] =
+    ["branch", "sync", "github", "repo", "model", "effort", "context", "tokens", "limit5h", "limitweek", "pc"];
 const OFF_BY_DEFAULT: [&str; 1] = ["repo"];
 const ASCII: &str = "ascii";
 

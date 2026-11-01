@@ -151,6 +151,9 @@ reads a fraction of it and does not repeat notes it already has. Search works by
 `watch <link|file>` gives an overview of any video (chapters, speech, screen text, scenes), `frames e40` turns a
 video on the page into one contact sheet, `listen` returns only the speech, `shot e57` looks at one image.
 
+Pictures are sized to the model's 28 px token grid, so no token is spent on a sliver of a tile. Scenes that look the
+same are left out: a screen recording that shows four different things gives four tiles, not twelve.
+
 ## Memory, notes and code map
 
 Three things in one program, so the AI does not read ten files or ask you again what you decided last week.
@@ -215,9 +218,12 @@ A build, a test run or a server log can print thousands of lines, and the model 
 is a hook that runs after each Bash command. When the output is longer than 60 lines or 4,000 characters it keeps
 what matters and cuts the rest:
 
-- the first 10 and the last 30 lines,
-- every line with an error, exception, failure, panic, warning, timeout or similar word, plus the two lines after it,
-- stack traces shortened, repeated lines folded into one with a count,
+- the first 5 to 10 and the last 10 to 20 lines, more of both the longer the output is,
+- every line with an error, exception, failure, panic, warning, timeout or similar word, plus the two lines after it ("0 errors" and `--no-fail-fast` do not count),
+- test and build summaries (`test result:`, `BUILD FAILURE`, `Tests: 1 failed`),
+- stack traces shortened, framework frames folded into `... 19 frames`, your own frames kept,
+- progress bars, download lines, spinners and colors dropped,
+- repeated lines folded into one with a count, lines that differ in one word (`Compiling a`, `Compiling b` ...) into `(+4 similar)`,
 - long JSON shortened the same way.
 
 The model gets that short version and a name for the full text. One command shows any part of it again:
@@ -237,6 +243,18 @@ wisply more hr-3fa91c04de --lines 400-440
 `wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
 keeps the rest in a file.
 
+## Headless
+
+`wisply headless` runs a browser with no window, with the Wisply extension loaded, for servers and CI.
+
+- `wisply headless install` downloads Chrome for Testing into `~/.wisply/chrome` (Windows, macOS, Linux x64).
+- `wisply headless start` starts it detached with its own profile in `~/.wisply/headless-profile` and waits until the
+  extension is connected. After that every normal command (`open`, `snap`, `click`, ...) works as usual.
+- `wisply headless stop` ends it, `wisply headless status` says whether it runs.
+- It uses `--browser PATH`, `WISPLY_CHROME`, the downloaded Chrome or a `chromium` on the PATH, in that order. On Linux
+  CI (`CI` set) it adds `--no-sandbox`; `--no-sandbox` does the same by hand.
+- Your own logged-in browser is not touched. The headless profile has no logins.
+
 ## Updates
 
 Wisply keeps itself current. Once a day the daemon looks for a newer stable release on GitHub. When there is one it
@@ -248,6 +266,41 @@ once nothing has talked to Wisply for 5 minutes. It never does this while a game
 - `wisply update` checks and installs now, `wisply update --check` only looks, `wisply update --rollback` goes back.
 - `wisply config update notify` only tells you (once a day, in the start info), `config update off` turns it off.
 - Builds you run from a source checkout are never touched.
+
+## PC optimizer
+
+`wisply pc` checks how fast this PC is and says what slows it down. It works the same on Windows, macOS and Linux.
+
+```
+pc 72/100 · RAM 87 % (brave 6.1 GB) · C: 18 GB free · 6 autostarts · ping 1.1.1.1 34 ms
+1. RAM 87 % (brave holds 6.1 GB) - free the memory of idle programs -> wisply pc fix 1
+2. C: only 18.0 GB free - clean temp files, caches and old build folders -> wisply pc fix 2
+```
+
+- `wisply pc fix <n>` runs suggestion n, `fix all` runs every safe one. `pc clean [--dry]` cleans up, `pc startup`
+  lists autostarts (`off <n>` / `on <n>`, the original is kept), `pc net [host]` shows ping and which program holds
+  the line, `pc disk` shows drive health, `pc updates` shows old graphics drivers and open system updates (it never
+  installs anything), `pc game` shows the game mode, `pc afk|play|auto` switches it by hand, `pc log [n]` lists what
+  it did, `pc config` shows the settings.
+- The daemon looks every 5 seconds in the background (about 0.3 % of one CPU core and 10 MB of RAM, measured). It warns, with a system
+  notification, when RAM is above 85 %, a program grows fast, CPU stays above 80 % for 30 s or the disk stays busy for
+  30 s, and it names the program. The same warning comes once per 30 minutes at most and never brings a window to the
+  front. The status line gets a short `pc 72 RAM 87 %` field (`wisply statusline set pc off` hides it).
+- New users: it shows and warns, it does not act. `wisply pc on` lets it act by itself: lower priorities, give memory
+  back, clean temp files and run the game mode. Closing programs, switching autostarts off and deleting outside temp
+  and cache folders always need your yes (`pc fix <n>`). `wisply pc off` puts everything back.
+- Game mode: while a game runs and you used the mouse or keyboard in the last 5 minutes, builds, tests and AI agents
+  (not the one in front of you) get the lowest priority, background programs get quieter and the game a higher one,
+  with the high performance power plan. Builds are paused for a moment when RAM runs out. After 5 minutes without
+  input it relaxes, the first input brings it back. Everything is restored exactly at the end, also after a crash of
+  the daemon (the state is kept in `~/.wisply/pc/mode-state.json`).
+- Cleaning (below 25 GB free, once a week when idle, or `pc clean`): temp files, caches, crash dumps, build folders
+  (`target`, `build`, `node_modules`, `.gradle`) of projects untouched for 30 days and without uncommitted changes,
+  logs older than 14 days, npm/pip/cargo/gradle caches while their tool is not running. Never touched: open projects,
+  `build/libs`, Minecraft, game folders, `~/.claude`, `~/.wisply/memory`, the vault, Documents, Pictures, Downloads and
+  anything that looks like a secret. Deleted files skip the recycle bin; `pc log` says what, where and how big.
+- Settings live in `~/.wisply/pc/config.json` (`act`, `warn`, `notify`, `statusline`, `tick_secs`, thresholds,
+  `builders`, `background`, `protect`, `protect_paths`, `project_roots`, `ping_host`, `game_exes`).
 
 ## The numbers
 
@@ -306,12 +359,11 @@ used, ~34M without Wisply, **84% saved**.
 | Tokens for a first look at a page | **~440** (measured) | ~15,850 (measured) | 15,000–30,000 on dense pages ([1]) | not published ([2]) |
 | Repeated tasks | learned routines, one call | saved shortcuts | – | – |
 | Memory across sessions | ✅ local | – | – | – |
-| Headless mode | ❌ needs a browser window (Xvfb on a Linux CI machine) | – | ✅ | ✅ |
+| Headless mode | ✅ `wisply headless` (Chrome for Testing, no window) | – | ✅ | ✅ |
 
-`–` = not built in, as far as the public docs say. Wisply drives a real browser window with its extension loaded.
-It has no `--headless` mode, but a window is all it needs: Wisply's own CI runs it in Chrome for Testing on Windows,
-macOS and Linux (under Xvfb there), see `scripts/ci-browser.sh`. For headless test suites, take Playwright. Wisply is
-for an agent on your own computer that has to use your logged-in browser and your apps, cheaply.
+`–` = not built in, as far as the public docs say. Wisply drives a browser with its extension loaded. `wisply headless`
+starts one without a window, so it also runs on a server or in CI, and Wisply's own CI tests it on Windows, macOS and
+Linux (`scripts/ci-browser.sh`). Wisply is for an agent that has to use a logged-in browser and your apps, cheaply.
 
 [1]: https://lite.ego.app/article/playwright-mcp-token-problem
 [2]: https://github.com/vercel-labs/agent-browser
@@ -393,6 +445,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
 | **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) |
+| **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |
 | **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` |
