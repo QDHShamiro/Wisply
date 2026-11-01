@@ -1,7 +1,7 @@
 mod agents;
 pub(crate) mod claude_env;
 mod migrate;
-mod place;
+pub(crate) mod place;
 #[cfg(windows)]
 mod reg;
 
