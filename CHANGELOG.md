@@ -48,6 +48,10 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   Reports are saved to the vault (`Research/`) and found again by `recall`.
 
 ### Changed
+- Headroom v2: about 38% fewer characters than before on 24 real and generated outputs (cargo, Gradle, Maven, npm, tests,
+  server logs, JSON), every error and warning line kept, 7 ms at most per output. Head and tail grow with the output,
+  progress bars and download lines are dropped, framework stack frames and similar lines are folded, summaries always
+  stay, and "0 errors" no longer counts as an error. The full output is still saved and `wisply more` works as before.
 - The repository is now `QDHShamiro/Wisply` (old links redirect). The crates are `wisply`, `wisply-ui` and
   `wisply-core`, `wisply-memory`, `wisply-proto`, `wisply-code`, `wisply-squeeze`.
 

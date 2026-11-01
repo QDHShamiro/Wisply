@@ -19,6 +19,7 @@ const SIZE: (f64, f64) = (1280.0, 820.0);
 const MIN_SIZE: (f64, f64) = (720.0, 480.0);
 const START: &str = "wisply://localhost/";
 const BACKGROUND: (u8, u8, u8, u8) = (0, 0, 0, 0);
+#[cfg(windows)]
 const BROWSER_ARGS: &str =
     "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --lang=en-US --accept-lang=en-US";
 const QUIET_ENV: &str = "WISPLY_UI_QUIET";

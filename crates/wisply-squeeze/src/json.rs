@@ -1,4 +1,4 @@
-use crate::pat::{IMPORTANT, NUMS, QUIET};
+use crate::pat;
 use crate::text::{clip, head, len, lstrip, strip};
 use serde_json::{Map, Number, Value};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -157,12 +157,12 @@ fn picks(items: &[Value]) -> (Vec<usize>, usize) {
     let mut bad = 0;
     for (i, it) in items.iter().enumerate() {
         let dumped = dumps(&brief(it), false, false);
-        let text = QUIET.replace_all(head(&dumped, PICK_CHARS), "");
-        if !IMPORTANT.is_match(&text) {
+        let text = pat::quiet(head(&dumped, PICK_CHARS));
+        if !pat::important(&text) {
             continue;
         }
         bad += 1;
-        if kinds.insert(NUMS.replace_all(&text, "#").into_owned()) {
+        if kinds.insert(pat::numbers(&text)) {
             found.push(i);
         }
     }

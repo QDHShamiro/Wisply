@@ -1,5 +1,7 @@
 mod json;
 mod log;
+#[cfg(test)]
+mod oracle;
 mod pat;
 mod text;
 

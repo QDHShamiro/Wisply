@@ -217,9 +217,12 @@ A build, a test run or a server log can print thousands of lines, and the model 
 is a hook that runs after each Bash command. When the output is longer than 60 lines or 4,000 characters it keeps
 what matters and cuts the rest:
 
-- the first 10 and the last 30 lines,
-- every line with an error, exception, failure, panic, warning, timeout or similar word, plus the two lines after it,
-- stack traces shortened, repeated lines folded into one with a count,
+- the first 5 to 10 and the last 10 to 20 lines, more of both the longer the output is,
+- every line with an error, exception, failure, panic, warning, timeout or similar word, plus the two lines after it ("0 errors" and `--no-fail-fast` do not count),
+- test and build summaries (`test result:`, `BUILD FAILURE`, `Tests: 1 failed`),
+- stack traces shortened, framework frames folded into `... 19 frames`, your own frames kept,
+- progress bars, download lines, spinners and colors dropped,
+- repeated lines folded into one with a count, lines that differ in one word (`Compiling a`, `Compiling b` ...) into `(+4 similar)`,
 - long JSON shortened the same way.
 
 The model gets that short version and a name for the full text. One command shows any part of it again:

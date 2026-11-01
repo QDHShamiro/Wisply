@@ -39,7 +39,7 @@ done
 "$L" selftest | tee "$OUT"
 grep -E "^(FAIL|SKIP)" "$OUT" | sed 's/^/::warning title=selftest::/' || true
 STATUS=0
-if ! tail -1 "$OUT" | grep -qE "^([0-9]+)/ passed$"; then
+if ! tail -1 "$OUT" | grep -qE "^([0-9]+)/\1 passed$"; then
   tail -25 "$RUNNER_TEMP/chrome.log"
   tail -40 "$HOME/.wisply/daemon.log"
   STATUS=1
