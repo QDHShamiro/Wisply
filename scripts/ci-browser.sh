@@ -38,10 +38,11 @@ done
 "$L" status
 "$L" selftest | tee "$OUT"
 grep -E "^(FAIL|SKIP)" "$OUT" | sed 's/^/::warning title=selftest::/' || true
-if ! tail -1 "$OUT" | grep -qE "^([0-9]+)/\1 passed$"; then
+STATUS=0
+if ! tail -1 "$OUT" | grep -qE "^([0-9]+)/ passed$"; then
   tail -25 "$RUNNER_TEMP/chrome.log"
   tail -40 "$HOME/.wisply/daemon.log"
-  exit 1
+  STATUS=1
 fi
 if [ -n "$EXE" ]; then
   taskkill //F //IM chrome.exe > /dev/null 2>&1
@@ -57,5 +58,6 @@ else
   "$L" headless stop
   tail -25 "$HOME/.wisply/headless.log"
   tail -40 "$HOME/.wisply/daemon.log"
-  exit 1
+  STATUS=1
 fi
+exit $STATUS
