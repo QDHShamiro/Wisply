@@ -13,8 +13,9 @@ const RRF_K: f64 = 60.0;
 const POOL: usize = 60;
 const PROJECT_BOOST: f64 = 1.3;
 const USER_BOOST: f64 = 1.2;
-const FRESH_BOOST: f64 = 0.25;
-const HALF_LIFE_S: f64 = 90.0 * 86_400.0;
+const FRESH_BOOST: f64 = 0.5;
+const HALF_LIFE_S: f64 = 45.0 * 86_400.0;
+const FOLD_POOL: usize = 3;
 const BUSY: Duration = Duration::from_secs(15);
 const TITLE_CHARS: usize = 200;
 pub(crate) const TASK_CHARS: usize = 300;
@@ -312,10 +313,13 @@ impl Store {
         let mut stmt = self.db.prepare(&format!("select * from notes where id in ({marks})"))?;
         let notes = stmt.query_map(params_from_iter(score.iter().map(|(id, _)| id)), note_of)?;
         let t = now();
+        let want = super::rank::terms(query);
         let mut out = Vec::new();
         for note in notes {
             let note = note?;
+            let sim = sims.iter().find(|(id, _)| *id == note.id).map(|(_, v)| *v);
             let mut s = score.iter().find(|(id, _)| *id == note.id).map_or(0.0, |(_, s)| *s);
+            s *= super::rank::weight(super::rank::coverage(&note, &want, sim));
             if !project.is_empty() && note.project == project {
                 s *= PROJECT_BOOST;
             }
@@ -323,12 +327,11 @@ impl Store {
                 s *= USER_BOOST;
             }
             s *= 1.0 + FRESH_BOOST * 0.5f64.powf((t - note.updated).max(0.0) / HALF_LIFE_S);
-            let sim = sims.iter().find(|(id, _)| *id == note.id).map(|(_, v)| *v);
             out.push(Hit { note, score: s, sim });
         }
         out.sort_by(|a, b| b.score.total_cmp(&a.score));
-        out.truncate(limit);
-        Ok(out)
+        out.truncate(limit * FOLD_POOL);
+        Ok(super::rank::fold(out, limit))
     }
 
     pub fn todo(&self, id: i64) -> rusqlite::Result<Option<Todo>> {

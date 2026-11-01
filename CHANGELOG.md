@@ -23,6 +23,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
 
 ### Added
+- `recall` ranks by how many of your words a note really contains (title counts more than body), folds near-identical
+  notes into the best one, favours recent notes (half-life 45 days), and shows the sentence that matches instead of the
+  start of the note. It also lists matching open to-dos first, so "Lighting loeschen" finds the to-do. Default 6 lines
+  instead of 8 and a shorter footer: about 30% fewer characters on 15 real questions, all 15 right notes in the top 3.
+- `code callers` groups calls per function and shows tests last; the name search behind meaning questions strips plural
+  endings, weighs rare words higher and also reads file paths; the file list is cached for 3 seconds, so a repeated
+  `wisply code` answers in about 160 ms instead of 225 ms.
 - `wisply pc`: an optimizer for Windows, macOS and Linux. `pc` gives a score from 0 to 100 with the 3 biggest slowdowns
   and a numbered fix for each; `pc fix <n|all>`, `pc clean [--dry]`, `pc startup [off|on <n>]`, `pc game`, `pc
   afk|play|auto`, `pc net [host]`, `pc disk`, `pc updates`, `pc on|off`, `pc log [n]`. The daemon watches every 5 seconds

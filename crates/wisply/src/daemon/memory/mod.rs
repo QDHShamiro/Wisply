@@ -16,15 +16,18 @@ use std::thread;
 use std::time::Duration;
 
 use wisply_core::{Call, Fail};
-use wisply_memory::{DbResult, NewNote, Note, Store, Todo, date, day, oneline, project_of, scrub, short};
+use wisply_memory::{
+    DbResult, NewNote, Note, Store, Todo, date, day, mentions, oneline, project_of, scrub, short, snippet, terms, words,
+};
 
 use super::Daemon;
 use super::ctx::Ctx;
 use super::web::number;
 
-const RECALL_MAX: usize = 8;
-const LINE: usize = 110;
-const BODY_LINE: usize = 70;
+const RECALL_MAX: usize = 6;
+const LINE: usize = 100;
+const BODY_LINE: usize = 56;
+const TODO_HITS: usize = 2;
 const RECALL_COST: usize = 150;
 const TITLE_MAX: usize = 160;
 const SESSION_CHARS: usize = 8;
@@ -89,9 +92,9 @@ fn ident(text: &str) -> Result<i64, Fail> {
     text.trim().trim_start_matches('#').parse().map_err(|_| fail())
 }
 
-fn line(n: &Note, other: bool) -> String {
+fn line(n: &Note, other: bool, want: &[String]) -> String {
     let body = if !n.body.is_empty() && n.kind != "session" {
-        oneline(n.body.split('\n').next().unwrap_or(""), BODY_LINE)
+        snippet(&n.body, &n.title, want, BODY_LINE)
     } else {
         String::new()
     };
@@ -168,13 +171,25 @@ fn recall(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         Ok(hits)
     })?;
     let note = if why.is_empty() { String::new() } else { format!("words only, {why}") };
-    if found.is_empty() {
+    let todos = open_todos(d, &text)?;
+    if found.is_empty() && todos.is_empty() {
         let tail = if note.is_empty() { String::new() } else { format!(" ({note})") };
         return Ok(format!("nothing remembered about \"{text}\"{tail}"));
     }
-    let lines: Vec<String> = found.iter().map(|h| line(&h.note, !here.is_empty() && h.note.project != here)).collect();
+    let want = terms(&text);
+    let mut lines: Vec<String> = todos.iter().map(|t| format!("to-do {}", todo_line(t, true))).collect();
+    lines.extend(found.iter().map(|h| line(&h.note, !here.is_empty() && h.note.project != here, &want)));
     let tail = if note.is_empty() { String::new() } else { format!("; {note}") };
-    Ok(format!("{}\n(wisply recall <id> shows one in full, ~Nt = its size{tail})", lines.join("\n")))
+    Ok(format!("{}\n(recall <id> = full note, ~Nt = size{tail})", lines.join("\n")))
+}
+
+fn open_todos(d: &Daemon, text: &str) -> Result<Vec<Todo>, Fail> {
+    let raw = words(text);
+    if raw.is_empty() {
+        return Ok(Vec::new());
+    }
+    let all = with_store(d, |s| s.todos(None, true))?;
+    Ok(all.into_iter().filter(|t| mentions(&format!("{} {}", t.task, t.note), &raw)).take(TODO_HITS).collect())
 }
 
 fn first_sentence(text: &str) -> &str {
@@ -349,7 +364,7 @@ mod tests {
             updated: 0.0,
             ..Note::default()
         };
-        let shown = line(&n, true);
+        let shown = line(&n, true, &[]);
         assert!(shown.starts_with("#3 ") && shown.contains(" fact [web] (vault): Deploy with ship.sh"), "{shown}");
         assert!(shown.ends_with(" | ship.sh does it all"), "{shown}");
         let t = Todo {

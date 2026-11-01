@@ -58,6 +58,7 @@ const SKIP_DIRS: &[&str] = &[
 const OUTPUT_DIRS: &[&str] = &["target", "build", "out", "dist", "bin", "obj"];
 const MAX_BYTES: u64 = 600_000;
 const RETRY: Duration = Duration::from_secs(600);
+const LIST_TTL: Duration = Duration::from_secs(3);
 const SCHEMA: &str = "
 create table if not exists files(path text primary key, mtime real, lang text, lines integer);
 create table if not exists symbols(id integer primary key, path text, name text, low text, kind text, line integer,
@@ -80,6 +81,7 @@ pub struct Index {
     pub root: PathBuf,
     pub db: Connection,
     pub left: usize,
+    listed: Option<(Instant, Vec<String>)>,
 }
 
 pub fn lang_of(path: &str) -> Option<&'static str> {
@@ -110,7 +112,7 @@ impl Index {
         db.pragma_update(None, "journal_mode", "wal")?;
         db.execute_batch(SCHEMA)?;
         let _ = configure(&PackConfig { cache_dir: Some(dir.join("parsers")), ..PackConfig::default() });
-        Ok(Index { root: root.to_path_buf(), db, left: 0 })
+        Ok(Index { root: root.to_path_buf(), db, left: 0, listed: None })
     }
 
     pub fn refresh(&mut self, budget: Option<Duration>) -> rusqlite::Result<usize> {
@@ -118,7 +120,14 @@ impl Index {
             let mut q = self.db.prepare("select path, mtime from files")?;
             q.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?
         };
-        let files = listing(&self.root);
+        let files = match &self.listed {
+            Some((at, names)) if at.elapsed() < LIST_TTL => names.clone(),
+            _ => {
+                let names = listing(&self.root);
+                self.listed = Some((Instant::now(), names.clone()));
+                names
+            }
+        };
         let mut todo = Vec::new();
         let mut seen = HashSet::new();
         for rel in files {
