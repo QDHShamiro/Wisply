@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --minify --format=iife --target=es2022 --legal-comments=none --outfile=dist/app.js && node copy.mjs",
+    "build": "node copy.mjs clean && esbuild src/main.ts --bundle --minify --splitting --format=esm --target=es2022 --legal-comments=none --entry-names=app --chunk-names=chunk-[hash] --outdir=dist && node copy.mjs",
     "check": "tsc --noEmit"
   },
   "devDependencies": {

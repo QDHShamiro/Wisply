@@ -15,21 +15,14 @@
 [12:01:15 WARN]: Can't keep up! Is the server overloaded? Running 7120ms or 132 ticks behind
 [12:01:16 INFO]: Steve joined the game
 [12:01:17 INFO]: Herobrine joined the game
-... 173 lines (58 x UUID of player, 25 x Saving chunks for)
+... 173 lines (7 x Can't keep up!, 58 x UUID of player)
 [12:04:10 ERROR]: Could not pass event PlayerInteractEvent to AsyncDonutDuels v1.4.2
 java.lang.NullPointerException: Cannot invoke "org.bukkit.Location.getWorld()" because "loc" is null
-	at dev.qdhshamiro.duels.arena.Arena.join(Arena.java:100) ~[AsyncDonutDuels-1.4.2.jar:?] (x14)
-... 131 lines (49 x UUID of player, 11 x at dev.qdhshamiro.duels.arena.Arena.join(Arena.java:#) ~[Asy)
-[12:06:10 INFO]: UUID of player Steve is 315a84f4-82c8-cb70-cfea-11b425c1e9e7
-[12:06:11 INFO]: Shamiro issued server command: /spawn
-[12:06:12 INFO]: Shamiro joined the game
-[12:06:13 INFO]: Steve joined the game
-[12:06:14 INFO]: Herobrine joined the game
-[12:06:15 INFO]: UUID of player Shamiro is bd5cc167-ac58-3039-bc97-4e7c48570adf
-[12:06:16 INFO]: UUID of player Steve is 9cb31b93-8799-9421-8090-8484fd34221b
-[12:06:17 WARN]: Can't keep up! Is the server overloaded? Running 5209ms or 130 ticks behind
-[12:06:18 INFO]: Shamiro joined the game
-[12:06:19 INFO]: UUID of player Notch is 07f3e877-fb9c-3725-afc0-d2f79e7cefe2
+	at dev.qdhshamiro.duels.arena.Arena.join(Arena.java:100) ~[AsyncDonutDuels-1.4.2.jar:?] (x12)
+	... 14 frames
+[12:04:11 INFO]: UUID of player Herobrine is 66ad472e-185d-01f4-7935-25572ddae449
+[12:04:12 INFO]: Alex joined the game
+... 127 lines (7 x Can't keep up!, 52 x UUID of player)
 [12:06:20 INFO]: Steve issued server command: /spawn
 [12:06:21 INFO]: Herobrine joined the game
 [12:06:22 INFO]: Notch joined the game

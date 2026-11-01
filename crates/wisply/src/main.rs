@@ -1,5 +1,6 @@
 mod client;
 mod daemon;
+mod headless;
 mod hook;
 mod host;
 #[cfg(windows)]
@@ -12,6 +13,7 @@ mod spawn;
 mod statusline;
 #[cfg(windows)]
 mod testapp;
+mod update;
 mod v2;
 #[cfg(windows)]
 mod voice;

@@ -15,6 +15,7 @@ mod hotkey;
 mod lane;
 mod media;
 mod memory;
+mod pc;
 mod phone;
 mod record;
 mod research;
@@ -55,6 +56,11 @@ const FIRST_MESSAGE: Duration = Duration::from_secs(10);
 const STOPPED: &str = "stopped (Ctrl+Alt+End or wisply abort)";
 const ABORTED: &str = "stopped the running and queued commands";
 const LANES: [Lane; 3] = [Lane::Main, Lane::Memory, Lane::Hook];
+const UPDATE_IDLE: u64 = 300;
+
+fn secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
 
 pub type Prompts = Vec<(f64, Vec<String>)>;
 
@@ -70,6 +76,7 @@ pub struct Daemon {
     log: Log,
     next_id: AtomicU64,
     generation: AtomicU64,
+    last_cmd: AtomicU64,
 }
 
 pub enum Out {
@@ -155,6 +162,7 @@ enum Msg {
     Hello(Map<String, Value>),
 }
 
+pub(crate) use doctor::install as net;
 pub use doctor::run as doctor;
 #[cfg(windows)]
 pub use media::tools::{ffmpeg, run as run_tool, which};
@@ -215,8 +223,18 @@ pub fn serve() -> ExitCode {
         token,
         next_id: AtomicU64::new(0),
         generation: AtomicU64::new(0),
+        last_cmd: AtomicU64::new(secs()),
     });
     memory::index::start(d.home.clone());
+    pc::start(d.home.clone());
+    {
+        let quiet = Arc::clone(&d);
+        let gate = crate::update::Gate {
+            game: Box::new(|| !game::running().is_empty()),
+            idle: Box::new(move || quiet.idle_for(UPDATE_IDLE)),
+        };
+        crate::update::start(d.home.clone(), gate);
+    }
     let mut sessions = Some(sessions);
     let mut senders = Vec::with_capacity(LANES.len());
     for lane in LANES {
@@ -264,6 +282,7 @@ fn handle(d: &Daemon, link: Link, lanes: &[Sender<Work>]) {
         return;
     }
     let name = msg.argv.first().map(|a| a.to_lowercase()).unwrap_or_default();
+    d.last_cmd.store(secs(), Ordering::Relaxed);
     let res = if name == "abort" {
         d.abort_all(lanes);
         Res::new(0, ABORTED)
@@ -334,6 +353,10 @@ fn decode(raw: &[u8]) -> Option<Msg> {
 }
 
 impl Daemon {
+    pub fn idle_for(&self, quiet: u64) -> bool {
+        secs().saturating_sub(self.last_cmd.load(Ordering::Relaxed)) >= quiet
+    }
+
     pub fn prompts_of(&self, sid: &str) -> Prompts {
         self.prompts.lock().unwrap_or_else(|e| e.into_inner()).get(sid).cloned().unwrap_or_default()
     }

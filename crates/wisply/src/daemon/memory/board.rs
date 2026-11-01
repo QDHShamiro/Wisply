@@ -15,7 +15,7 @@ use super::super::{Daemon, config};
 use super::{QUERY_BUDGET, embed, index, with_store};
 
 const USAGE: &str = "wisply board home | pulse | project <name> | note <id> | save <path> --mtime <ms> | todo <id> <status> | \
-                     todo-add <project> <task> | search <words> | graph [project] | live | lessons | unlearn <sig> | settings | blind | blind-pick <run> <n> 1|2|same";
+                     todo-add <project> <task> | search <words> | graph [project] | live | lessons | unlearn <sig> | settings | tokens [today|<days>|all] | blind | blind-pick <run> <n> 1|2|same";
 const NOTES_SHOWN: usize = 400;
 const RUNS_SHOWN: usize = 60;
 const BACKLINKS: usize = 80;
@@ -291,6 +291,7 @@ pub fn board(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         "lessons" => lessons(d)?,
         "unlearn" => unlearn(d, c)?,
         "settings" => Value::Object(config::load(&d.home)),
+        "tokens" => super::super::tokens::board(d, c.pos.get(1).map_or("7", String::as_str))?,
         "blind" => super::blind::open(d),
         "blind-pick" => super::blind::pick(d, c)?,
         _ => return Err(Fail::hint("what should the board show?", USAGE)),

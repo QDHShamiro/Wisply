@@ -51,7 +51,7 @@ pub fn write_if_changed(path: &Path, data: &[u8]) -> io::Result<bool> {
     Ok(true)
 }
 
-fn copy_tree(src: &Path, dst: &Path) -> io::Result<()> {
+pub(crate) fn copy_tree(src: &Path, dst: &Path) -> io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;

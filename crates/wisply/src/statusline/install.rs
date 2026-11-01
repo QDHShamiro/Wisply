@@ -115,6 +115,41 @@ pub fn turn_off(file: &Path, home: &Path) -> Result<Off, String> {
     Ok(outcome)
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Health {
+    Off,
+    Unset,
+    Own,
+    Fine,
+    Missing(String),
+    Broken(String),
+}
+
+pub fn program_of(command: &str) -> Option<std::path::PathBuf> {
+    let rest = command.trim_end().strip_suffix(WORD)?;
+    let program = rest.trim().trim_matches('"');
+    (!program.is_empty()).then(|| std::path::PathBuf::from(program))
+}
+
+pub fn health(home: &Path, file: &Path) -> Health {
+    let enabled = Config::load(home).enabled;
+    let map = match load(file) {
+        Ok(map) => map,
+        Err(e) => return Health::Broken(e),
+    };
+    match command_of(&map) {
+        Some(cmd) if is_ours(&cmd) => match program_of(&cmd) {
+            Some(exe) if !exe.is_file() => Health::Missing(exe.display().to_string()),
+            _ if !enabled => Health::Off,
+            _ => Health::Fine,
+        },
+        Some(_) => Health::Own,
+        None if map.get(KEY).is_some_and(|v| !v.is_null()) => Health::Own,
+        None if enabled => Health::Unset,
+        None => Health::Off,
+    }
+}
+
 pub fn auto(home: &Path, file: &Path, exe: &Path) -> Option<String> {
     if !Config::load(home).enabled || !file.parent().is_some_and(Path::is_dir) {
         return None;
@@ -192,6 +227,30 @@ mod tests {
         assert_eq!(turn_off(&file, &home).unwrap(), Off::Restored);
         assert_eq!(read(&file)["statusLine"]["padding"], 1);
         assert!(!previous(&home).is_file());
+        fs::remove_dir_all(file.parent().unwrap().parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn health_tells_off_unset_own_fine_and_missing_apart() {
+        let (file, home, exe) = scene("health");
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        fs::write(&exe, "").unwrap();
+        fs::write(&file, "{}").unwrap();
+        assert_eq!(health(&home, &file), Health::Unset);
+        turn_on(&file, &home, &exe, false).unwrap();
+        assert_eq!(health(&home, &file), Health::Fine);
+        fs::remove_file(&exe).unwrap();
+        assert!(matches!(health(&home, &file), Health::Missing(_)));
+        fs::write(&file, r#"{"statusLine":{"type":"command","command":"x.sh"}}"#).unwrap();
+        assert_eq!(health(&home, &file), Health::Own);
+        fs::write(&file, "{ nope").unwrap();
+        assert!(matches!(health(&home, &file), Health::Broken(_)));
+        assert_eq!(program_of("\"C:/a b/wisply.exe\" statusline"), Some(PathBuf::from("C:/a b/wisply.exe")));
+        let mut cfg = Config::load(&home);
+        cfg.enabled = false;
+        cfg.save(&home).unwrap();
+        fs::write(&file, "{}").unwrap();
+        assert_eq!(health(&home, &file), Health::Off);
         fs::remove_dir_all(file.parent().unwrap().parent().unwrap()).unwrap();
     }
 

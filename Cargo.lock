@@ -4366,12 +4366,14 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "sha2 0.10.9",
+ "toml",
  "ureq",
  "windows",
  "winresource",
  "wisply-code",
  "wisply-core",
  "wisply-memory",
+ "wisply-pc",
  "wisply-proto",
  "wisply-squeeze",
  "wisply-think",
@@ -4410,6 +4412,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wisply-pc"
+version = "3.0.1"
+dependencies = [
+ "libc",
+ "serde_json",
+]
+
+[[package]]
 name = "wisply-proto"
 version = "3.0.1"
 
@@ -4440,6 +4450,7 @@ dependencies = [
  "image",
  "serde_json",
  "tao",
+ "windows",
  "winresource",
  "wisply-proto",
  "wry",

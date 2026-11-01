@@ -14,24 +14,24 @@ const WATCH_MS = 3000;
 const theme = EditorView.theme(
   {
     "&": { backgroundColor: "var(--panel)", color: "var(--text)" },
-    ".cm-content": { fontFamily: "var(--mono)", padding: "14px 0", caretColor: "var(--ink)" },
+    ".cm-content": { fontFamily: "var(--mono)", padding: "14px 0", caretColor: "var(--accent)" },
     ".cm-line": { padding: "0 16px" },
-    ".cm-cursor": { borderLeftColor: "var(--ink)" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "#33333d" },
+    ".cm-cursor": { borderLeftColor: "var(--accent)" },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "color-mix(in srgb, var(--accent) 30%, transparent)" },
     ".cm-gutters": { display: "none" },
   },
   { dark: true },
 );
 
 const marks = HighlightStyle.define([
-  { tag: tags.heading, fontWeight: "700", color: "#ffffff" },
+  { tag: tags.heading, fontWeight: "700", color: "var(--text)" },
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
-  { tag: tags.link, color: "#b8b8c4", textDecoration: "underline" },
-  { tag: tags.url, color: "#8b8b95" },
-  { tag: tags.monospace, color: "#d6d6de" },
-  { tag: tags.quote, color: "#8b8b95" },
-  { tag: tags.processingInstruction, color: "#5a5a63" },
+  { tag: tags.link, color: "var(--accent)", textDecoration: "underline" },
+  { tag: tags.url, color: "var(--faint)" },
+  { tag: tags.monospace, color: "var(--good)" },
+  { tag: tags.quote, color: "var(--muted)" },
+  { tag: tags.processingInstruction, color: "var(--faint)" },
 ]);
 
 type Mode = "read" | "edit";

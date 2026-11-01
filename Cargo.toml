@@ -24,6 +24,7 @@ wisply-proto = { path = "crates/wisply-proto" }
 wisply-code = { path = "crates/wisply-code" }
 wisply-squeeze = { path = "crates/wisply-squeeze" }
 wisply-think = { path = "crates/wisply-think" }
+wisply-pc = { path = "crates/wisply-pc" }
 proptest = { version = "1", default-features = false, features = ["std"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 roxmltree = "0.21"
@@ -31,6 +32,7 @@ fancy-regex = { version = "0.20", default-features = false, features = ["std", "
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
+toml = "0.8"
 tree-sitter = "0.27"
 tao = { version = "0.37", default-features = false, features = ["rwh_06", "x11"] }
 wry = { version = "0.57", default-features = false, features = ["os-webview", "x11"] }

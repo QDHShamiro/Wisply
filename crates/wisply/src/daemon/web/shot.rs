@@ -23,7 +23,11 @@ const PRINT: (u32, u32) = (48, 27);
 const THUMB: (u32, u32) = (32, 18);
 const STEP: u8 = 24;
 const TOKEN_PX: u32 = 28;
-const TILE_W: u32 = 400;
+const FINE: (u32, u32) = (128, 72);
+const FINE_STEP: u8 = 40;
+const SHEET_W: u32 = 1008;
+const SHEET_ROWS_MAX: u32 = 28;
+const SNAP_SLACK: u32 = 3;
 const CAPTION_CHARS: usize = 140;
 const GLYPH_SCALE: u32 = 2;
 const GLYPH_ADVANCE: u32 = 6 * GLYPH_SCALE;
@@ -70,8 +74,49 @@ pub fn save_picture(
     save_image(d, ctx, img, key, c.on("if-changed"), width(d, c, None)?, threshold(c)?, out)
 }
 
-pub fn thumb(img: &DynamicImage) -> Vec<u8> {
-    luma(img, THUMB, None)
+pub fn fine(img: &DynamicImage) -> Vec<u8> {
+    luma(img, FINE, None)
+}
+
+pub fn distinct_moved(thumbs: &[Vec<u8>], n: usize, min_moved: f64) -> Vec<usize> {
+    let gap = |a: usize, b: usize| {
+        let moved = thumbs[a].iter().zip(&thumbs[b]).filter(|(x, y)| x.abs_diff(**y) > FINE_STEP).count();
+        moved as f64 / thumbs[a].len().max(1) as f64
+    };
+    let mut chosen = vec![0];
+    while chosen.len() < n.min(thumbs.len()) {
+        let mut best: Option<(f64, usize)> = None;
+        for i in (0..thumbs.len()).filter(|i| !chosen.contains(i)) {
+            let near = chosen.iter().map(|&j| gap(i, j)).fold(f64::MAX, f64::min);
+            if best.is_none_or(|(b, _)| near > b) {
+                best = Some((near, i));
+            }
+        }
+        match best {
+            Some((near, i)) if near >= min_moved => chosen.push(i),
+            _ => break,
+        }
+    }
+    chosen.sort_unstable();
+    chosen
+}
+
+fn snap(len: u32) -> u32 {
+    if len > TOKEN_PX && len % TOKEN_PX <= SNAP_SLACK { len - len % TOKEN_PX } else { len }
+}
+
+pub fn fitted(img: &DynamicImage, width: u32) -> DynamicImage {
+    let w = match (img.width() > width, width >= TOKEN_PX) {
+        (true, true) => width / TOKEN_PX * TOKEN_PX,
+        (true, false) => width,
+        (false, _) => img.width(),
+    };
+    let h = (f64::from(img.height()) * f64::from(w) / f64::from(img.width().max(1))).round().max(1.0) as u32;
+    let (w, h) = (snap(w), snap(h));
+    if (w, h) == (img.width(), img.height()) {
+        return img.clone();
+    }
+    img.resize_exact(w, h, FilterType::Lanczos3)
 }
 
 pub fn save_sheet(d: &Daemon, ctx: &mut Ctx, img: &DynamicImage, key: &str) -> Result<String, Fail> {
@@ -171,12 +216,7 @@ fn save_image(
     threshold: f64,
     out: Option<PathBuf>,
 ) -> Result<String, Fail> {
-    let img = if img.width() > width {
-        let h = (f64::from(img.height()) * f64::from(width) / f64::from(img.width())).round().max(1.0) as u32;
-        img.resize_exact(width, h, FilterType::Lanczos3)
-    } else {
-        img.clone()
-    };
+    let img = fitted(img, width);
     let print = luma(&img, PRINT, Some(STEP));
     if (if_changed || threshold > 0.0)
         && let Some(old) = ctx.shots.get(key).filter(|old| old.len() == print.len())
@@ -265,17 +305,44 @@ fn stamp(sheet: &mut RgbImage, x: u32, y: u32, text: &str) {
 }
 
 pub fn sheet(tiles: &[DynamicImage], stamps: &[String]) -> RgbImage {
-    let cols = if tiles.len() > 4 { 3 } else { 2 };
+    sheet_in(tiles, stamps, SHEET_W)
+}
+
+fn grid(n: u32, aspect: f64, width: u32) -> (u32, u32, u32) {
+    let units = (width / TOKEN_PX).max(1);
+    let mut best = None;
+    for cols in 1..=n.min(6) {
+        if cols > 1 && !units.is_multiple_of(cols) {
+            continue;
+        }
+        let tw = units / cols * TOKEN_PX;
+        let th = ((f64::from(tw) / aspect / f64::from(TOKEN_PX)).ceil() as u32).max(1) * TOKEN_PX;
+        let rows = n.div_ceil(cols);
+        let big = tw >= 3 * width / 10;
+        let fits = rows * th <= SHEET_ROWS_MAX * TOKEN_PX;
+        let waste = cols * rows - n;
+        let score = (u32::from(!fits), u32::from(!big), waste, cols);
+        if best.is_none_or(|(s, _, _, _)| score < s) {
+            best = Some((score, cols, tw, th));
+        }
+    }
+    best.map_or((1, width, width), |(_, cols, tw, th)| (cols, tw, th))
+}
+
+pub fn sheet_in(tiles: &[DynamicImage], stamps: &[String], width: u32) -> RgbImage {
     let first = &tiles[0];
-    let th = (f64::from(first.height()) * f64::from(TILE_W) / f64::from(first.width().max(1))).round().max(1.0) as u32;
+    let aspect = f64::from(first.width().max(1)) / f64::from(first.height().max(1));
+    let width = (width / TOKEN_PX).max(1) * TOKEN_PX;
+    let (cols, tw, th) = grid(tiles.len() as u32, aspect, width);
     let rows = (tiles.len() as u32).div_ceil(cols);
-    let mut sheet = RgbImage::new(cols * TILE_W, rows * th);
+    let fit_h = ((f64::from(tw) / aspect).round().max(1.0) as u32).min(th);
+    let mut sheet = RgbImage::new(cols * tw, rows * th);
     for (i, (tile, label)) in tiles.iter().zip(stamps).enumerate() {
-        let (x, y) = (i as u32 % cols * TILE_W, i as u32 / cols * th);
-        let small = imageops::resize(&tile.to_rgb8(), TILE_W, th, FilterType::CatmullRom);
+        let (x, y) = (i as u32 % cols * tw, i as u32 / cols * th);
+        let small = imageops::resize(&tile.to_rgb8(), tw, fit_h, FilterType::CatmullRom);
         imageops::replace(&mut sheet, &small, i64::from(x), i64::from(y));
-        let w = (8 + GLYPH_ADVANCE * label.chars().count() as u32).min(TILE_W);
-        fill(&mut sheet, x, y, x + w, y + (7 * GLYPH_SCALE + 4).min(th), Rgb([0, 0, 0]));
+        let w = (8 + GLYPH_ADVANCE * label.chars().count() as u32).min(tw);
+        fill(&mut sheet, x, y, x + w, y + (7 * GLYPH_SCALE + 4).min(fit_h), Rgb([0, 0, 0]));
         stamp(&mut sheet, x + 4, y + 2, label);
     }
     sheet
@@ -319,7 +386,7 @@ pub fn frames(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
     let res = save_image(
         d,
         ctx,
-        &DynamicImage::ImageRgb8(sheet(&tiles, &stamps)),
+        &DynamicImage::ImageRgb8(sheet_in(&tiles, &stamps, width)),
         &format!("frames-{reference}"),
         false,
         width,
@@ -381,14 +448,32 @@ mod tests {
     }
 
     #[test]
+    fn near_duplicates_drop_and_sizes_follow_the_token_grid() {
+        let flat = vec![100u8; 100];
+        let mut moved = flat.clone();
+        moved[..10].fill(250);
+        assert_eq!(distinct_moved(&[flat.clone(), flat.clone(), flat.clone()], 3, 0.01), vec![0]);
+        assert_eq!(distinct_moved(&[flat.clone(), flat.clone(), moved], 3, 0.01), vec![0, 2]);
+        let wide = DynamicImage::ImageRgb8(RgbImage::new(1600, 900));
+        let fit = fitted(&wide, 1024);
+        assert_eq!(fit.width(), 1008);
+        assert_eq!(fitted(&DynamicImage::ImageRgb8(RgbImage::new(960, 540)), 1024).width(), 960);
+        let (cols, tw, th) = grid(12, 16.0 / 9.0, 1008);
+        assert_eq!((cols, tw % TOKEN_PX, th % TOKEN_PX), (3, 0, 0));
+        let (cols, _, _) = grid(12, 1.0, 1008);
+        assert_eq!(cols, 4);
+        assert_eq!(grid(1, 1.5, 1008).0, 1);
+    }
+
+    #[test]
     fn contact_sheets_have_stamped_tiles() {
         let tile = DynamicImage::ImageRgb8(RgbImage::from_pixel(800, 450, Rgb([90, 90, 90])));
         let tiles = vec![tile.clone(), tile.clone(), tile];
         let stamps = vec!["0:01".to_string(), "?".into(), "1:23".into()];
         let sheet = sheet(&tiles, &stamps);
-        assert_eq!(sheet.dimensions(), (800, 450));
+        assert_eq!(sheet.dimensions(), (1008, 196));
         assert_eq!(sheet.get_pixel(1, 1), &Rgb([0, 0, 0]));
-        assert_eq!(sheet.get_pixel(200, 200), &Rgb([90, 90, 90]));
+        assert_eq!(sheet.get_pixel(200, 100), &Rgb([90, 90, 90]));
         let white =
             (0..30u32).flat_map(|x| (0..18u32).map(move |y| (x, y))).any(|(x, y)| sheet.get_pixel(x, y)[0] == 255);
         assert!(white);

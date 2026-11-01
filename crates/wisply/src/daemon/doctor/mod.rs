@@ -1,4 +1,5 @@
-mod install;
+mod ai;
+pub(crate) mod install;
 
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
@@ -27,7 +28,7 @@ const MIN_FAILS: usize = 10;
 const SHOWN_CHARS: usize = 100;
 const ERROR_CHARS: usize = 60;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Level {
     Ok,
     Warn,
@@ -287,9 +288,33 @@ fn print(rows: &[Row]) -> ExitCode {
     if fails > 0 { ExitCode::from(1) } else { ExitCode::SUCCESS }
 }
 
+fn statusline_rows(home: &Path) -> Vec<Row> {
+    use crate::statusline::install::{Health, health};
+    let file = crate::setup::claude_env::settings_file();
+    let fix = "wisply statusline on";
+    vec![match health(home, &file) {
+        Health::Fine => row(Level::Ok, "status", "Wisply status line is on in Claude Code", ""),
+        Health::Off => row(Level::Ok, "status", "status line is off (wisply statusline on switches it on)", ""),
+        Health::Own => row(
+            Level::Ok,
+            "status",
+            "Claude Code uses a status line of your own (wisply statusline on --force replaces it)",
+            "",
+        ),
+        Health::Unset => row(Level::Warn, "status", "status line is enabled but not set in Claude Code settings", fix),
+        Health::Missing(exe) => {
+            row(Level::Warn, "status", format!("status line points to a missing program: {exe}"), fix)
+        }
+        Health::Broken(why) => row(Level::Warn, "status", why, "repair the file at that position"),
+    }]
+}
+
 pub fn run(home: &Path, args: &[String], ask: Ask) -> ExitCode {
+    if let Some(first) = args.first().filter(|a| ai::handles(a)) {
+        return ai::run(first, &args[1..]);
+    }
     if let Some(bad) = args.iter().find(|a| *a != "--fix") {
-        eprintln!("err: doctor takes only --fix ({bad}) -> try: wisply doctor --fix");
+        eprintln!("err: doctor takes --fix or ai ({bad}) -> try: wisply doctor --fix");
         return ExitCode::from(2);
     }
     println!(
@@ -317,5 +342,6 @@ pub fn run(home: &Path, args: &[String], ask: Ask) -> ExitCode {
     rows.extend(key_rows());
     rows.extend(data_rows(home));
     rows.extend(error_rows(home));
+    rows.extend(statusline_rows(home));
     print(&rows)
 }
