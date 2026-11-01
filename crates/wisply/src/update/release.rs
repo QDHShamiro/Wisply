@@ -51,7 +51,7 @@ fn tar() -> PathBuf {
     system.filter(|p| cfg!(windows) && p.is_file()).unwrap_or_else(|| PathBuf::from("tar"))
 }
 
-fn unpack(archive: &Path, into: &Path) -> Result<(), String> {
+pub(crate) fn unpack(archive: &Path, into: &Path) -> Result<(), String> {
     let mut cmd = Command::new(tar());
     cmd.arg("-xf").arg(archive).arg("-C").arg(into).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
     crate::v2::hide(&mut cmd);

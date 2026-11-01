@@ -160,7 +160,7 @@ pub fn browser(r: &mut Run, srv: &Server) -> String {
         !e && o.contains(".jpg") && o.contains("did not move") && o.contains("not seekable")
     });
     r.step("frames --small", &["frames", &vref, "--count", "2", "--every", "400", "--small"], |o, e| {
-        !e && o.contains("(768x")
+        !e && o.contains("(756x")
     });
     r.step("frames read captions", &["frames", &vref, "--count", "2", "--every", "300"], |o, e| {
         !e && o.contains("captions:") && o.contains("Hello from the caption track")

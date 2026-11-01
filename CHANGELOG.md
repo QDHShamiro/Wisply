@@ -7,6 +7,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Changed
+- `frames`, `watch` and `shot`: fewer image tokens, faster. Contact sheets now fit the model's 28 px token grid
+  (no second resize, no empty cells, bigger tiles when there are few), near-identical scenes are dropped instead of
+  padding the sheet to the full count, and `shot` sizes snap to whole tokens (1024 px wide became 1008). Video frames
+  come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
+
 ### Added
 - `wisply pc`: an optimizer for Windows, macOS and Linux. `pc` gives a score from 0 to 100 with the 3 biggest slowdowns
   and a numbered fix for each; `pc fix <n|all>`, `pc clean [--dry]`, `pc startup [off|on <n>]`, `pc game`, `pc
@@ -22,6 +28,9 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   skill frontmatter, agent name collisions and the configured MCP servers. For Claude Code it also names unused
   skills, plugins and MCP servers, slow hooks and hook timeouts, ranks denied tool calls and checks the default
   permission mode. `wisply doctor` shows whether the Wisply status line is set up. `/wisply:doctor` runs both.
+- `wisply headless start|stop|status|install`: a browser without a window for servers and CI. `install` downloads
+  Chrome for Testing, `start` launches it with the extension and its own profile and waits until it is connected.
+  `scripts/ci-browser.sh` now tests it on Windows, macOS and Linux.
 - `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
   on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with
   `*` for changes and `↑2 ↓1` for ahead/behind, the GitHub pull request of the branch with its checks, model, effort,

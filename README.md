@@ -150,6 +150,9 @@ fixes and open points. Search works by words and meaning, in any language. Every
 `watch <link|file>` gives an overview of any video (chapters, speech, screen text, scenes), `frames e40` turns a
 video on the page into one contact sheet, `listen` returns only the speech, `shot e57` looks at one image.
 
+Pictures are sized to the model's 28 px token grid, so no token is spent on a sliver of a tile. Scenes that look the
+same are left out: a screen recording that shows four different things gives four tiles, not twelve.
+
 ## Memory, notes and code map
 
 Three things in one program, so the AI does not read ten files or ask you again what you decided last week.
@@ -235,6 +238,18 @@ wisply more hr-3fa91c04de --lines 400-440
 
 `wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
 keeps the rest in a file.
+
+## Headless
+
+`wisply headless` runs a browser with no window, with the Wisply extension loaded, for servers and CI.
+
+- `wisply headless install` downloads Chrome for Testing into `~/.wisply/chrome` (Windows, macOS, Linux x64).
+- `wisply headless start` starts it detached with its own profile in `~/.wisply/headless-profile` and waits until the
+  extension is connected. After that every normal command (`open`, `snap`, `click`, ...) works as usual.
+- `wisply headless stop` ends it, `wisply headless status` says whether it runs.
+- It uses `--browser PATH`, `WISPLY_CHROME`, the downloaded Chrome or a `chromium` on the PATH, in that order. On Linux
+  CI (`CI` set) it adds `--no-sandbox`; `--no-sandbox` does the same by hand.
+- Your own logged-in browser is not touched. The headless profile has no logins.
 
 ## Updates
 
@@ -340,12 +355,11 @@ used, ~34M without Wisply, **84% saved**.
 | Tokens for a first look at a page | **~440** (measured) | ~15,850 (measured) | 15,000–30,000 on dense pages ([1]) | not published ([2]) |
 | Repeated tasks | learned routines, one call | saved shortcuts | – | – |
 | Memory across sessions | ✅ local | – | – | – |
-| Headless mode | ❌ needs a browser window (Xvfb on a Linux CI machine) | – | ✅ | ✅ |
+| Headless mode | ✅ `wisply headless` (Chrome for Testing, no window) | – | ✅ | ✅ |
 
-`–` = not built in, as far as the public docs say. Wisply drives a real browser window with its extension loaded.
-It has no `--headless` mode, but a window is all it needs: Wisply's own CI runs it in Chrome for Testing on Windows,
-macOS and Linux (under Xvfb there), see `scripts/ci-browser.sh`. For headless test suites, take Playwright. Wisply is
-for an agent on your own computer that has to use your logged-in browser and your apps, cheaply.
+`–` = not built in, as far as the public docs say. Wisply drives a browser with its extension loaded. `wisply headless`
+starts one without a window, so it also runs on a server or in CI, and Wisply's own CI tests it on Windows, macOS and
+Linux (`scripts/ci-browser.sh`). Wisply is for an agent that has to use a logged-in browser and your apps, cheaply.
 
 [1]: https://lite.ego.app/article/playwright-mcp-token-problem
 [2]: https://github.com/vercel-labs/agent-browser
@@ -427,6 +441,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
 | **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) |
+| **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |
 | **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` |

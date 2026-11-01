@@ -19,3 +19,6 @@ serde_json.workspace = true
 image.workspace = true
 tao.workspace = true
 wry.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_UI_Controls"] }

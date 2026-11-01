@@ -34,6 +34,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
         secure [folder] [--history] [--no-deps] (keys, vulnerable dependencies, risky code; not while a game runs)
         think <step> (finds, fixes and proves improvements without AI; wisply think help lists the steps)
+        headless [start|stop|status|install] (a browser without a window for servers and CI; install fetches Chrome for Testing)
         update [--check|--rollback] (installs the newest release by itself in the background; config update auto|notify|off)
         pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
 
