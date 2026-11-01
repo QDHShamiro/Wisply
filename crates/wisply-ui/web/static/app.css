@@ -1,4 +1,5 @@
 :root, :root[data-theme="dark"] {
+  --g-shadow: rgba(0, 0, 0, 0.5);
   --bg: #0f1015;
   --side: #0b0c10;
   --panel: #171920;
@@ -25,6 +26,7 @@
   color-scheme: dark;
 }
 :root[data-theme="light"] {
+  --g-shadow: rgba(18, 20, 30, 0.14);
   --bg: #f5f6fa;
   --side: #eceef4;
   --panel: #ffffff;
@@ -36,21 +38,22 @@
   --ink: #12141e;
   --muted: #2b3042;
   --faint: #4d5368;
-  --accent: #2856ff;
-  --accent-soft: rgba(40, 86, 255, 0.12);
+  --accent: #1f45d8;
+  --accent-soft: rgba(31, 69, 216, 0.1);
   --on-accent: #ffffff;
   --good: #067a3f;
   --bad: #c8102e;
   --g-label: #12141e;
   --g-dim: #d9dce5;
   --g-edge: rgba(18, 20, 30, 0.16);
-  --g-edge-on: rgba(40, 86, 255, 0.95);
+  --g-edge-on: rgba(31, 69, 216, 0.95);
   --g-back: #ffffff;
   --g-back-line: rgba(18, 20, 30, 0.2);
   --g-other: #8a8fa0;
   color-scheme: light;
 }
 :root[data-theme="glass"] {
+  --g-shadow: rgba(0, 0, 0, 0.45);
   --bg: rgba(10, 11, 18, 0.6);
   --side: rgba(6, 7, 12, 0.55);
   --panel: rgba(255, 255, 255, 0.07);
@@ -60,17 +63,17 @@
   --strong: rgba(255, 255, 255, 0.32);
   --text: #ffffff;
   --ink: #ffffff;
-  --muted: #eef0f7;
-  --faint: #d2d6e4;
-  --accent: #7ea6ff;
-  --accent-soft: rgba(126, 166, 255, 0.24);
+  --muted: #f3f5fa;
+  --faint: #e2e5ef;
+  --accent: #c2d4ff;
+  --accent-soft: rgba(194, 212, 255, 0.2);
   --on-accent: #0a0f22;
-  --good: #3df29c;
-  --bad: #ff6b86;
+  --good: #6dffb8;
+  --bad: #ffb8c4;
   --g-label: #ffffff;
   --g-dim: rgba(255, 255, 255, 0.16);
   --g-edge: rgba(255, 255, 255, 0.22);
-  --g-edge-on: rgba(126, 166, 255, 1);
+  --g-edge-on: rgba(194, 212, 255, 1);
   --g-back: rgba(20, 22, 32, 0.92);
   --g-back-line: rgba(255, 255, 255, 0.3);
   --g-other: #b0b5c6;
@@ -409,8 +412,8 @@ section + section { margin-top: 4px; }
 :root[data-theme="light"] .pill { background: color-mix(in srgb, currentColor 12%, transparent); }
 
 :root[data-theme="glass"] {
-  --glass: linear-gradient(135deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.05) 60%, rgba(255, 255, 255, 0.09));
-  --glass-strong: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.1) 60%, rgba(255, 255, 255, 0.16));
+  --glass: linear-gradient(135deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04) 60%, rgba(255, 255, 255, 0.07));
+  --glass-strong: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08) 60%, rgba(255, 255, 255, 0.12));
   --rim: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 1px 0 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.1), inset 0 0 22px rgba(255, 255, 255, 0.05);
   --lift: 0 12px 34px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.18);
   --blur: blur(28px) saturate(185%);
@@ -419,7 +422,7 @@ section + section { margin-top: 4px; }
   background:
     radial-gradient(1200px 700px at 12% -10%, rgba(91, 140, 255, 0.22), transparent 60%),
     radial-gradient(900px 600px at 100% 110%, rgba(255, 61, 139, 0.16), transparent 60%),
-    rgba(8, 10, 18, 0.58);
+    rgba(8, 10, 18, 0.74);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
 }
 :root[data-theme="glass"] #app { gap: 10px; padding: 10px; }
@@ -476,3 +479,6 @@ section + section { margin-top: 4px; }
 :root[data-theme="glass"] .field input { border-radius: 14px; }
 :root[data-theme="glass"] .card:hover, :root[data-theme="glass"] .item:hover { background: rgba(255, 255, 255, 0.08); }
 :root[data-theme="glass"] .bars .stack, :root[data-theme="glass"] .meter { background: rgba(255, 255, 255, 0.1); }
+:root[data-theme="glass"] input::placeholder { color: var(--muted); }
+:root[data-theme="glass"] button.danger { background: rgba(255, 77, 109, 0.3); border-color: rgba(255, 140, 160, 0.5); color: #ffffff; }
+:root[data-theme="glass"] button.danger:hover { background: rgba(255, 77, 109, 0.42); }

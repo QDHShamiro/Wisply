@@ -152,7 +152,7 @@ function seed(data: GraphData): { g: Graph<Attrs>; colors: Map<string, string>; 
 }
 
 export async function graph(view: HTMLElement, project?: string): Promise<() => void> {
-  const [LABEL, DIM, EDGE, EDGE_ON, BACKDROP, BACKDROP_LINE] = ["--g-label", "--g-dim", "--g-edge", "--g-edge-on", "--g-back", "--g-back-line"].map(css);
+  const [LABEL, DIM, EDGE, EDGE_ON, BACKDROP, BACKDROP_LINE, SHADOW] = ["--g-label", "--g-dim", "--g-edge", "--g-edge-on", "--g-back", "--g-back-line", "--g-shadow"].map(css);
   mount(view, h("div", { class: "empty", style: "margin:24px" }, T.graph.loading));
   const data = await board<GraphData>("graph", ...(project ? [project] : []));
   const { g, colors, names } = seed(data);
@@ -301,7 +301,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
 
   const center = (n: string) => {
     const d = renderer.getNodeDisplayData(n);
-    if (d) void renderer.getCamera().animate({ x: d.x, y: d.y, ratio: 0.6 }, { duration: 350 });
+    if (d) void renderer.getCamera().animate({ x: d.x, y: d.y, ratio: 0.3 }, { duration: 350 });
   };
 
   const pick = (n: string | null) => {
@@ -370,14 +370,17 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
         backdropBorderColor: BACKDROP_LINE,
         backdropBorderWidth: 1,
         backdropCornerRadius: 6,
-        backdropShadowColor: "rgba(0,0,0,0.5)",
+        backdropShadowColor: SHADOW,
         cursor: "pointer",
       };
       if (!shown(a as Attrs)) out.visibility = "hidden";
       else if (lit() && n !== lit() && !near.has(n)) {
         out.color = DIM;
         out.labelVisibility = "hidden";
-      } else if (lit()) out.labelVisibility = "visible";
+      } else if (lit()) {
+        out.labelVisibility = "visible";
+        out.backdropVisibility = "visible";
+      }
       else if (named.has(n)) out.labelVisibility = "visible";
       if (n === focus) out.backdropVisibility = "visible";
       return out;
