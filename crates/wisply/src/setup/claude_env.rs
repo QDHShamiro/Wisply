@@ -31,7 +31,7 @@ fn wanted(exe: &Path) -> Vec<(&'static str, String)> {
     out
 }
 
-fn load(file: &Path) -> Result<Map<String, Value>, String> {
+pub(crate) fn load(file: &Path) -> Result<Map<String, Value>, String> {
     let raw = match fs::read_to_string(file) {
         Ok(raw) => raw,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Map::new()),
@@ -43,7 +43,7 @@ fn load(file: &Path) -> Result<Map<String, Value>, String> {
     }
 }
 
-fn save(file: &Path, map: Map<String, Value>) -> Result<(), String> {
+pub(crate) fn save(file: &Path, map: Map<String, Value>) -> Result<(), String> {
     let text = serde_json::to_string_pretty(&Value::Object(map)).map_err(|e| e.to_string())? + "\n";
     let tmp = file.with_extension("json.wisply-tmp");
     fs::write(&tmp, text)

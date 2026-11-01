@@ -8,6 +8,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
+  on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with
+  `*` for changes and `↑2 ↓1` for ahead/behind, the GitHub pull request of the branch with its checks, model, effort,
+  context bar, tokens and the 5-hour and weekly limits. Git and GitHub state is fetched in the background and cached,
+  so drawing the line never starts a program. A status line of your own is never overwritten without `--force`, and
+  `off` brings it back.
 - `wisply think`: critical thinking without AI. A run keeps goal, criteria, ideas, checkpoints, measurements and
   lessons; `scan` checks code (Rust, Java/Paper plugins, Python, JS/TS), web (alt text, contrast, viewport), texts
   (broken links, repeated words, long sentences), images (size, PNG recompress) and skills, with the packs that fit the
