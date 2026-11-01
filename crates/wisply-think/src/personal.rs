@@ -6,11 +6,10 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use crate::files::{self, Pack};
-use crate::rules::{Finding, entries, unquote};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
-    Ban(String),
+    Ban(String, Vec<String>),
     NoComments,
     FileLines(usize),
     Denial(String),
@@ -29,7 +28,7 @@ pub struct Rule {
     pub text: String,
 }
 
-fn re(p: &str) -> Regex {
+pub(crate) fn re(p: &str) -> Regex {
     Regex::new(p).expect("personal rule pattern")
 }
 
@@ -53,11 +52,7 @@ static CAPS: LazyLock<Regex> =
 static NEGATION: LazyLock<Regex> =
     LazyLock::new(|| re(r"(?i)\b(?:never|no|nie|niemals|kein|keine|keinen|avoid|verboten|don't|do not)\b"));
 static TICK: LazyLock<Regex> = LazyLock::new(|| re(r"`([^`]+)`"));
-static COLOR: LazyLock<Regex> = LazyLock::new(|| re(r"(?i)&#[0-9a-f]{6}|&[0-9a-fk-or]|<#[0-9a-f]{6}>"));
-static PLACEHOLDER: LazyLock<Regex> = LazyLock::new(|| re(r"%[^%\s]+%|\{[^}\s]+\}|<[^>\s]+>"));
-static DENIAL_KEY: LazyLock<Regex> = LazyLock::new(|| {
-    re(r"(?i)no[-_]?perm|denied|not[-_]?enough|cannot|can-?not|invalid|error|fail|not[-_]?found|no[-_]?money")
-});
+static GIT_HEAD: LazyLock<Regex> = LazyLock::new(|| re(r"(?i)\bgit(?:hub)?\b|\bcommits?\b|\bpull requests?\b"));
 
 const BRIDGE: &[&str] = &["use", "call", "import", "write", "add", "using", "nutze", "nutzen", "verwende", "benutze"];
 const STOPS: &[&str] =
@@ -71,6 +66,15 @@ fn code_like(t: &str) -> bool {
         && !t.starts_with(['-', '.', '<', '&', '~'])
         && !FILE_ENDS.iter().any(|e| t.to_lowercase().ends_with(e))
         && (camel || t.contains(['.', '(', '_', ':']))
+}
+
+fn instead(line: &str, banned: &[String]) -> Vec<String> {
+    TICK.captures_iter(line)
+        .map(|c| c[1].trim().to_string())
+        .filter(|t| code_like(t) && !banned.contains(t))
+        .map(|t| t.split(['.', '(']).next().unwrap_or_default().to_string())
+        .filter(|t| !t.is_empty())
+        .collect()
 }
 
 fn bans(line: &str) -> Vec<String> {
@@ -147,8 +151,17 @@ fn kinds(line: &str) -> Vec<Kind> {
     if CAPS.is_match(line) {
         out.push(Kind::SmallCapsNames);
     }
-    out.extend(bans(line).into_iter().map(Kind::Ban));
+    let banned = bans(line);
+    let allow = instead(line, &banned);
+    out.extend(banned.into_iter().map(|t| Kind::Ban(t, allow.clone())));
     out
+}
+
+fn same(a: &Kind, b: &Kind) -> bool {
+    match (a, b) {
+        (Kind::Ban(x, _), Kind::Ban(y, _)) => x == y,
+        _ => a == b,
+    }
 }
 
 pub fn parse(text: &str, source: &str, fallback: &BTreeSet<Pack>) -> Vec<Rule> {
@@ -184,10 +197,10 @@ pub fn parse(text: &str, source: &str, fallback: &BTreeSet<Pack>) -> Vec<Rule> {
             scope = if skip { whole.clone() } else { fallback.clone() };
         }
         for kind in found {
-            if matches!(kind, Kind::Ban(_)) && scope.is_empty() {
+            if matches!(kind, Kind::Ban(..)) && (scope.is_empty() || GIT_HEAD.is_match(&chain)) {
                 continue;
             }
-            if out.iter().any(|r| r.kind == kind) {
+            if out.iter().any(|r| same(&r.kind, &kind)) {
                 continue;
             }
             out.push(Rule {
@@ -201,6 +214,11 @@ pub fn parse(text: &str, source: &str, fallback: &BTreeSet<Pack>) -> Vec<Rule> {
     out
 }
 
+fn encoded(p: &Path) -> String {
+    let s: String = p.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
+    s.trim_end_matches('-').to_lowercase()
+}
+
 pub fn sources(user: &Path, root: &Path) -> Vec<PathBuf> {
     let mut out = vec![user.join(".claude").join("CLAUDE.md")];
     for d in root.ancestors() {
@@ -210,8 +228,9 @@ pub fn sources(user: &Path, root: &Path) -> Vec<PathBuf> {
             break;
         }
     }
+    let mine: BTreeSet<String> = std::iter::once(user).chain(root.ancestors()).map(encoded).collect();
     if let Ok(list) = fs::read_dir(user.join(".claude").join("projects")) {
-        for p in list.flatten() {
+        for p in list.flatten().filter(|p| mine.contains(&encoded(Path::new(&p.file_name())))) {
             if let Ok(mem) = fs::read_dir(p.path().join("memory")) {
                 out.extend(
                     mem.flatten()
@@ -232,7 +251,7 @@ pub fn load(user: &Path, root: &Path, fallback: &BTreeSet<Pack>) -> Vec<Rule> {
         let Ok(text) = fs::read_to_string(&f) else { continue };
         let name = files::slashed(f.strip_prefix(user).unwrap_or(&f));
         for r in parse(&text, &format!("~/{name}"), fallback) {
-            if !out.iter().any(|o| o.kind == r.kind) {
+            if !out.iter().any(|o| same(&o.kind, &r.kind)) {
                 out.push(r);
             }
         }
@@ -242,7 +261,8 @@ pub fn load(user: &Path, root: &Path, fallback: &BTreeSet<Pack>) -> Vec<Rule> {
 
 pub fn describe(r: &Rule) -> String {
     let what = match &r.kind {
-        Kind::Ban(t) => format!("never `{t}`"),
+        Kind::Ban(t, allow) if allow.is_empty() => format!("never `{t}`"),
+        Kind::Ban(t, allow) => format!("never `{t}` (except in {})", allow.join(", ")),
         Kind::NoComments => "no comments".into(),
         Kind::FileLines(n) => format!("files under {n} lines"),
         Kind::Denial(c) => format!("denial messages fully {c}"),
@@ -257,171 +277,10 @@ pub fn describe(r: &Rule) -> String {
     format!("{what} [{scope}] <- {}", r.source)
 }
 
-fn applies(r: &Rule, packs: &BTreeSet<Pack>) -> bool {
-    r.scope.is_empty() || r.scope.iter().any(|p| packs.contains(p))
-}
-
-fn comment_line(ext: &str, t: &str) -> bool {
-    match ext {
-        "py" | "sh" => t.starts_with('#') && !t.starts_with("#!"),
-        "lua" => t.starts_with("--"),
-        _ => t.starts_with("//") || t.starts_with("/*") || t.starts_with("* ") || t == "*" || t.starts_with("*/"),
-    }
-}
-
-fn first_and_count(hits: &[usize]) -> Option<(usize, usize)> {
-    hits.first().map(|f| (*f, hits.len()))
-}
-
-fn yours(r: &Rule, line: usize, why: String) -> Finding {
-    Finding::new("yours", Pack::Code, line, why, format!("your rule ({}): {}", r.source, cut(&r.text, 90)))
-        .rate(2, 3, 1)
-}
-
-fn cut(t: &str, n: usize) -> String {
-    if t.chars().count() <= n { t.to_string() } else { format!("{}…", t.chars().take(n - 1).collect::<String>()) }
-}
-
-fn visible(v: &str) -> String {
-    PLACEHOLDER.replace_all(&COLOR.replace_all(unquote(v), ""), "").to_string()
-}
-
-fn gui_file(path: &Path) -> bool {
-    let s = files::slashed(path).to_lowercase();
-    files::has_ext(path, &["yml", "yaml"]) && (s.contains("/gui/") || s.contains("/guis/") || s.contains("/menus/"))
-}
-
-fn message_file(path: &Path) -> bool {
-    let n = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
-    files::has_ext(path, &["yml", "yaml"]) && (n.contains("messages") || n.starts_with("lang"))
-}
-
-fn lore_heads(text: &str) -> Vec<(usize, &str)> {
-    let list = entries(text);
-    let mut out = Vec::new();
-    for (i, e) in list.iter().enumerate() {
-        if e.key != "lore" {
-            continue;
-        }
-        if e.value.starts_with('[') {
-            let first = e.value.trim_start_matches('[').split(',').next().unwrap_or("");
-            out.push((e.line, first));
-        } else if let Some(next) = list.get(i + 1).filter(|n| n.key == "-" && n.indent >= e.indent) {
-            out.push((next.line, next.value));
-        }
-    }
-    out
-}
-
-pub fn check(rules: &[Rule], path: &Path, ext: &str, text: &str, test: bool, packs: &BTreeSet<Pack>) -> Vec<Finding> {
-    let mut out = Vec::new();
-    let code = files::has_ext(path, files::CODE_EXT);
-    for r in rules.iter().filter(|r| applies(r, packs)) {
-        match &r.kind {
-            Kind::Ban(token) if code && !test => {
-                let pat = format!(
-                    "{}{}{}",
-                    if token.starts_with(|c: char| c.is_alphanumeric()) { r"\b" } else { "" },
-                    regex::escape(token),
-                    if token.ends_with(|c: char| c.is_alphanumeric()) { r"\b" } else { "" }
-                );
-                let Ok(p) = Regex::new(&pat) else { continue };
-                let hits: Vec<usize> =
-                    text.lines().enumerate().filter(|(_, l)| p.is_match(l)).map(|(i, _)| i + 1).collect();
-                if let Some((at, n)) = first_and_count(&hits) {
-                    out.push(yours(r, at, format!("`{token}` used {n}x")));
-                }
-            }
-            Kind::NoComments if code && !test => {
-                let hits: Vec<usize> = text
-                    .lines()
-                    .enumerate()
-                    .filter(|(_, l)| comment_line(ext, l.trim_start()))
-                    .map(|(i, _)| i + 1)
-                    .collect();
-                if let Some((at, n)) = first_and_count(&hits) {
-                    out.push(yours(r, at, format!("{n} comment lines")));
-                }
-            }
-            Kind::FileLines(n) if code => {
-                let lines = text.lines().count();
-                if lines > *n {
-                    let mut f = yours(r, 0, format!("{lines} lines (over {n})"));
-                    f.rule = "long-file".into();
-                    out.push(f);
-                }
-            }
-            Kind::Denial(color) if message_file(path) => {
-                let bad: Vec<usize> = entries(text)
-                    .iter()
-                    .filter(|e| DENIAL_KEY.is_match(e.key) && !e.value.is_empty())
-                    .filter(|e| {
-                        let v = unquote(e.value);
-                        let v =
-                            PLACEHOLDER.find(v).filter(|m| m.start() == 0).map_or(v, |m| &v[m.end()..]).trim_start();
-                        let colors: Vec<String> = COLOR.find_iter(v).map(|m| m.as_str().to_uppercase()).collect();
-                        let other = colors.iter().any(|c| {
-                            c.starts_with("&#") && c != color || c.len() == 2 && !"&L&O&N&M&K".contains(c.as_str())
-                        });
-                        !v.to_uppercase().starts_with(color.as_str()) || other
-                    })
-                    .map(|e| e.line)
-                    .collect();
-                if let Some((at, n)) = first_and_count(&bad) {
-                    out.push(yours(r, at, format!("{n} denial messages are not fully {color}")));
-                }
-            }
-            Kind::LoreHeader(head) if gui_file(path) => {
-                let bad: Vec<usize> =
-                    lore_heads(text).into_iter().filter(|(_, v)| !v.contains(head.as_str())).map(|(l, _)| l).collect();
-                if let Some((at, n)) = first_and_count(&bad) {
-                    out.push(yours(r, at, format!("{n} lores do not start with {head}")));
-                }
-            }
-            Kind::Filler(mat) if gui_file(path) => {
-                if text.contains("material:") && !text.contains(mat.as_str()) {
-                    out.push(yours(r, 0, format!("no {mat} filler for empty slots")));
-                }
-            }
-            Kind::OneGlow if gui_file(path) => {
-                let glows: Vec<usize> = entries(text)
-                    .iter()
-                    .filter(|e| e.key == "glow" && unquote(e.value) == "true")
-                    .map(|e| e.line)
-                    .collect();
-                if glows.len() > 1 {
-                    out.push(yours(r, glows[1], format!("{} items glow", glows.len())));
-                }
-            }
-            Kind::TitleColor(color) if gui_file(path) => {
-                for e in entries(text).iter().filter(|e| e.key == "title") {
-                    let v = unquote(e.value);
-                    let colors: Vec<String> = COLOR.find_iter(v).map(|m| m.as_str().to_uppercase()).collect();
-                    if !v.to_uppercase().starts_with(color.as_str()) || colors.iter().any(|c| c != color) {
-                        out.push(yours(r, e.line, format!("title is not plain {color}")));
-                        break;
-                    }
-                }
-            }
-            Kind::SmallCapsNames if gui_file(path) => {
-                let bad: Vec<usize> = entries(text)
-                    .iter()
-                    .filter(|e| e.key == "name" && visible(e.value).trim().chars().any(|c| c.is_ascii_lowercase()))
-                    .map(|e| e.line)
-                    .collect();
-                if let Some((at, n)) = first_and_count(&bad) {
-                    out.push(yours(r, at, format!("{n} item names are not in small caps")));
-                }
-            }
-            _ => {}
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::yours::check;
 
     const RULES: &str = "# Minecraft Plugin — Shamiro\n\n## Absolute Code Rules\n1. Zero comments (no `//`, `/* */`, JavaDoc, TODO).\n\
         3. `FoliaScheduler` always — never `Bukkit.getScheduler()`.\n5. `ConcurrentHashMap` for shared state — never `HashMap`.\n\
@@ -438,9 +297,9 @@ mod tests {
             kinds,
             [
                 &Kind::NoComments,
-                &Kind::Ban("Bukkit.getScheduler()".into()),
-                &Kind::Ban("HashMap".into()),
-                &Kind::Ban("System.out".into()),
+                &Kind::Ban("Bukkit.getScheduler()".into(), vec!["FoliaScheduler".into()]),
+                &Kind::Ban("HashMap".into(), vec!["ConcurrentHashMap".into()]),
+                &Kind::Ban("System.out".into(), vec!["DebugLogger".into()]),
                 &Kind::Denial("&#FF0000".into()),
                 &Kind::SmallCapsNames,
                 &Kind::Filler("GRAY_STAINED_GLASS_PANE".into()),
@@ -458,21 +317,59 @@ mod tests {
     }
 
     #[test]
+    fn git_rules_and_other_projects_stay_out() {
+        let git = "# Minecraft Plugin\n## Git Workflow\n- No `Claude-Session:` lines, never `Git.push()`.\n";
+        assert!(parse(git, "c.md", &BTreeSet::new()).is_empty());
+        let base = std::env::temp_dir().join(format!("wisply-think-mem-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let user = base.join("user");
+        let proj = base.join("work").join("proj");
+        for (owner, token) in [(&user, "homeBan()"), (&proj, "projBan()"), (&base.join("other"), "otherBan()")] {
+            let dir = user.join(".claude").join("projects").join(encoded(owner)).join("memory");
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("feedback_x.md"), format!("Minecraft plugin: never `{token}`.\n")).unwrap();
+        }
+        let bans = |root: &Path| {
+            let mut out: Vec<String> = load(&user, root, &BTreeSet::new())
+                .into_iter()
+                .filter_map(|r| if let Kind::Ban(t, _) = r.kind { Some(t) } else { None })
+                .filter(|t| t.ends_with("Ban()"))
+                .collect();
+            out.sort();
+            out
+        };
+        assert_eq!(bans(&proj), ["homeBan()", "projBan()"]);
+        assert_eq!(bans(&proj.join("sub")), ["homeBan()", "projBan()"]);
+        assert_eq!(bans(&base.join("work")), ["homeBan()"]);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
     fn your_rules_are_checked_in_the_right_files() {
         let rules = parse(RULES, "c.md", &BTreeSet::new());
         let packs: BTreeSet<Pack> = [Pack::Code, Pack::JavaPlugin, Pack::McGui].into_iter().collect();
-        let java =
-            "class A {\n  // hi\n  Map<A, B> m = new ConcurrentHashMap<>();\n  Map<A, B> n = new HashMap<>();\n}\n";
+        let java = "class A {\n  // hi\n  Map<A, B> m = new ConcurrentHashMap<>();\n  Map<A, B> n = new HashMap<>();\n  Object copy() { return new HashMap<>(n); }\n}\n";
         let got: Vec<String> =
-            check(&rules, Path::new("src/A.java"), "java", java, false, &packs).into_iter().map(|f| f.why).collect();
+            check(&rules, Path::new("src/A.java"), "java", java, false, &packs).0.into_iter().map(|f| f.why).collect();
         assert_eq!(got, ["1 comment lines", "`HashMap` used 1x"]);
+        let wrapper = "class FoliaScheduler {\n  void run() { Bukkit.getScheduler().runTask(p, r); }\n}\n";
+        let (got, waived) = check(&rules, Path::new("src/FoliaScheduler.java"), "java", wrapper, false, &packs);
+        assert!(got.is_empty() && waived.contains("bukkit-scheduler"), "{got:?} {waived:?}");
+        let other = "class Task {\n  void run() { Bukkit.getScheduler().runTask(p, r); }\n}\n";
+        let (got, waived) = check(&rules, Path::new("src/Task.java"), "java", other, false, &packs);
+        assert!(got.is_empty() && waived.is_empty(), "{got:?} {waived:?}");
         let rust_only: BTreeSet<Pack> = [Pack::Code, Pack::Rust].into_iter().collect();
         assert!(
-            check(&rules, Path::new("src/a.rs"), "rs", "// x\nlet m = HashMap::new();\n", false, &rust_only).is_empty()
+            check(&rules, Path::new("src/a.rs"), "rs", "// x\nlet m = HashMap::new();\n", false, &rust_only)
+                .0
+                .is_empty()
         );
         let gui = "title: '&#444444Shop'\nitems:\n  a:\n    material: STONE\n    name: '&fStone'\n    glow: true\n    lore:\n      - '&7Cheap'\n  b:\n    glow: true\n";
-        let got: Vec<String> =
-            check(&rules, Path::new("p/gui/shop.yml"), "yml", gui, false, &packs).into_iter().map(|f| f.why).collect();
+        let got: Vec<String> = check(&rules, Path::new("p/gui/shop.yml"), "yml", gui, false, &packs)
+            .0
+            .into_iter()
+            .map(|f| f.why)
+            .collect();
         assert_eq!(
             got,
             [
@@ -483,8 +380,11 @@ mod tests {
             ]
         );
         let msgs = "no-permission: '&#FF0000You can not do that.'\nnot-enough-money: '&#FF0000You need &#FFAA00$5'\nwelcome: '&aHi'\n";
-        let got: Vec<String> =
-            check(&rules, Path::new("p/messages.yml"), "yml", msgs, false, &packs).into_iter().map(|f| f.why).collect();
+        let got: Vec<String> = check(&rules, Path::new("p/messages.yml"), "yml", msgs, false, &packs)
+            .0
+            .into_iter()
+            .map(|f| f.why)
+            .collect();
         assert_eq!(got, ["1 denial messages are not fully &#FF0000"]);
     }
 }

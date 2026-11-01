@@ -22,8 +22,10 @@ fn version(path: &str) -> Value {
     let p = Path::new(path);
     let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     if let Some((_, mime)) = IMAGES.iter().find(|(e, _)| *e == ext) {
-        if fs::metadata(p).map(|m| m.len()).unwrap_or(u64::MAX) > IMAGE_MAX {
-            return json!({"kind": "missing"});
+        match fs::metadata(p).map(|m| m.len()) {
+            Err(_) => return json!({"kind": "missing"}),
+            Ok(n) if n > IMAGE_MAX => return json!({"kind": "big"}),
+            Ok(_) => {}
         }
         return match fs::read(p) {
             Ok(raw) => json!({"kind": "image", "src": format!("data:{mime};base64,{}",
@@ -62,4 +64,20 @@ pub fn pick(d: &Daemon, c: &Call) -> Result<Value, Fail> {
     };
     let winner = wisply_think::blind_pick(&d.home, run, n, verdict).map_err(Fail::new)?;
     Ok(json!({ "winner": winner }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn big_images_say_so_instead_of_gone() {
+        let dir = std::env::temp_dir().join(format!("wisply-blind-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let big = dir.join("a.png");
+        fs::File::create(&big).unwrap().set_len(IMAGE_MAX + 1).unwrap();
+        assert_eq!(version(&big.to_string_lossy())["kind"], "big");
+        assert_eq!(version(&dir.join("gone.png").to_string_lossy())["kind"], "missing");
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

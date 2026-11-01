@@ -26,6 +26,11 @@ fn secs() -> f64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
 }
 
+fn file_key(abs: &str) -> String {
+    let s = abs.trim_start_matches(r"\\?\").replace('\\', "/");
+    if cfg!(windows) { s.to_lowercase() } else { s }
+}
+
 pub fn digest(p: &Path) -> String {
     let Ok(raw) = fs::read(p) else { return String::new() };
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -35,11 +40,10 @@ pub fn digest(p: &Path) -> String {
     format!("{h:016x}-{}", raw.len())
 }
 
-pub fn backup(run: &Run) -> Value {
+pub fn backup(run: &Run, list: &[PathBuf]) -> Value {
     let cap = BACKUP_MAX_MB * 1024 * 1024;
-    let list = files::walk(&run.paths());
     let mut total = 0u64;
-    for f in &list {
+    for f in list {
         total += fs::metadata(f).map_or(0, |m| m.len());
         if total > cap {
             return json!({"ok": false, "mb": total / 1024 / 1024, "files": list.len()});
@@ -80,13 +84,13 @@ pub fn checkpoint(run: &Run, id: i64, list: &[PathBuf]) -> Result<(Vec<String>, 
         cp = json!({"files": []});
     }
     cp["reverted"] = json!(false);
-    let known: BTreeSet<String> = entries(&cp).iter().map(|e| text(e, "abs").to_string()).collect();
+    let mut known: BTreeSet<String> = entries(&cp).iter().map(|e| file_key(text(e, "abs"))).collect();
     let (mut added, mut kept) = (Vec::new(), Vec::new());
     let mut all = entries(&cp);
     for f in list {
         let abs = f.to_string_lossy().to_string();
         let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-        if known.contains(&abs) {
+        if !known.insert(file_key(&abs)) {
             kept.push(name);
             continue;
         }
@@ -157,7 +161,7 @@ fn conflicts(run: &Run, id: i64, cp: &Value) -> Vec<String> {
         |e: &Value| Path::new(text(e, "abs")).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let mine: BTreeMap<String, f64> = entries(cp)
         .iter()
-        .map(|e| (text(e, "abs").to_string(), e.get("t").and_then(Value::as_f64).unwrap_or(0.0)))
+        .map(|e| (file_key(text(e, "abs")), e.get("t").and_then(Value::as_f64).unwrap_or(0.0)))
         .collect();
     let mut out: Vec<String> = entries(cp)
         .iter()
@@ -170,7 +174,7 @@ fn conflicts(run: &Run, id: i64, cp: &Value) -> Vec<String> {
         }
         for e in entries(&ocp) {
             let t = e.get("t").and_then(Value::as_f64).unwrap_or(0.0);
-            if mine.get(text(&e, "abs")).is_some_and(|m| t > *m) && changed_since(&dir, &e) {
+            if mine.get(&file_key(text(&e, "abs"))).is_some_and(|m| t > *m) && changed_since(&dir, &e) {
                 out.push(format!("{} (#{other})", name(&e)));
             }
         }
@@ -211,29 +215,32 @@ pub fn revert(run: &Run, id: i64, force: bool) -> Result<(Vec<String>, Vec<Strin
     Ok((done, later))
 }
 
-fn originals(run: &Run) -> (BTreeMap<String, PathBuf>, Vec<String>) {
+fn originals(run: &Run) -> (Vec<(String, PathBuf)>, Vec<String>) {
     let bdir = run.dir.join("backup");
-    let mut orig: BTreeMap<String, PathBuf> = BTreeMap::new();
+    let mut seen = BTreeSet::new();
+    let mut orig = Vec::new();
     if let Value::Array(list) = read_json(&bdir.join("manifest.json")) {
         for e in list {
-            orig.insert(text(&e, "abs").to_string(), bdir.join(text(&e, "bak")));
+            if seen.insert(file_key(text(&e, "abs"))) {
+                orig.push((text(&e, "abs").to_string(), bdir.join(text(&e, "bak"))));
+            }
         }
     }
-    let mut created = BTreeSet::new();
+    let mut created = Vec::new();
     for (_, dir, cp) in checkpoints(run) {
         for e in entries(&cp) {
             let abs = text(&e, "abs").to_string();
-            if orig.contains_key(&abs) || created.contains(&abs) {
+            if !seen.insert(file_key(&abs)) {
                 continue;
             }
             if e.get("existed").and_then(Value::as_bool) == Some(true) {
-                orig.insert(abs, dir.join(text(&e, "bak")));
+                orig.push((abs, dir.join(text(&e, "bak"))));
             } else {
-                created.insert(abs);
+                created.push(abs);
             }
         }
     }
-    (orig, created.into_iter().collect())
+    (orig, created)
 }
 
 pub fn restore_all(run: &Run) -> Result<(usize, usize), String> {
@@ -356,7 +363,7 @@ mod tests {
         let home = Home::new(&base, "s");
         let mut run = Run::create(&home, "safety");
         run.map().insert("paths".into(), json!([work.to_string_lossy()]));
-        assert_eq!(backup(&run)["files"], 1);
+        assert_eq!(backup(&run, &files::walk(&run.paths()))["files"], 1);
         let fresh = work.join("new.txt");
         checkpoint(&run, 1, &[a.clone(), fresh.clone()]).unwrap();
         fs::write(&a, "two").unwrap();
@@ -378,6 +385,29 @@ mod tests {
         let e = blind(&mut run, &a, &b).unwrap();
         let after_slot = if e["map"]["1"] == "after" { "1" } else { "2" };
         assert_eq!(blind_result(&mut run, 1, after_slot).unwrap(), "after");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn one_file_counts_once_however_its_path_is_written() {
+        let base = std::env::temp_dir().join(format!("wisply-think-spelling-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let work = base.join("work");
+        fs::create_dir_all(&work).unwrap();
+        let a = work.join("a.txt");
+        fs::write(&a, "one").unwrap();
+        let mut run = Run::create(&Home::new(&base, "s"), "spelling");
+        run.map().insert("paths".into(), json!([files::slashed(&work)]));
+        backup(&run, &files::walk(&run.paths()));
+        fs::write(&a, "two").unwrap();
+        checkpoint(&run, 1, std::slice::from_ref(&a)).unwrap();
+        fs::write(&a, "three").unwrap();
+        checkpoint(&run, 2, &[PathBuf::from(files::slashed(&a))]).unwrap();
+        fs::write(&a, "four").unwrap();
+        assert!(revert(&run, 1, false).unwrap_err().contains("a.txt (#2)"));
+        assert_eq!(diff(&run, "t").unwrap().1, 1);
+        assert_eq!(restore_all(&run).unwrap(), (1, 0));
+        assert_eq!(fs::read_to_string(&a).unwrap(), "one");
         let _ = fs::remove_dir_all(&base);
     }
 }

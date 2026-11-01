@@ -183,23 +183,52 @@ fn first_line(text: &str, pat: &Regex, test_cut: usize) -> Option<(usize, usize)
     first.map(|f| (f, n))
 }
 
-static DBG: LazyLock<Regex> = LazyLock::new(|| re(r"\bdbg!\("));
-static UNWRAP: LazyLock<Regex> = LazyLock::new(|| re(r"\.unwrap\(\)"));
-static UNDONE: LazyLock<Regex> = LazyLock::new(|| re(r"\b(?:todo|unimplemented)!\("));
-static SYSOUT: LazyLock<Regex> = LazyLock::new(|| re(r"System\.(?:out|err)\.print"));
-static TRACE: LazyLock<Regex> = LazyLock::new(|| re(r"\.printStackTrace\(\)"));
-static CONSOLE: LazyLock<Regex> = LazyLock::new(|| re(r"\bconsole\.log\("));
-static SCHED: LazyLock<Regex> = LazyLock::new(|| re(r"Bukkit\.getScheduler\(\)|\.runTaskTimer\(|BukkitRunnable"));
-static MAPFIELD: LazyLock<Regex> = LazyLock::new(|| {
-    re(r"^\s*(?:private|protected|public)?\s*(?:static\s+)?(?:final\s+)?(?:Map|HashMap)<[^;]*=\s*new\s+HashMap<")
+const SMELL_TABLE: &str = r"
+rs | rust | debug-output | 2 3 1 | dbg! left in | remove it | \bdbg!\(
+rs | rust | todo-macro | 3 3 2 | todo!/unimplemented! panics | finish it | \b(?:todo|unimplemented)!\(
+rs | rust | unwrap | 2 2 1 | unwrap() can panic | use ? or expect with the reason | \.unwrap\(\)
+java,kt | code | debug-output | 2 3 1 | System.out/err print | use the plugin logger | System\.(?:out|err)\.print
+java,kt | code | stack-trace | 2 3 1 | printStackTrace() | log it with the logger and the exception | \.printStackTrace\(\)
+java,kt | java-plugin | bukkit-scheduler | 3 3 2 | Bukkit scheduler breaks on Folia | use the global/region/entity schedulers | Bukkit\.getScheduler\(\)|\.runTaskTimer\(|BukkitRunnable
+java,kt | java-plugin | shared-hashmap | 2 2 1 | HashMap field shared across threads | use ConcurrentHashMap | ^\s*(?:final\s+)?(?:private|protected|public|static)\s+(?:(?:static|final|volatile|transient)\s+)*(?:Map|HashMap)<[^;]*=\s*new\s+HashMap<|^(?:\t| {0,4})(?:final\s+)?(?:Map|HashMap)<[^;]*=\s*new\s+HashMap<
+java,kt | java-plugin | gui-by-title | 2 3 2 | GUI recognised by its title | give the GUI its own InventoryHolder and check instanceof | getView\(\)\.getTitle\(\)|\.getTitle\(\)\s*\.\s*(?:equals|contains|startsWith)
+java,kt | java-plugin | legacy-color | 1 2 2 | legacy ChatColor/§ colors | use Adventure components or a color util | \bChatColor\.|§[0-9a-fk-or]
+py | python | bare-except | 2 3 1 | bare except hides every error | catch the real exception | ^\s*except\s*:
+py | python | mutable-default | 2 3 1 | mutable default argument is shared between calls | default to None and create it inside | def\s+\w+\([^)]*=\s*(?:\[\]|\{\}|set\(\))
+js,ts,tsx,jsx,mjs,cjs,vue,svelte | web | debug-output | 1 3 1 | console.log left in | remove it | \bconsole\.log\(
+ts,tsx | web | any-type | 1 2 2 | any turns type checks off | give it a real type | :\s*any\b|<any>|\bas\s+any\b
+js,ts,tsx,jsx,mjs,cjs,vue,svelte | web | loose-equal | 1 2 1 | == / != convert types | use === / !== | [^=!<>]\s(?:==|!=)\s[^=]
+";
+
+struct Smell {
+    langs: Vec<&'static str>,
+    pack: Pack,
+    rule: &'static str,
+    rate: (u8, u8, u8),
+    what: &'static str,
+    fix: &'static str,
+    pat: Regex,
+}
+
+static SMELLS: LazyLock<Vec<Smell>> = LazyLock::new(|| {
+    SMELL_TABLE
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| {
+            let f: Vec<&str> = l.splitn(7, '|').map(str::trim).collect();
+            let n: Vec<u8> = f[3].split_whitespace().filter_map(|x| x.parse().ok()).collect();
+            Smell {
+                langs: f[0].split(',').collect(),
+                pack: Pack::from_name(f[1]).expect("smell pack"),
+                rule: f[2],
+                rate: (n[0], n[1], n[2]),
+                what: f[4],
+                fix: f[5],
+                pat: re(f[6]),
+            }
+        })
+        .collect()
 });
-static TITLE: LazyLock<Regex> =
-    LazyLock::new(|| re(r"getView\(\)\.getTitle\(\)|\.getTitle\(\)\s*\.\s*(?:equals|contains|startsWith)"));
-static LEGACY: LazyLock<Regex> = LazyLock::new(|| re(r"\bChatColor\.|§[0-9a-fk-or]"));
-static BARE: LazyLock<Regex> = LazyLock::new(|| re(r"^\s*except\s*:"));
-static MUTABLE: LazyLock<Regex> = LazyLock::new(|| re(r"def\s+\w+\([^)]*=\s*(?:\[\]|\{\}|set\(\))"));
-static ANY: LazyLock<Regex> = LazyLock::new(|| re(r":\s*any\b|<any>|\bas\s+any\b"));
-static LOOSE: LazyLock<Regex> = LazyLock::new(|| re(r"[^=!<>]\s(?:==|!=)\s[^=]"));
 
 fn counted(
     rule: &str,
@@ -296,135 +325,22 @@ pub fn check(lang: &str, text: &str, test: bool, packs: &BTreeSet<Pack>) -> Vec<
     } else {
         usize::MAX
     };
-    let mut add = |f: Option<Finding>| out.extend(f);
-    match lang {
-        "rs" => {
-            add(counted(
-                "debug-output",
-                Pack::Rust,
-                first_line(text, &DBG, cut),
-                "dbg! left in",
-                "remove it",
-                (2, 3, 1),
-            ));
-            add(counted(
-                "todo-macro",
-                Pack::Rust,
-                first_line(text, &UNDONE, cut),
-                "todo!/unimplemented! panics",
-                "finish it",
-                (3, 3, 2),
-            ));
-            add(counted(
-                "unwrap",
-                Pack::Rust,
-                first_line(text, &UNWRAP, cut),
-                "unwrap() can panic",
-                "use ? or expect with the reason",
-                (2, 2, 1),
-            ));
-        }
-        "java" | "kt" => {
-            add(counted(
-                "debug-output",
-                Pack::Code,
-                first_line(text, &SYSOUT, cut),
-                "System.out/err print",
-                "use the plugin logger",
-                (2, 3, 1),
-            ));
-            add(counted(
-                "stack-trace",
-                Pack::Code,
-                first_line(text, &TRACE, cut),
-                "printStackTrace()",
-                "log it with the logger and the exception",
-                (2, 3, 1),
-            ));
-            if packs.contains(&Pack::JavaPlugin) {
-                add(counted(
-                    "bukkit-scheduler",
-                    Pack::JavaPlugin,
-                    first_line(text, &SCHED, cut),
-                    "Bukkit scheduler breaks on Folia",
-                    "use the global/region/entity schedulers",
-                    (3, 3, 2),
-                ));
-                add(counted(
-                    "shared-hashmap",
-                    Pack::JavaPlugin,
-                    first_line(text, &MAPFIELD, cut),
-                    "HashMap field shared across threads",
-                    "use ConcurrentHashMap",
-                    (2, 2, 1),
-                ));
-                add(counted(
-                    "gui-by-title",
-                    Pack::JavaPlugin,
-                    first_line(text, &TITLE, cut),
-                    "GUI recognised by its title",
-                    "give the GUI its own InventoryHolder and check instanceof",
-                    (2, 3, 2),
-                ));
-                add(counted(
-                    "legacy-color",
-                    Pack::JavaPlugin,
-                    first_line(text, &LEGACY, cut),
-                    "legacy ChatColor/§ colors",
-                    "use Adventure components or a color util",
-                    (1, 2, 2),
-                ));
-            }
-        }
-        "py" => {
-            add(counted(
-                "bare-except",
-                Pack::Python,
-                first_line(text, &BARE, cut),
-                "bare except hides every error",
-                "catch the real exception",
-                (2, 3, 1),
-            ));
-            add(counted(
-                "mutable-default",
-                Pack::Python,
-                first_line(text, &MUTABLE, cut),
-                "mutable default argument is shared between calls",
-                "default to None and create it inside",
-                (2, 3, 1),
-            ));
-        }
-        "js" | "ts" | "tsx" | "jsx" | "mjs" | "cjs" | "vue" | "svelte" => {
-            add(counted(
-                "debug-output",
-                Pack::Web,
-                first_line(text, &CONSOLE, cut),
-                "console.log left in",
-                "remove it",
-                (1, 3, 1),
-            ));
-            if matches!(lang, "ts" | "tsx") {
-                add(counted(
-                    "any-type",
-                    Pack::Web,
-                    first_line(text, &ANY, cut),
-                    "any turns type checks off",
-                    "give it a real type",
-                    (1, 2, 2),
-                ));
-            }
-            add(counted(
-                "loose-equal",
-                Pack::Web,
-                first_line(text, &LOOSE, cut),
-                "== / != convert types",
-                "use === / !==",
-                (1, 2, 1),
-            ));
-        }
-        _ => {}
+    for m in active(lang, packs) {
+        out.extend(counted(m.rule, m.pack, first_line(text, &m.pat, cut), m.what, m.fix, m.rate));
     }
     out
+}
+
+fn active<'a>(lang: &'a str, packs: &'a BTreeSet<Pack>) -> impl Iterator<Item = &'static Smell> + 'a {
+    let plugin = packs.contains(&Pack::JavaPlugin);
+    SMELLS.iter().filter(move |m| m.langs.contains(&lang) && (m.pack != Pack::JavaPlugin || plugin))
+}
+
+pub fn smells_on(lang: &str, line: &str, packs: &BTreeSet<Pack>) -> Vec<&'static str> {
+    if !packs.contains(&Pack::Code) || line.trim_start().starts_with("//") {
+        return Vec::new();
+    }
+    active(lang, packs).filter(|m| m.pat.is_match(line)).map(|m| m.rule).collect()
 }
 
 fn significant(line: &str) -> Option<String> {
@@ -526,9 +442,23 @@ mod tests {
             .collect();
         assert_eq!(got, ["debug-output", "stack-trace", "bukkit-scheduler", "shared-hashmap"]);
         assert!(check("java", java, true, &packs(&[Pack::Code, Pack::JavaPlugin])).is_empty());
+        let plugin = packs(&[Pack::Code, Pack::JavaPlugin]);
+        let field = |line: &str| smells_on("java", line, &plugin).contains(&"shared-hashmap");
+        assert!(
+            field("    Map<UUID, Integer> m = new HashMap<>();") && field("\tprivate Map<A, B> m = new HashMap<>();")
+        );
+        assert!(field("        private static final Map<A, B> M = new HashMap<>();"));
+        assert!(!field("        Map<String, String> ph = new HashMap<>();"));
+        assert!(!field("        final Map<Location, BlockData> changes = new HashMap<>();"));
         let ts = "let a: any = 1;\nif (a == 2) console.log(a);\n";
         let got: Vec<String> = check("ts", ts, false, &packs(&[Pack::Code])).iter().map(|f| f.rule.clone()).collect();
         assert_eq!(got, ["debug-output", "any-type", "loose-equal"]);
+    }
+
+    #[test]
+    fn every_smell_row_parses() {
+        assert_eq!(SMELLS.len(), SMELL_TABLE.lines().filter(|l| !l.trim().is_empty()).count());
+        assert!(SMELLS.iter().all(|m| m.rate.0 > 0 && m.rate.1 > 0 && m.rate.2 > 0 && !m.fix.is_empty()));
     }
 
     #[test]

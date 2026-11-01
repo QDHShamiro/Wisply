@@ -16,6 +16,11 @@ pub struct Plan {
     pub files: Vec<PathBuf>,
 }
 
+fn canon(p: &Path) -> PathBuf {
+    fs::canonicalize(p)
+        .map_or_else(|_| p.to_path_buf(), |c| PathBuf::from(c.to_string_lossy().trim_start_matches(r"\\?\")))
+}
+
 fn works(program: &str, arg: &str) -> bool {
     quiet(&mut Command::new(program)).arg(arg).output().is_ok_and(|o| o.status.success())
 }
@@ -36,7 +41,18 @@ fn listed(out: &str, root: &Path, prefix: &str) -> Vec<PathBuf> {
         .collect()
 }
 
-pub fn plans(root: &Path, found: &[Finding], packs: &std::collections::BTreeSet<Pack>, deep: bool) -> Vec<Plan> {
+pub fn plans(
+    root: &Path,
+    found: &[Finding],
+    packs: &std::collections::BTreeSet<Pack>,
+    deep: bool,
+    paths: &[PathBuf],
+) -> Vec<Plan> {
+    let roots: Vec<PathBuf> = paths.iter().map(|p| canon(p)).collect();
+    let inside = |f: &Path| {
+        let f = canon(f);
+        roots.iter().any(|p| f.starts_with(p))
+    };
     let mut by: BTreeMap<&'static str, Vec<PathBuf>> = BTreeMap::new();
     for f in found {
         if let Some(fixer) = f.fixer {
@@ -62,15 +78,20 @@ pub fn plans(root: &Path, found: &[Finding], packs: &std::collections::BTreeSet<
     let rust = packs.contains(&Pack::Rust) && root.join("Cargo.toml").exists();
     if rust && works("cargo", "--version") {
         let check = run("cargo fmt --check -- -l", root, TOOL_WAIT);
-        let list: Vec<PathBuf> = check.out.lines().map(|l| PathBuf::from(l.trim())).filter(|p| p.is_file()).collect();
-        if check.code != 0 && !list.is_empty() {
+        let list: Vec<PathBuf> = check
+            .out
+            .lines()
+            .map(|l| PathBuf::from(l.trim().trim_start_matches(r"\\?\")))
+            .filter(|p| p.is_file())
+            .collect();
+        if check.code != 0 && !list.is_empty() && list.iter().all(|f| inside(f)) {
             out.push(Plan {
                 fixer: "rustfmt",
                 title: format!("Wisply: cargo fmt ({} files)", list.len()),
                 files: list,
             });
         }
-        if deep {
+        if deep && inside(root) {
             let all: Vec<PathBuf> =
                 files::walk(&[root.to_path_buf()]).into_iter().filter(|p| files::ext(p) == "rs").collect();
             out.push(Plan {
@@ -82,7 +103,7 @@ pub fn plans(root: &Path, found: &[Finding], packs: &std::collections::BTreeSet<
     }
     if let Some(bin) = prettier(root).filter(|_| packs.contains(&Pack::Web)) {
         let check = run(&format!("\"{}\" --list-different .", bin.display()), root, TOOL_WAIT);
-        let list = listed(&check.out, root, "");
+        let list: Vec<PathBuf> = listed(&check.out, root, "").into_iter().filter(|f| inside(f)).collect();
         if !list.is_empty() {
             out.push(Plan {
                 fixer: "prettier",
@@ -93,7 +114,8 @@ pub fn plans(root: &Path, found: &[Finding], packs: &std::collections::BTreeSet<
     }
     if packs.contains(&Pack::Python) && works("ruff", "--version") {
         let check = run("ruff format --check .", root, TOOL_WAIT);
-        let list = listed(&check.out, root, "Would reformat:");
+        let list: Vec<PathBuf> =
+            listed(&check.out, root, "Would reformat:").into_iter().filter(|f| inside(f)).collect();
         if !list.is_empty() {
             out.push(Plan { fixer: "ruff", title: format!("Wisply: ruff format ({} files)", list.len()), files: list });
         }
@@ -213,6 +235,25 @@ mod tests {
         let plan = Plan { fixer: "repeat", title: String::new(), files: vec![md.clone()] };
         apply(&plan, &dir).unwrap();
         assert_eq!(fs::read_to_string(&md).unwrap(), "This is fine.\n```\nthe the\n```\nkeep `x x` here\n");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn formatters_stay_inside_the_run() {
+        if !works("cargo", "--version") {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("wisply-think-fmt-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).unwrap();
+        let manifest = "[package]\nname = \"t\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n";
+        fs::write(dir.join("Cargo.toml"), manifest).unwrap();
+        fs::write(dir.join("src/main.rs"), "mod a;\nfn main(){a::f();}\n").unwrap();
+        fs::write(dir.join("src/a.rs"), "pub fn f(){}\n").unwrap();
+        let packs = [Pack::Rust].into_iter().collect();
+        let fmt = |paths: &[PathBuf]| plans(&dir, &[], &packs, false, paths).iter().any(|p| p.fixer == "rustfmt");
+        assert!(fmt(std::slice::from_ref(&dir)));
+        assert!(!fmt(&[dir.join("src").join("a.rs")]));
         let _ = fs::remove_dir_all(&dir);
     }
 }

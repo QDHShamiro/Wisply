@@ -4427,6 +4427,7 @@ name = "wisply-think"
 version = "3.0.1"
 dependencies = [
  "image",
+ "libc",
  "regex",
  "serde_json",
  "wisply-core",

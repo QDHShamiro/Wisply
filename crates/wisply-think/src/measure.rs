@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::LazyLock;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -65,17 +65,46 @@ pub struct Ran {
     pub out: String,
 }
 
+#[cfg(windows)]
+fn shell(cmd: &str) -> Command {
+    use std::os::windows::process::CommandExt;
+    let mut c = Command::new("cmd");
+    c.args(["/S", "/C"]).raw_arg(format!("\"{cmd}\""));
+    c
+}
+
+#[cfg(not(windows))]
+fn shell(cmd: &str) -> Command {
+    let mut c = Command::new("sh");
+    c.arg("-c").arg(cmd);
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut c, 0);
+    c
+}
+
+#[cfg(windows)]
+fn kill_group(child: &Child) {
+    let mut k = Command::new("taskkill");
+    k.args(["/T", "/F", "/PID", &child.id().to_string()]);
+    let _ = quiet(&mut k).stdout(Stdio::null()).stderr(Stdio::null()).status();
+}
+
+#[cfg(unix)]
+fn kill_group(child: &Child) {
+    if let Ok(pid) = i32::try_from(child.id()) {
+        let _ = unsafe { libc::killpg(pid, libc::SIGKILL) };
+    }
+}
+
+fn kill_tree(child: &mut Child) {
+    kill_group(child);
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 pub fn run(cmd: &str, cwd: &Path, limit: Duration) -> Ran {
     let started = Instant::now();
-    let mut c = if cfg!(windows) {
-        let mut c = Command::new("cmd");
-        c.arg("/C").arg(cmd);
-        c
-    } else {
-        let mut c = Command::new("sh");
-        c.arg("-c").arg(cmd);
-        c
-    };
+    let mut c = shell(cmd);
     let child =
         quiet(&mut c).current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
     let mut child = match child {
@@ -99,8 +128,7 @@ pub fn run(cmd: &str, cwd: &Path, limit: Duration) -> Ran {
         match child.try_wait() {
             Ok(Some(status)) => break status.code().unwrap_or(1),
             Ok(None) if started.elapsed() > limit => {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_tree(&mut child);
                 break 124;
             }
             Ok(None) => thread::sleep(Duration::from_millis(50)),
@@ -142,7 +170,7 @@ pub fn tests(out: &str) -> Option<(u64, u64)> {
     }
     if let Some(c) = MAVEN.captures_iter(out).last() {
         let (all, bad, skip) = (n(&c, 1), n(&c, 2) + n(&c, 3), n(&c, 4));
-        return Some((all - bad - skip, all - skip));
+        return Some((all.saturating_sub(bad + skip), all.saturating_sub(skip)));
     }
     if let Some(c) = SELF.captures_iter(out).last() {
         return Some((n(&c, 1), n(&c, 2)));
@@ -252,12 +280,25 @@ mod tests {
         assert_eq!(tests("Summary 12 tests run: 11 passed, 1 failed"), Some((11, 12)));
         assert_eq!(tests("Tests:       1 failed, 9 passed, 10 total"), Some((9, 10)));
         assert_eq!(tests("Tests run: 10, Failures: 1, Errors: 0, Skipped: 2"), Some((7, 8)));
+        assert_eq!(tests("Tests run: 1, Failures: 1, Errors: 1, Skipped: 0"), Some((0, 1)));
         assert_eq!(tests("==== 2 failed, 30 passed in 1.2s ===="), Some((30, 32)));
         assert_eq!(tests("61/61 gruen"), Some((61, 61)));
         assert_eq!(tests("nothing"), None);
         let ok = run("echo hi", Path::new("."), Duration::from_secs(20));
         assert_eq!(ok.code, 0);
         assert!(ok.out.contains("hi"));
+        let dir = std::env::temp_dir().join(format!("wisply think quoted {}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a b.txt"), "inside").unwrap();
+        let reader = if cfg!(windows) { "type" } else { "cat" };
+        let quoted =
+            run(&format!("{reader} \"{}\"", dir.join("a b.txt").display()), Path::new("."), Duration::from_secs(20));
+        assert_eq!((quoted.code, quoted.out.trim()), (0, "inside"), "{}", quoted.out);
+        let _ = std::fs::remove_dir_all(&dir);
+        let slow = if cfg!(windows) { "ping -n 30 127.0.0.1" } else { "sleep 30; echo done" };
+        let cut = run(slow, Path::new("."), Duration::from_secs(1));
+        assert_eq!(cut.code, 124);
+        assert!(cut.secs < 15.0, "the child tree kept the pipes open for {} s", cut.secs);
         let v = result("x", &[ok]);
         assert_eq!(line(&v).split(',').next(), Some("OK"));
         let a = json!({"exit": 0, "median_s": 2.0, "runs": 5, "tests": {"passed": 3, "total": 4}});
