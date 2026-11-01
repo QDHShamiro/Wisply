@@ -6,14 +6,14 @@ import { board, type GraphData } from "../api";
 import { ago, enc, go, h, mount } from "../dom";
 import { T } from "../text";
 
-const PALETTE = ["#ff9f4a", "#6fc3e8", "#e9d56f", "#82d9a2", "#ef8fb0", "#b9a6f2", "#5fd3c4", "#f2866b", "#c7d96a", "#9fb4cc"];
-const OTHER = "#aaa59a";
-const DIM = "#3a3a36";
-const EDGE = "rgba(240,237,230,0.2)";
-const EDGE_ON = "rgba(255,159,74,0.9)";
-const LABEL = "#f5f3ee";
-const BACKDROP = "#292927";
-const BACKDROP_LINE = "rgba(240,237,230,0.3)";
+const PALETTE = ["#ffffff", "#d9d9d9", "#b8b8b8", "#999999", "#7d7d7d", "#ececec", "#c8c8c8", "#a8a8a8", "#8c8c8c", "#707070"];
+const OTHER = "#5c5c5c";
+const DIM = "#383838";
+const EDGE = "rgba(255, 255, 255, 0.2)";
+const EDGE_ON = "rgba(255, 255, 255, 0.9)";
+const LABEL = "#f5f5f5";
+const BACKDROP = "#262626";
+const BACKDROP_LINE = "rgba(255, 255, 255, 0.3)";
 const FONT = "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif";
 const STORE = "wisply.graph.v3:";
 const SYNC_MAX = 3000;
@@ -391,7 +391,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
       const [s, t] = gr.extremities(e);
       if (!shown(gr.getNodeAttributes(s) as Attrs) || !shown(gr.getNodeAttributes(t) as Attrs)) return { visibility: "hidden" };
       const n = lit();
-      if (n) return s === n || t === n ? { color: EDGE_ON, size: 1.6 } : { color: "rgba(240,237,230,0.05)" };
+      if (n) return s === n || t === n ? { color: EDGE_ON, size: 1.6 } : { color: "rgba(255, 255, 255, 0.05)" };
       return { color: EDGE };
     },
   });

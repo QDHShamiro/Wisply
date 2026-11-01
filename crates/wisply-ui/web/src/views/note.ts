@@ -17,21 +17,21 @@ const theme = EditorView.theme(
     ".cm-content": { fontFamily: "var(--mono)", padding: "14px 0", caretColor: "var(--accent)" },
     ".cm-line": { padding: "0 16px" },
     ".cm-cursor": { borderLeftColor: "var(--accent)" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "rgba(255,159,74,0.3)" },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "rgba(255, 255, 255, 0.3)" },
     ".cm-gutters": { display: "none" },
   },
   { dark: true },
 );
 
 const marks = HighlightStyle.define([
-  { tag: tags.heading, fontWeight: "700", color: "#f5f3ee" },
+  { tag: tags.heading, fontWeight: "700", color: "#f5f5f5" },
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
-  { tag: tags.link, color: "#ffb06b", textDecoration: "underline" },
-  { tag: tags.url, color: "#aaa59a" },
-  { tag: tags.monospace, color: "#e9d56f" },
-  { tag: tags.quote, color: "#d2cdc3" },
-  { tag: tags.processingInstruction, color: "#8a857b" },
+  { tag: tags.link, color: "#e6e6e6", textDecoration: "underline" },
+  { tag: tags.url, color: "#a6a6a6" },
+  { tag: tags.monospace, color: "#e6e6e6" },
+  { tag: tags.quote, color: "#d0d0d0" },
+  { tag: tags.processingInstruction, color: "#8a8a8a" },
 ]);
 
 type Mode = "read" | "edit";
