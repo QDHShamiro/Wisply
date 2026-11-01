@@ -54,14 +54,16 @@ export async function home(view: HTMLElement): Promise<void> {
     return h(
       "a",
       { class: "card", href: `#/p/${enc(p.name)}` },
-      h("div", { class: "row" }, h("span", { class: `pulse${age < DAY ? " hot" : age < WEEK ? " warm" : ""}` }), h("div", { class: "name ellipsis grow" }, p.name), star),
+      h("div", { class: "row" }, h("span", { class: `pulse${age < DAY ? " hot" : age < WEEK ? " warm" : ""}` }), h("div", { class: "name ellipsis grow" }, p.name)),
       h("div", { class: "title ellipsis" }, p.title),
-      h("div", { class: "meta" }, ...T.home.counts(p.notes, p.todos, p.sessions).map((c) => h("span", {}, c)), h("span", { class: "grow" }), p.last ? T.ago(age) : ""),
+      h("div", { class: "meta" }, ...T.home.counts(p.notes, p.todos, p.sessions).map((c) => h("span", {}, c))),
+      h("div", { class: "when" }, p.last ? T.ago(age) : ""),
+      star,
     );
   };
 
   const section = (title: string, list: Card[]): HTMLElement | null =>
-    list.length ? h("section", {}, h("h2", {}, `${title} · ${list.length}`), h("div", { class: "cards" }, ...list.map(card))) : null;
+    list.length ? h("section", {}, h("h2", {}, title, h("span", { class: "n" }, list.length)), h("div", { class: "cards" }, ...list.map(card))) : null;
 
   const draw = () => {
     const w = want.trim().toLowerCase();

@@ -1,5 +1,5 @@
 import { board, type Pulse } from "./api";
-import { enc, go, h, mount } from "./dom";
+import { enc, go, h, icon, mount } from "./dom";
 import { T } from "./text";
 import { graph } from "./views/graph";
 import { blind } from "./views/blind";
@@ -11,25 +11,24 @@ import { search } from "./views/search";
 import { learned, settings, tokens } from "./views/side";
 
 const STATUS_MS = 5000;
-const bar = document.getElementById("bar") as HTMLElement;
+const side = document.getElementById("side") as HTMLElement;
 const view = document.getElementById("view") as HTMLElement;
-const status = document.getElementById("status") as HTMLElement;
+const status = h("div", { id: "status" });
 let cleanup: () => void = () => {};
 let turn = 0;
 
-const links: [string, string][] = [
-  ["#/", T.nav.projects],
-  ["#/graph", T.nav.graph],
-  ["#/live", T.nav.live],
-  ["#/tokens", T.nav.tokens],
-  ["#/learned", T.nav.learned],
-  ["#/blind", T.nav.blind],
-  ["#/settings", T.nav.settings],
+const links: [string, string, string][] = [
+  ["#/", "projects", T.nav.projects],
+  ["#/graph", "graph", T.nav.graph],
+  ["#/live", "live", T.nav.live],
+  ["#/tokens", "tokens", T.nav.tokens],
+  ["#/learned", "learned", T.nav.learned],
+  ["#/blind", "blind", T.nav.blind],
+  ["#/settings", "settings", T.nav.settings],
 ];
-const nav = h("nav", {}, links.map(([href, text]) => h("a", { href }, text)));
+const nav = h("nav", { id: "nav" }, links.map(([href, name, text]) => h("a", { href, title: text }, icon(name), h("span", {}, text))));
 const find = h("input", {
   type: "search",
-  class: "find",
   placeholder: T.find,
   onkeydown: (e: Event) => {
     const k = e as KeyboardEvent;
@@ -37,7 +36,20 @@ const find = h("input", {
     if (k.key === "Enter" && q) go(`#/search/${enc(q)}`);
   },
 });
-mount(bar, h("a", { class: "brand", href: "#/" }, h("img", { src: "icon.svg", alt: "" }), T.app), nav, find);
+mount(
+  side,
+  h("a", { class: "brand", href: "#/" }, h("img", { src: "icon.svg", alt: "" }), h("span", {}, T.app)),
+  h("div", { class: "search" }, icon("search"), find, h("kbd", {}, "Ctrl K")),
+  nav,
+  status,
+);
+window.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    find.focus();
+    find.select();
+  }
+});
 
 function mark(hash: string): void {
   for (const a of nav.querySelectorAll("a")) {

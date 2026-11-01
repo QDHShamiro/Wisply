@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use tao::dpi::LogicalSize;
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
-use tao::window::{Icon, WindowBuilder};
+use tao::window::{Icon, Theme, WindowBuilder};
 use wry::WebViewBuilder;
 use wry::http::Response;
 
@@ -16,7 +16,7 @@ const TITLE: &str = "Wisply";
 const SIZE: (f64, f64) = (1280.0, 820.0);
 const MIN_SIZE: (f64, f64) = (720.0, 480.0);
 const START: &str = "wisply://localhost/";
-const BACKGROUND: (u8, u8, u8, u8) = (5, 5, 5, 255);
+const BACKGROUND: (u8, u8, u8, u8) = (19, 19, 18, 255);
 const QUIET_ENV: &str = "WISPLY_UI_QUIET";
 const HELP: &str = "the Wisply window, open it with wisply ui";
 const ICON_SMALL: &[u8] = include_bytes!("../icons/32.png");
@@ -48,6 +48,7 @@ fn main() -> wry::Result<()> {
     let proxy = event_loop.create_proxy();
     let builder = WindowBuilder::new()
         .with_title(TITLE)
+        .with_theme(Some(Theme::Dark))
         .with_window_icon(icon(if cfg!(windows) { ICON_SMALL } else { ICON_BIG }))
         .with_inner_size(LogicalSize::new(SIZE.0, SIZE.1))
         .with_min_inner_size(LogicalSize::new(MIN_SIZE.0, MIN_SIZE.1))

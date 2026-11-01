@@ -22,7 +22,7 @@ const FIELDS: Field[] = [
 ];
 
 export async function tokens(view: HTMLElement): Promise<void> {
-  const out = h("pre", { class: "md", style: "white-space:pre-wrap;font-family:var(--mono);font-size:13px" });
+  const out = h("pre", { class: "out" });
   const days = (n: string) => async () => {
     out.textContent = T.tokens.loading;
     out.textContent = await plain("tokens", n).catch((e: Error) => e.message);
@@ -102,7 +102,7 @@ export async function settings(view: HTMLElement): Promise<void> {
         onchange: (e: Event) => void set(f.key, (e.target as HTMLInputElement).value),
       });
     }
-    return h("div", { class: "item" }, h("div", { class: "grow" }, h("div", {}, T.settings.labels[f.key] ?? f.key), h("div", { class: "body faint" }, f.key)), input);
+    return h("div", { class: "setting" }, h("div", { class: "grow" }, h("div", {}, T.settings.labels[f.key] ?? f.key), h("div", { class: "key" }, f.key)), input);
   };
   mount(view, h("div", { class: "page" }, h("div", { class: "row" }, h("div", { class: "grow" }, h("h1", {}, T.settings.title), h("div", { class: "sub" }, T.settings.sub)), note), h("div", { class: "list" }, FIELDS.map(row))));
 }

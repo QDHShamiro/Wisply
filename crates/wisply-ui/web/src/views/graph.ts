@@ -7,12 +7,13 @@ import { board, type GraphData } from "../api";
 import { enc, go, h, mount } from "../dom";
 import { T } from "../text";
 
-const PALETTE = ["#ffffff", "#c8d3e6", "#e6c8c8", "#c8e6d2", "#dacbe6", "#e6dcc0", "#c0e0e2", "#e6c8da", "#d6d6b8", "#b9bec8"];
-const OTHER = "#6a6a6f";
-const DIM = "#1b1b1d";
-const EDGE = "rgba(255,255,255,0.07)";
-const EDGE_ON = "rgba(255,255,255,0.45)";
-const LABEL = "#f2f2f2";
+const PALETTE = ["#ff9f4a", "#6fc3e8", "#e9d56f", "#82d9a2", "#ef8fb0", "#b9a6f2", "#5fd3c4", "#f2866b", "#c7d96a", "#9fb4cc"];
+const OTHER = "#8f8a80";
+const DIM = "#2b2b28";
+const EDGE = "rgba(236,233,226,0.16)";
+const EDGE_ON = "rgba(255,159,74,0.85)";
+const LABEL = "#ece9e2";
+const FONT = "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif";
 const STORE = "wisply.graph.v1:";
 const ANIMATE_MAX = 6000;
 const NUDGE_MS = 900;
@@ -289,10 +290,10 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
       labelRenderedSizeThreshold: 10,
       labelDensity: 0.5,
       labelGridCellSize: 120,
-      minEdgeThickness: 0.5,
+      minEdgeThickness: 0.6,
     },
     nodeReducer: (n, d, a) => {
-      const out: Partial<typeof d> = { labelColor: LABEL };
+      const out: Partial<typeof d> = { labelColor: LABEL, labelFont: FONT, labelSize: 12.5 };
       if (!shown(a)) out.visibility = "hidden";
       else if (focus && n !== focus && !near.has(n)) {
         out.color = DIM;
