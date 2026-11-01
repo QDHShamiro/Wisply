@@ -12,6 +12,7 @@ mod spawn;
 mod statusline;
 #[cfg(windows)]
 mod testapp;
+mod update;
 mod v2;
 #[cfg(windows)]
 mod voice;

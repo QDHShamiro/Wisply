@@ -236,6 +236,18 @@ wisply more hr-3fa91c04de --lines 400-440
 `wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
 keeps the rest in a file.
 
+## Updates
+
+Wisply keeps itself current. Once a day the daemon looks for a newer stable release on GitHub. When there is one it
+downloads the archive for your system, checks its SHA-256 against `SHA256SUMS.txt`, and installs it in the background
+once nothing has talked to Wisply for 5 minutes. It never does this while a game runs.
+
+- The install is the normal `setup`, run by a small helper. It starts the new daemon, checks that it answers as the new
+  version and goes back to the old programs and extension by itself if it does not.
+- `wisply update` checks and installs now, `wisply update --check` only looks, `wisply update --rollback` goes back.
+- `wisply config update notify` only tells you (once a day, in the start info), `config update off` turns it off.
+- Builds you run from a source checkout are never touched.
+
 ## The numbers
 
 Every number comes from a run you can repeat: `wisply bench`, `wisply bench --real`, `wisply selftest`.
@@ -293,10 +305,12 @@ used, ~34M without Wisply, **84% saved**.
 | Tokens for a first look at a page | **~440** (measured) | ~15,850 (measured) | 15,000–30,000 on dense pages ([1]) | not published ([2]) |
 | Repeated tasks | learned routines, one call | saved shortcuts | – | – |
 | Memory across sessions | ✅ local | – | – | – |
-| Headless, CI | ❌ real browser only | – | ✅ | ✅ |
+| Headless mode | ❌ needs a browser window (Xvfb on a Linux CI machine) | – | ✅ | ✅ |
 
-`–` = not built in, as far as the public docs say. For headless tests and CI, take Playwright. Wisply is for an
-agent on your own computer that has to use your logged-in browser and your apps, cheaply.
+`–` = not built in, as far as the public docs say. Wisply drives a real browser window with its extension loaded.
+It has no `--headless` mode, but a window is all it needs: Wisply's own CI runs it in Chrome for Testing on Windows,
+macOS and Linux (under Xvfb there), see `scripts/ci-browser.sh`. For headless test suites, take Playwright. Wisply is
+for an agent on your own computer that has to use your logged-in browser and your apps, cheaply.
 
 [1]: https://lite.ego.app/article/playwright-mcp-token-problem
 [2]: https://github.com/vercel-labs/agent-browser
@@ -378,6 +392,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
 | **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) |
+| **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |
 | **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` |
 

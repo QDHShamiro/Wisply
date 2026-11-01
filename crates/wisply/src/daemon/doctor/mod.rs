@@ -1,5 +1,6 @@
 mod ai;
 mod install;
+pub(crate) mod install;
 
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};

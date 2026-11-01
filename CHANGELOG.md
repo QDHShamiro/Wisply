@@ -20,6 +20,11 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   context bar, tokens and the 5-hour and weekly limits. Git and GitHub state is fetched in the background and cached,
   so drawing the line never starts a program. A status line of your own is never overwritten without `--force`, and
   `off` brings it back.
+- Automatic updates: the daemon checks the newest stable release once a day, downloads the archive for the system,
+  checks its SHA-256 against `SHA256SUMS.txt`, and installs it through `setup` run by a helper once no command came for
+  5 minutes and no game runs. The helper restarts the daemon, requires it to answer as the new version and otherwise
+  puts the kept programs (`*.old`) and the extension back. `wisply update [--check|--rollback]`, `config update
+  auto|notify|off` (default `auto`), result and new versions in the start info. See `SPEC-update.md`.
 - `wisply think`: critical thinking without AI. A run keeps goal, criteria, ideas, checkpoints, measurements and
   lessons; `scan` checks code (Rust, Java/Paper plugins, Python, JS/TS), web (alt text, contrast, viewport), texts
   (broken links, repeated words, long sentences), images (size, PNG recompress) and skills, with the packs that fit the

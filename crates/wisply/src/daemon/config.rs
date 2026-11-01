@@ -11,6 +11,7 @@ pub const NAV_LINES: usize = 40;
 const NAV_CHARS: usize = 1600;
 const SNAP_TOP: i64 = 15;
 const FOCUS_MODES: [&str; 3] = ["never", "away", "idle"];
+const UPDATE_MODES: [&str; 3] = ["auto", "notify", "off"];
 const RISK_WORDS: &[&str] = &[
     "buy",
     "purchase",
@@ -66,6 +67,7 @@ fn defaults() -> Map<String, Value> {
         ("models_dir", json!("")),
         ("vault", json!("")),
         ("vault_inbox", json!("Inbox")),
+        ("update", json!("auto")),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
@@ -141,6 +143,9 @@ pub fn command(home: &Path, pos: &[String]) -> Result<(String, bool), Fail> {
     };
     if key == "focus" && !FOCUS_MODES.contains(&raw.as_str()) {
         return Err(Fail::hint(format!("focus is one of {}", FOCUS_MODES.join(", ")), "wisply config focus never"));
+    }
+    if key == "update" && !UPDATE_MODES.contains(&raw.as_str()) {
+        return Err(Fail::hint(format!("update is one of {}", UPDATE_MODES.join(", ")), "wisply config update auto"));
     }
     let line = format!("{key} = {}", dumps(&val));
     cfg.insert(key.clone(), val);
