@@ -8,6 +8,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `recall` ranks by how many of your words a note really contains (title counts more than body), folds near-identical
+  notes into the best one, favours recent notes (half-life 45 days), and shows the sentence that matches instead of the
+  start of the note. It also lists matching open to-dos first, so "Lighting loeschen" finds the to-do. Default 6 lines
+  instead of 8 and a shorter footer: about 30% fewer characters on 15 real questions, all 15 right notes in the top 3.
+- `code callers` groups calls per function and shows tests last; the name search behind meaning questions strips plural
+  endings, weighs rare words higher and also reads file paths; the file list is cached for 3 seconds, so a repeated
+  `wisply code` answers in about 160 ms instead of 225 ms.
 - `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
   on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with
   `*` for changes and `↑2 ↓1` for ahead/behind, the GitHub pull request of the branch with its checks, model, effort,

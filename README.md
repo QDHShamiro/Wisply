@@ -170,7 +170,8 @@ vault/
 ```
 
 - **`recall "words"`** searches the vault, session notes, Claude's own memory files and the to-dos by words and by
-  meaning, in any language. One line per note, `recall 42` opens one in full.
+  meaning, in any language. One line per note with the sentence that matches, near-identical notes folded into one,
+  open to-dos that match listed first. `recall 42` opens one in full.
 - **Notes write themselves.** After a session a local model drafts the notes. Drafts land in `Inbox/`:
   `wisply wiki` lists them, `wiki accept 3` files one into the right folder, `wiki drop 3` throws it away. No new drafts
   while 30 wait, so the inbox never floods.
