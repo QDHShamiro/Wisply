@@ -7,6 +7,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Changed
+- `frames`, `watch` and `shot`: fewer image tokens, faster. Contact sheets now fit the model's 28 px token grid
+  (no second resize, no empty cells, bigger tiles when there are few), near-identical scenes are dropped instead of
+  padding the sheet to the full count, and `shot` sizes snap to whole tokens (1024 px wide became 1008). Video frames
+  come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
+
 ### Added
 - `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
   on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with

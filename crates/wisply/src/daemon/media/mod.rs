@@ -1,5 +1,7 @@
 pub mod gemini;
 mod listen;
+#[cfg(test)]
+mod measure;
 mod scenes;
 pub mod tools;
 mod watch;
