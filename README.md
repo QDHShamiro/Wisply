@@ -248,6 +248,41 @@ once nothing has talked to Wisply for 5 minutes. It never does this while a game
 - `wisply config update notify` only tells you (once a day, in the start info), `config update off` turns it off.
 - Builds you run from a source checkout are never touched.
 
+## PC optimizer
+
+`wisply pc` checks how fast this PC is and says what slows it down. It works the same on Windows, macOS and Linux.
+
+```
+pc 72/100 · RAM 87 % (brave 6.1 GB) · C: 18 GB free · 6 autostarts · ping 1.1.1.1 34 ms
+1. RAM 87 % (brave holds 6.1 GB) - free the memory of idle programs -> wisply pc fix 1
+2. C: only 18.0 GB free - clean temp files, caches and old build folders -> wisply pc fix 2
+```
+
+- `wisply pc fix <n>` runs suggestion n, `fix all` runs every safe one. `pc clean [--dry]` cleans up, `pc startup`
+  lists autostarts (`off <n>` / `on <n>`, the original is kept), `pc net [host]` shows ping and which program holds
+  the line, `pc disk` shows drive health, `pc updates` shows old graphics drivers and open system updates (it never
+  installs anything), `pc game` shows the game mode, `pc afk|play|auto` switches it by hand, `pc log [n]` lists what
+  it did, `pc config` shows the settings.
+- The daemon looks every 5 seconds in the background (about 0.3 % of one CPU core and 10 MB of RAM, measured). It warns, with a system
+  notification, when RAM is above 85 %, a program grows fast, CPU stays above 80 % for 30 s or the disk stays busy for
+  30 s, and it names the program. The same warning comes once per 30 minutes at most and never brings a window to the
+  front. The status line gets a short `pc 72 RAM 87 %` field (`wisply statusline set pc off` hides it).
+- New users: it shows and warns, it does not act. `wisply pc on` lets it act by itself: lower priorities, give memory
+  back, clean temp files and run the game mode. Closing programs, switching autostarts off and deleting outside temp
+  and cache folders always need your yes (`pc fix <n>`). `wisply pc off` puts everything back.
+- Game mode: while a game runs and you used the mouse or keyboard in the last 5 minutes, builds, tests and AI agents
+  (not the one in front of you) get the lowest priority, background programs get quieter and the game a higher one,
+  with the high performance power plan. Builds are paused for a moment when RAM runs out. After 5 minutes without
+  input it relaxes, the first input brings it back. Everything is restored exactly at the end, also after a crash of
+  the daemon (the state is kept in `~/.wisply/pc/mode-state.json`).
+- Cleaning (below 25 GB free, once a week when idle, or `pc clean`): temp files, caches, crash dumps, build folders
+  (`target`, `build`, `node_modules`, `.gradle`) of projects untouched for 30 days and without uncommitted changes,
+  logs older than 14 days, npm/pip/cargo/gradle caches while their tool is not running. Never touched: open projects,
+  `build/libs`, Minecraft, game folders, `~/.claude`, `~/.wisply/memory`, the vault, Documents, Pictures, Downloads and
+  anything that looks like a secret. Deleted files skip the recycle bin; `pc log` says what, where and how big.
+- Settings live in `~/.wisply/pc/config.json` (`act`, `warn`, `notify`, `statusline`, `tick_secs`, thresholds,
+  `builders`, `background`, `protect`, `protect_paths`, `project_roots`, `ping_host`, `game_exes`).
+
 ## The numbers
 
 Every number comes from a run you can repeat: `wisply bench`, `wisply bench --real`, `wisply selftest`.

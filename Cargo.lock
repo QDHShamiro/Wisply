@@ -4373,6 +4373,7 @@ dependencies = [
  "wisply-code",
  "wisply-core",
  "wisply-memory",
+ "wisply-pc",
  "wisply-proto",
  "wisply-squeeze",
  "wisply-think",
@@ -4408,6 +4409,14 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "wisply-core",
+]
+
+[[package]]
+name = "wisply-pc"
+version = "3.0.1"
+dependencies = [
+ "libc",
+ "serde_json",
 ]
 
 [[package]]

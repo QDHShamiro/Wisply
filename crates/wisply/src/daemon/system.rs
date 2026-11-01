@@ -35,6 +35,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         secure [folder] [--history] [--no-deps] (keys, vulnerable dependencies, risky code; not while a game runs)
         think <step> (finds, fixes and proves improvements without AI; wisply think help lists the steps)
         update [--check|--rollback] (installs the newest release by itself in the background; config update auto|notify|off)
+        pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
 Output is plain text, one line per action. Big results go to a file (path printed).
@@ -174,6 +175,7 @@ fn status(d: &Daemon, ctx: &Ctx) -> String {
         posix(&d.home.join("out")),
     ));
     lines.extend(media::usage(&d.home));
+    lines.extend(super::pc::status_line(d));
     lines.push(format!("home {}", posix(&d.home)));
     lines.join("\n")
 }
