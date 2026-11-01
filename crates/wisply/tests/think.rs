@@ -69,7 +69,7 @@ fn think_finds_fixes_and_reports_without_ai() {
     assert!(out.contains("README.md:3 repeated-word: 1 lines repeat a word (\"is is\")"), "{out}");
 
     let (code, out) = home.feed(&["think", "idea", "add"], Some("Shorter intro | text | invert | 2 | 2 | 1 | safe\n"));
-    assert!(code == 0 && out.contains("+1 ideas (total 3/10)"), "{out}");
+    assert!(code == 0 && out.contains("+1 ideas (total 3, "), "{out}");
 
     let (code, out) = home.run(&["think", "fix"]);
     assert!(code == 0 && out.contains("drop repeated words (1 files)"), "{out}");

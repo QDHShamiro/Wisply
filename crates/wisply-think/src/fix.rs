@@ -16,6 +16,11 @@ pub struct Plan {
     pub files: Vec<PathBuf>,
 }
 
+fn canon(p: &Path) -> PathBuf {
+    fs::canonicalize(p)
+        .map_or_else(|_| p.to_path_buf(), |c| PathBuf::from(c.to_string_lossy().trim_start_matches(r"\\?\")))
+}
+
 fn works(program: &str, arg: &str) -> bool {
     quiet(&mut Command::new(program)).arg(arg).output().is_ok_and(|o| o.status.success())
 }
@@ -43,7 +48,11 @@ pub fn plans(
     deep: bool,
     paths: &[PathBuf],
 ) -> Vec<Plan> {
-    let inside = |f: &Path| paths.iter().any(|p| f.starts_with(p));
+    let roots: Vec<PathBuf> = paths.iter().map(|p| canon(p)).collect();
+    let inside = |f: &Path| {
+        let f = canon(f);
+        roots.iter().any(|p| f.starts_with(p))
+    };
     let mut by: BTreeMap<&'static str, Vec<PathBuf>> = BTreeMap::new();
     for f in found {
         if let Some(fixer) = f.fixer {
