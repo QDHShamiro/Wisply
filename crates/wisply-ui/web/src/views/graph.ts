@@ -1,33 +1,31 @@
 import Graph from "graphology";
-import { inferSettings } from "graphology-layout-forceatlas2";
+import forceAtlas2, { inferSettings } from "graphology-layout-forceatlas2";
 import FA2Layout from "graphology-layout-forceatlas2/worker";
 import Sigma from "sigma";
-import { animateNodes } from "sigma/utils";
 import { board, type GraphData } from "../api";
-import { enc, go, h, mount } from "../dom";
+import { ago, enc, go, h, mount } from "../dom";
 import { T } from "../text";
 
 const PALETTE = ["#ff9f4a", "#6fc3e8", "#e9d56f", "#82d9a2", "#ef8fb0", "#b9a6f2", "#5fd3c4", "#f2866b", "#c7d96a", "#9fb4cc"];
-const OTHER = "#8f8a80";
-const DIM = "#2b2b28";
-const EDGE = "rgba(236,233,226,0.16)";
-const EDGE_ON = "rgba(255,159,74,0.85)";
-const LABEL = "#ece9e2";
+const OTHER = "#aaa59a";
+const DIM = "#3a3a36";
+const EDGE = "rgba(240,237,230,0.2)";
+const EDGE_ON = "rgba(255,159,74,0.9)";
+const LABEL = "#f5f3ee";
+const BACKDROP = "#292927";
+const BACKDROP_LINE = "rgba(240,237,230,0.3)";
 const FONT = "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif";
-const STORE = "wisply.graph.v1:";
-const ANIMATE_MAX = 6000;
+const STORE = "wisply.graph.v3:";
+const SYNC_MAX = 3000;
 const NUDGE_MS = 900;
 const KINDS = ["note", "project", "session"] as const;
 const REPORT_TOP = 10;
-const NAMED = 24;
+const LABELED = 14;
+const CLUSTER_MIN = 3;
+const ROUNDS = 15;
 
 type Kind = (typeof KINDS)[number];
-type Attrs = { label: string; kind: Kind; group: string; t: number; x: number; y: number; size: number; color: string; deg: number };
-
-function layoutMs(n: number): number {
-  return Math.min(8000, 1500 + n / 3);
-}
-
+type Attrs = { label: string; kind: Kind; group: string; cluster: string; t: number; x: number; y: number; size: number; color: string; deg: number };
 type Spots = Record<string, [number, number]>;
 
 function loadSpots(key: string): Spots {
@@ -81,37 +79,53 @@ function frame(f: () => void): () => void {
   };
 }
 
-function seed(data: GraphData): { g: Graph<Attrs>; colors: Map<string, string> } {
+function communities(g: Graph<Attrs>): Map<string, string> {
+  const lab = new Map(g.nodes().map((n) => [n, n]));
+  for (let r = 0; r < ROUNDS; r++) {
+    let moved = false;
+    g.forEachNode((n) => {
+      const count = new Map<string, number>();
+      g.forEachNeighbor(n, (m) => {
+        const l = lab.get(m) as string;
+        count.set(l, (count.get(l) ?? 0) + 1);
+      });
+      let best = lab.get(n) as string;
+      let most = 0;
+      for (const [l, c] of count) {
+        if (c > most || (c === most && l < best)) {
+          best = l;
+          most = c;
+        }
+      }
+      if (most > 0 && best !== lab.get(n)) {
+        lab.set(n, best);
+        moved = true;
+      }
+    });
+    if (!moved) break;
+  }
+  return lab;
+}
+
+function seed(data: GraphData): { g: Graph<Attrs>; colors: Map<string, string>; names: Map<string, string> } {
   const g = new Graph<Attrs>({ type: "undirected", multi: false, allowSelfLoops: false });
   const deg = new Array<number>(data.nodes.length).fill(0);
   for (const [a, b] of data.edges) {
     deg[a]++;
     deg[b]++;
   }
-  const sizes = new Map<string, number>();
-  for (const n of data.nodes) sizes.set(n[3], (sizes.get(n[3]) ?? 0) + 1);
-  const groups = [...sizes.entries()].sort((a, b) => b[1] - a[1]);
-  const colors = new Map<string, string>();
-  groups.filter(([name]) => name).slice(0, PALETTE.length).forEach(([name], i) => colors.set(name, PALETTE[i]));
-  const centers = new Map<string, [number, number]>();
-  groups.forEach(([name, count], i) => {
-    const r = 40 * Math.sqrt(i) + Math.sqrt(count);
-    const a = i * 2.39996;
-    centers.set(name, [r * Math.cos(a), r * Math.sin(a)]);
-  });
   data.nodes.forEach(([id, label, kind, group, t], i) => {
-    const [cx, cy] = centers.get(group) ?? [0, 0];
-    const spread = Math.sqrt(sizes.get(group) ?? 1) * 1.5;
     const k = kind as Kind;
-    g.addNode(id, {
+    g.mergeNode(id, {
       label: label || id,
       kind: k,
       group,
+      cluster: "",
       t,
-      x: cx + (Math.random() - 0.5) * spread,
-      y: cy + (Math.random() - 0.5) * spread,
-      size: k === "project" ? 6 + Math.sqrt(deg[i]) * 0.6 : 1.5 + Math.sqrt(deg[i]) * 0.9,
-      color: colors.get(group) ?? OTHER,
+      x: (Math.random() - 0.5) * 100,
+      y: (Math.random() - 0.5) * 100,
+      size: k === "project" ? 8 + Math.sqrt(deg[i]) * 1.2 : 3 + Math.sqrt(deg[i]) * 1.4,
+      color: OTHER,
       deg: deg[i],
     });
   });
@@ -120,99 +134,89 @@ function seed(data: GraphData): { g: Graph<Attrs>; colors: Map<string, string> }
     const d = data.nodes[b][0];
     if (s !== d && !g.hasEdge(s, d)) g.addEdge(s, d);
   }
-  return { g, colors };
-}
-
-function report(g: Graph<Attrs>, pick: (node: string) => void): HTMLElement {
-  const notes = g.filterNodes((_, a) => a.kind === "note");
-  const hubs = [...notes].sort((a, b) => g.getNodeAttribute(b, "deg") - g.getNodeAttribute(a, "deg")).slice(0, REPORT_TOP);
-  const reach = (n: string) => new Set(g.mapNeighbors(n, (_, a) => a.group).filter((x) => x && x !== g.getNodeAttribute(n, "group"))).size;
-  const bridges = notes
-    .map((n) => [n, reach(n)] as const)
-    .filter(([, r]) => r > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, REPORT_TOP)
-    .map(([n]) => n);
-  const asks: [string, string][] = [];
-  for (const a of hubs) {
-    const b = hubs.find((x) => x !== a && g.getNodeAttribute(x, "group") !== g.getNodeAttribute(a, "group") && !g.hasEdge(a, x));
-    if (b && asks.length < 3) asks.push([a, b]);
-  }
-  const link = (n: string) => h("a", { href: "#", onclick: (e: Event) => { e.preventDefault(); pick(n); } }, g.getNodeAttribute(n, "label"));
-  return h(
-    "div",
-    {},
-    h("h2", {}, T.graph.hubs),
-    hubs.map(link),
-    bridges.length ? h("h2", {}, T.graph.bridges) : null,
-    bridges.map(link),
-    asks.length ? h("h2", {}, T.graph.questions) : null,
-    asks.map(([a, b]) => h("div", { class: "muted", style: "padding:3px 0" }, T.graph.ask(g.getNodeAttribute(a, "label"), g.getNodeAttribute(b, "label")))),
-  );
+  const named = new Set(data.nodes.map((n) => n[3]).filter(Boolean));
+  const lab = named.size >= 2 ? null : communities(g);
+  g.forEachNode((n, a) => {
+    a.cluster = lab ? (lab.get(n) as string) : a.group;
+  });
+  const sizes = new Map<string, number>();
+  g.forEachNode((_, a) => sizes.set(a.cluster, (sizes.get(a.cluster) ?? 0) + 1));
+  const top = [...sizes.entries()].filter(([c, n]) => c && n >= CLUSTER_MIN).sort((a, b) => b[1] - a[1]).slice(0, PALETTE.length);
+  const colors = new Map<string, string>();
+  const names = new Map<string, string>();
+  top.forEach(([c], i) => {
+    colors.set(c, PALETTE[i]);
+    if (lab) {
+      const hub = g.filterNodes((_, a) => a.cluster === c).sort((x, y) => g.getNodeAttribute(y, "deg") - g.getNodeAttribute(x, "deg"))[0];
+      names.set(c, g.getNodeAttribute(hub, "label"));
+    } else names.set(c, c);
+  });
+  g.forEachNode((_, a) => {
+    a.color = colors.get(a.cluster) ?? OTHER;
+  });
+  return { g, colors, names };
 }
 
 export async function graph(view: HTMLElement, project?: string): Promise<() => void> {
-  mount(view, h("div", { class: "empty", style: "padding:24px" }, T.graph.loading));
+  mount(view, h("div", { class: "empty", style: "margin:24px" }, T.graph.loading));
   const data = await board<GraphData>("graph", ...(project ? [project] : []));
-  const { g, colors } = seed(data);
+  const { g, colors, names } = seed(data);
   const key = project ?? "all";
   const fresh = place(g, loadSpots(key));
   const canvas = h("div", { class: "canvas" });
-  const info = h("span", { class: "info" }, T.graph.layout);
+  const info = h("span", { class: "info" }, T.graph.nodes(g.order, g.size));
+  const side = h("aside", {});
   const hidden = new Set<Kind>();
   let orphans = false;
-  const named = new Set(g.filterNodes((_, a) => a.kind === "project").sort((a, b) => g.getNodeAttribute(b, "deg") - g.getNodeAttribute(a, "deg")).slice(0, NAMED));
+  const named = new Set(g.nodes().sort((a, b) => g.getNodeAttribute(b, "deg") - g.getNodeAttribute(a, "deg")).slice(0, LABELED));
   let focus: string | null = null;
-  let near = new Set<string>();
+  let hover: string | null = null;
   const times = g.mapNodes((_, a) => a.t).filter((t) => t > 0);
   const [t0, t1] = times.length ? [Math.min(...times), Math.max(...times)] : [0, 0];
   let until = t1;
   const shown = (a: Attrs) => !hidden.has(a.kind) && (orphans || a.deg > 0) && (a.t === 0 || a.t <= until);
-
-  const pick = (n: string | null) => {
-    focus = n;
+  const lit = () => focus ?? hover;
+  let near = new Set<string>();
+  const light = () => {
+    const n = lit();
     near = n ? new Set(g.neighbors(n)) : new Set();
-    redraw();
-    if (n) {
-      const d = renderer.getNodeDisplayData(n);
-      if (d) void renderer.getCamera().animate({ x: d.x, y: d.y, ratio: 0.25 }, { duration: 400 });
-    }
   };
-  const done = () => (info.textContent = T.graph.nodes(g.order, g.size));
-  const work = g.copy();
-  const layout = fresh ? new FA2Layout(work, { settings: { ...inferSettings(work), barnesHutOptimize: work.order > 2000, slowDown: 2 } }) : null;
-  const settle = () => {
-    layout?.stop();
-    const targets: Record<string, { x: number; y: number }> = {};
-    work.forEachNode((n, a) => (targets[n] = { x: a.x, y: a.y }));
-    if (g.order <= ANIMATE_MAX) animateNodes(g, targets, { duration: 500 }, () => saveSpots(key, g));
-    else {
-      g.updateEachNodeAttributes((n, a) => ({ ...a, ...targets[n] }), { attributes: ["x", "y"] });
-      saveSpots(key, g);
-    }
-    done();
-  };
-  layout?.start();
-  const stop = layout ? window.setTimeout(settle, fresh === g.order ? layoutMs(g.order) : NUDGE_MS) : 0;
-  if (!layout) done();
 
-  let frames = 0;
-  let fps = 0;
-  let alive = true;
-  const fpsBox = h("span", { class: "info" });
-  const tick = (t0f: number) => (t: number) => {
-    if (!alive) return;
-    frames++;
-    if (t - t0f >= 1000) {
-      fps = Math.round((frames * 1000) / (t - t0f));
-      fpsBox.textContent = `${fps} fps`;
-      frames = 0;
-      requestAnimationFrame(tick(t));
-      return;
-    }
-    requestAnimationFrame(tick(t0f));
+  let layout: FA2Layout | null = null;
+  let stop = 0;
+  if (fresh && g.order <= SYNC_MAX) {
+    forceAtlas2.assign(g, { iterations: fresh === g.order ? 400 : 60, settings: { ...inferSettings(g), scalingRatio: 14, gravity: 0.6, slowDown: 2 } });
+    saveSpots(key, g);
+  } else if (fresh) {
+    info.textContent = T.graph.layout;
+    layout = new FA2Layout(g, { settings: { ...inferSettings(g), barnesHutOptimize: true, slowDown: 2 } });
+    layout.start();
+    stop = window.setTimeout(() => {
+      layout?.stop();
+      saveSpots(key, g);
+      info.textContent = T.graph.nodes(g.order, g.size);
+    }, fresh === g.order ? Math.min(8000, 1500 + g.order / 3) : NUDGE_MS);
+  }
+
+  const swatch = (n: string) => h("span", { class: "swatch", style: `background:${g.getNodeAttribute(n, "color")}` });
+  const link = (n: string) =>
+    h(
+      "a",
+      {
+        href: "#",
+        onclick: (e: Event) => {
+          e.preventDefault();
+          pick(n);
+        },
+      },
+      swatch(n),
+      g.getNodeAttribute(n, "label"),
+    );
+  const open = (n: string) => {
+    const a = g.getNodeAttributes(n);
+    if (a.kind === "note") go(`#/n/${n.slice(1)}`);
+    else if (a.kind === "project") go(`#/p/${enc(a.group)}`);
   };
-  if (location.hash.includes("fps")) requestAnimationFrame(tick(performance.now()));
 
   const toggles = h(
     "div",
@@ -238,7 +242,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
       {},
       h("input", {
         type: "checkbox",
-        checked: false,
+        checked: orphans,
         onchange: (e: Event) => {
           orphans = (e.target as HTMLInputElement).checked;
           redraw();
@@ -246,8 +250,75 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
       }),
       T.graph.orphans,
     ),
-    [...colors.entries()].map(([name, c]) => h("label", { onclick: () => pick(`p:${name}`) }, h("span", { class: "swatch", style: `background:${c}` }), name)),
   );
+
+  const overview = () => {
+    const hubs = g
+      .filterNodes((_, a) => a.kind === "note")
+      .sort((a, b) => g.getNodeAttribute(b, "deg") - g.getNodeAttribute(a, "deg"))
+      .slice(0, REPORT_TOP);
+    const groups = [...colors.keys()].map((c) => {
+      const hub = g.findNode((_, a) => a.cluster === c && a.label === names.get(c)) ?? g.findNode((_, a) => a.cluster === c);
+      const count = g.filterNodes((_, a) => a.cluster === c).length;
+      return h(
+        "a",
+        {
+          href: "#",
+          onclick: (e: Event) => {
+            e.preventDefault();
+            if (hub) pick(hub);
+          },
+        },
+        h("span", { class: "swatch", style: `background:${colors.get(c)}` }),
+        names.get(c) ?? c,
+        h("span", { class: "faint" }, ` · ${count}`),
+      );
+    });
+    mount(
+      side,
+      h("h2", { style: "margin-top:0" }, T.graph.show),
+      toggles,
+      groups.length ? h("h2", {}, T.graph.groups) : null,
+      ...groups,
+      h("h2", {}, T.graph.hubs),
+      ...hubs.map(link),
+    );
+  };
+
+  const detail = (n: string) => {
+    const a = g.getNodeAttributes(n);
+    const links = g.neighbors(n).sort((x, y) => g.getNodeAttribute(y, "deg") - g.getNodeAttribute(x, "deg"));
+    mount(
+      side,
+      h("div", { class: "detail" },
+        h("button", { class: "back", onclick: () => pick(null) }, `← ${T.graph.back}`),
+        h("h3", {}, a.label),
+        h("div", { class: "meta" }, [T.graph.kinds[a.kind], a.t ? T.ago(ago(a.t)) : "", colors.has(a.cluster) ? names.get(a.cluster) : ""].filter(Boolean).join(" · ")),
+        h("div", { class: "actions" },
+          a.kind === "session" ? null : h("button", { class: "primary", onclick: () => open(n) }, T.graph.open),
+          h("button", { onclick: () => center(n) }, T.graph.center),
+        ),
+        h("h2", {}, T.graph.connections, h("span", { class: "n" }, links.length)),
+        links.length ? links.map(link) : h("div", { class: "faint" }, T.graph.alone),
+      ),
+    );
+  };
+
+  const center = (n: string) => {
+    const d = renderer.getNodeDisplayData(n);
+    if (d) void renderer.getCamera().animate({ x: d.x, y: d.y, ratio: 0.4 }, { duration: 350 });
+  };
+
+  const pick = (n: string | null) => {
+    focus = n;
+    light();
+    redraw();
+    if (n) {
+      detail(n);
+      center(n);
+    } else overview();
+  };
+
   const find = h("input", {
     type: "search",
     class: "find",
@@ -267,6 +338,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
     min: 0,
     max: 1000,
     value: 1000,
+    "aria-label": T.graph.until,
     oninput: (e: Event) => {
       const v = Number((e.target as HTMLInputElement).value) / 1000;
       until = t0 + (t1 - t0) * v;
@@ -279,49 +351,65 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
     h(
       "div",
       { class: "graph" },
-      h("div", { class: "stage" }, canvas, h("div", { class: "tools" }, find, info, fpsBox), t1 > t0 ? h("div", { class: "time" }, slider, label) : null),
-      h("aside", {}, h("div", { class: "muted", style: "font-size:12px;margin-bottom:8px" }, T.graph.focus), toggles, h("h2", {}, T.graph.report), report(g, pick)),
+      h("div", { class: "stage" }, canvas, h("div", { class: "tools" }, find, info), h("div", { class: "hint-box" }, T.graph.focus), t1 > t0 ? h("div", { class: "time" }, slider, label) : null),
+      side,
     ),
   );
+  overview();
   const renderer = new Sigma(g, canvas, {
     settings: {
-      hideEdgesOnMove: true,
-      hideLabelsOnMove: g.order > ANIMATE_MAX,
-      labelRenderedSizeThreshold: 10,
-      labelDensity: 0.5,
-      labelGridCellSize: 120,
-      minEdgeThickness: 0.6,
+      hideEdgesOnMove: g.order > SYNC_MAX,
+      hideLabelsOnMove: g.order > SYNC_MAX,
+      labelRenderedSizeThreshold: 7,
+      labelDensity: 0.35,
+      labelGridCellSize: 110,
+      minEdgeThickness: 0.8,
     },
-    nodeReducer: (n, d, a) => {
-      const out: Partial<typeof d> = { labelColor: LABEL, labelFont: FONT, labelSize: 12.5 };
-      if (!shown(a)) out.visibility = "hidden";
-      else if (focus && n !== focus && !near.has(n)) {
+    nodeReducer: (n, _d, a) => {
+      const out: Record<string, unknown> = {
+        labelColor: LABEL,
+        labelFont: FONT,
+        labelSize: 13,
+        backdropColor: BACKDROP,
+        backdropBorderColor: BACKDROP_LINE,
+        backdropBorderWidth: 1,
+        backdropCornerRadius: 6,
+        backdropShadowColor: "rgba(0,0,0,0.5)",
+        cursor: "pointer",
+      };
+      if (!shown(a as Attrs)) out.visibility = "hidden";
+      else if (lit() && n !== lit() && !near.has(n)) {
         out.color = DIM;
         out.labelVisibility = "hidden";
-      } else if (focus) out.labelVisibility = "visible";
-      if (!focus && named.has(n)) out.labelVisibility = "visible";
+      } else if (lit()) out.labelVisibility = "visible";
+      else if (named.has(n)) out.labelVisibility = "visible";
+      if (n === focus) out.backdropVisibility = "visible";
       return out;
     },
     edgeReducer: (e, _d, _a, _s, _gs, gr) => {
       const [s, t] = gr.extremities(e);
-      const a = gr.getNodeAttributes(s) as Attrs;
-      const b = gr.getNodeAttributes(t) as Attrs;
-      if (!shown(a) || !shown(b)) return { visibility: "hidden" };
-      if (focus) return s === focus || t === focus ? { color: EDGE_ON, size: 1 } : { visibility: "hidden" };
+      if (!shown(gr.getNodeAttributes(s) as Attrs) || !shown(gr.getNodeAttributes(t) as Attrs)) return { visibility: "hidden" };
+      const n = lit();
+      if (n) return s === n || t === n ? { color: EDGE_ON, size: 1.6 } : { color: "rgba(240,237,230,0.05)" };
       return { color: EDGE };
     },
   });
   const redraw = frame(() => renderer.refresh({ skipIndexation: true }));
+  renderer.on("enterNode", ({ node }) => {
+    hover = node;
+    light();
+    redraw();
+  });
+  renderer.on("leaveNode", () => {
+    hover = null;
+    light();
+    redraw();
+  });
   renderer.on("clickNode", ({ node }) => pick(node === focus ? null : node));
   renderer.on("clickStage", () => pick(null));
-  renderer.on("doubleClickNode", ({ node }) => {
-    const a = g.getNodeAttributes(node);
-    if (a.kind === "note") go(`#/n/${node.slice(1)}`);
-    else if (a.kind === "project") go(`#/p/${enc(a.group)}`);
-  });
+  renderer.on("doubleClickNode", ({ node }) => open(node));
 
   return () => {
-    alive = false;
     clearTimeout(stop);
     layout?.kill();
     renderer.kill();

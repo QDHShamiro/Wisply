@@ -2,6 +2,7 @@
 
 mod assets;
 mod bridge;
+mod folder;
 
 use std::borrow::Cow;
 
@@ -59,6 +60,11 @@ fn main() -> wry::Result<()> {
         builder.with_taskbar_icon(icon(ICON_BIG))
     };
     let window = builder.build(&event_loop).map_err(|e| wry::Error::Io(std::io::Error::other(e.to_string())))?;
+    #[cfg(windows)]
+    {
+        use tao::platform::windows::WindowExtWindows;
+        folder::set_owner(window.hwnd());
+    }
     let builder = WebViewBuilder::new()
         .with_background_color(BACKGROUND)
         .with_custom_protocol("wisply".into(), |_, req| {

@@ -2,7 +2,6 @@ import { board, type Project, type Todo } from "../api";
 import { ago, enc, h, mount } from "../dom";
 import { render } from "../md";
 import { T } from "../text";
-import { graph } from "./graph";
 
 export type Tab = "notes" | "todos" | "sessions" | "graph";
 
@@ -122,7 +121,7 @@ export async function project(view: HTMLElement, name: string, tab: Tab): Promis
   else if (tab === "sessions") mount(body, sessions(p));
   else {
     body.style.height = "calc(100% - 42px)";
-    return graph(body, name);
+    return (await import("./graph")).graph(body, name);
   }
   return () => {};
 }

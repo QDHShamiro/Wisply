@@ -1,9 +1,9 @@
-import { board, plain } from "../api";
-import { h, mount } from "../dom";
+import { board, call, plain } from "../api";
+import { h, mount, pick } from "../dom";
 import { T } from "../text";
 
 type Lesson = { sig: string; cmd: string; target: string; kind: string; fix: string; ups: number; downs: number };
-type Field = { key: string; kind: "bool" | "text" | "pick"; options?: string[] };
+type Field = { key: string; kind: "bool" | "text" | "pick" | "path"; options?: string[] };
 
 const FIELDS: Field[] = [
   { key: "gemini", kind: "bool" },
@@ -16,9 +16,9 @@ const FIELDS: Field[] = [
   { key: "pointer", kind: "bool" },
   { key: "window", kind: "bool" },
   { key: "focus", kind: "pick", options: ["never", "away", "idle"] },
-  { key: "browser", kind: "text" },
-  { key: "vault", kind: "text" },
-  { key: "vault_inbox", kind: "text" },
+  { key: "browser", kind: "pick", options: ["auto", "brave", "chrome", "edge"] },
+  { key: "vault", kind: "path" },
+  { key: "vault_inbox", kind: "path" },
 ];
 
 export async function tokens(view: HTMLElement): Promise<void> {
@@ -83,26 +83,60 @@ export async function learned(view: HTMLElement): Promise<void> {
 
 export async function settings(view: HTMLElement): Promise<void> {
   const cfg = await board<Record<string, unknown>>("settings");
-  const note = h("span", { class: "muted" });
-  const set = async (key: string, value: string) => {
-    note.textContent = await plain("config", key, value).catch((e: Error) => e.message);
-  };
   const row = (f: Field) => {
     const v = cfg[f.key];
-    let input: HTMLElement;
+    const state = h("div", { class: "state" });
+    const say = (text: string, ok: boolean) => {
+      state.className = `state ${ok ? "ok" : "bad"}`;
+      state.textContent = text;
+    };
+    const set = async (value: string, input?: HTMLInputElement) => {
+      try {
+        await plain("config", f.key, value);
+        input?.classList.remove("bad");
+        say(T.settings.saved, true);
+      } catch (e) {
+        input?.classList.add("bad");
+        say((e as Error).message, false);
+      }
+    };
+    const head = h("div", { class: "grow" }, h("div", {}, T.settings.labels[f.key] ?? f.key), T.settings.help[f.key] ? h("div", { class: "help" }, T.settings.help[f.key]) : null, h("div", { class: "key" }, f.key));
     if (f.kind === "bool") {
-      input = h("input", { type: "checkbox", checked: v === true, onchange: (e: Event) => void set(f.key, (e.target as HTMLInputElement).checked ? "on" : "off") });
-    } else if (f.kind === "pick") {
-      input = h("select", { onchange: (e: Event) => void set(f.key, (e.target as HTMLSelectElement).value) }, (f.options ?? []).map((o) => h("option", { value: o, selected: o === v }, o)));
-    } else {
-      input = h("input", {
-        type: "text",
-        value: String(v ?? ""),
-        style: "width:340px",
-        onchange: (e: Event) => void set(f.key, (e.target as HTMLInputElement).value),
-      });
+      const box = h("input", { type: "checkbox", checked: v === true, "aria-label": T.settings.labels[f.key] ?? f.key, onchange: (e: Event) => void set((e.target as HTMLInputElement).checked ? "on" : "off") });
+      return h("div", { class: "setting" }, h("div", { class: "grow" }, head, state), box);
     }
-    return h("div", { class: "setting" }, h("div", { class: "grow" }, h("div", {}, T.settings.labels[f.key] ?? f.key), h("div", { class: "key" }, f.key)), input);
+    if (f.kind === "pick") {
+      const choices = (f.options ?? []).map((o) => ({ value: o, label: T.settings.options[`${f.key}.${o}`] ?? o }));
+      return h("div", { class: "setting" }, h("div", { class: "grow" }, head, state), pick(choices, String(v ?? ""), (value) => void set(value)));
+    }
+    const input = h("input", {
+      type: "text",
+      value: String(v ?? ""),
+      spellcheck: "false",
+      placeholder: T.settings.placeholder[f.key] ?? "",
+      "aria-label": T.settings.labels[f.key] ?? f.key,
+      onkeydown: (e: Event) => {
+        if ((e as KeyboardEvent).key === "Enter") (e.target as HTMLInputElement).blur();
+      },
+      onchange: (e: Event) => void set((e.target as HTMLInputElement).value.trim(), e.target as HTMLInputElement),
+    });
+    const browse =
+      f.kind === "path"
+        ? h(
+            "button",
+            {
+              type: "button",
+              onclick: async () => {
+                const r = await call(["pick-folder", input.value]);
+                if (r.code !== 0 || !r.out) return;
+                input.value = r.out;
+                await set(r.out, input);
+              },
+            },
+            T.settings.browse,
+          )
+        : null;
+    return h("div", { class: "setting stack" }, head, h("div", { class: "field" }, input, browse), state);
   };
-  mount(view, h("div", { class: "page" }, h("div", { class: "row" }, h("div", { class: "grow" }, h("h1", {}, T.settings.title), h("div", { class: "sub" }, T.settings.sub)), note), h("div", { class: "list" }, FIELDS.map(row))));
+  mount(view, h("div", { class: "page" }, h("h1", {}, T.settings.title), h("div", { class: "sub" }, T.settings.sub), h("div", { class: "list" }, FIELDS.map(row))));
 }

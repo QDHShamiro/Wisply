@@ -42,6 +42,90 @@ export function icon(name: string): SVGElement {
   return svg;
 }
 
+export type Choice = { value: string; label: string; hint?: string };
+
+export function pick(choices: Choice[], value: string, onPick: (value: string) => void): HTMLElement {
+  let current = value;
+  let active = Math.max(0, choices.findIndex((c) => c.value === value));
+  const label = () => choices.find((c) => c.value === current)?.label ?? current;
+  const text = h("span", {}, label());
+  const list = h("ul", { role: "listbox", tabindex: "-1" });
+  const root = h("div", { class: "pick" });
+  const button = h("button", { type: "button", "aria-haspopup": "listbox", "aria-expanded": "false" }, text);
+  const outside = (e: Event) => {
+    if (!root.contains(e.target as Node)) close();
+  };
+  const draw = () =>
+    mount(
+      list,
+      ...choices.map((c, i) =>
+        h(
+          "li",
+          {
+            role: "option",
+            "aria-selected": String(c.value === current),
+            class: i === active ? "active" : "",
+            onmousemove: () => {
+              if (active !== i) {
+                active = i;
+                draw();
+              }
+            },
+            onmousedown: (e: Event) => {
+              e.preventDefault();
+              choose(i);
+            },
+          },
+          c.label,
+          c.hint ? h("span", { class: "hint" }, c.hint) : null,
+        ),
+      ),
+    );
+  const open = () => {
+    if (root.classList.contains("open")) return;
+    active = Math.max(0, choices.findIndex((c) => c.value === current));
+    draw();
+    root.append(list);
+    root.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+    document.addEventListener("mousedown", outside);
+  };
+  function close(): void {
+    list.remove();
+    root.classList.remove("open");
+    button.setAttribute("aria-expanded", "false");
+    document.removeEventListener("mousedown", outside);
+  }
+  function choose(i: number): void {
+    const c = choices[i];
+    close();
+    button.focus();
+    if (!c || c.value === current) return;
+    current = c.value;
+    text.textContent = label();
+    onPick(current);
+  }
+  button.addEventListener("click", () => (root.classList.contains("open") ? close() : open()));
+  button.addEventListener("keydown", (e) => {
+    const k = e.key;
+    const isOpen = root.classList.contains("open");
+    if (k === "ArrowDown" || k === "ArrowUp") {
+      e.preventDefault();
+      if (!isOpen) return open();
+      active = (active + (k === "ArrowDown" ? 1 : choices.length - 1)) % choices.length;
+      draw();
+    } else if ((k === "Enter" || k === " ") && isOpen) {
+      e.preventDefault();
+      choose(active);
+    } else if (k === "Escape" && isOpen) {
+      e.preventDefault();
+      close();
+    } else if (k === "Tab" && isOpen) close();
+  });
+  root.append(button);
+  return root;
+}
+
 export function mount(parent: HTMLElement, ...kids: Child[]): void {
   parent.replaceChildren(...kids.filter((k): k is Node | string => k !== null && k !== undefined && k !== false).map((k) => (typeof k === "number" ? String(k) : k)));
 }

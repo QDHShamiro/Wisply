@@ -1,14 +1,15 @@
 :root {
-  --bg: #131312;
-  --side: #0e0e0d;
-  --panel: #1a1a18;
-  --raise: #232321;
-  --hover: #2b2b28;
-  --line: rgba(236, 233, 226, 0.1);
-  --strong: rgba(236, 233, 226, 0.24);
-  --text: #ece9e2;
-  --muted: #b3aea3;
-  --faint: #8f8a80;
+  --bg: #171715;
+  --side: #111110;
+  --panel: #1f1f1d;
+  --raise: #292927;
+  --hover: #333330;
+  --line: rgba(240, 237, 230, 0.13);
+  --strong: rgba(240, 237, 230, 0.3);
+  --text: #f5f3ee;
+  --ink: #f5f3ee;
+  --muted: #d2cdc3;
+  --faint: #aaa59a;
   --accent: #ff9f4a;
   --accent-soft: rgba(255, 159, 74, 0.14);
   --on-accent: #1d1305;
@@ -49,7 +50,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
 #nav a { display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 8px; color: var(--muted); font-weight: 500; transition: background 0.12s var(--ease), color 0.12s var(--ease); }
 #nav a svg { width: 18px; height: 18px; flex: none; stroke-width: 1.75; }
 #nav a:hover { background: var(--raise); color: var(--text); }
-#nav a.on { background: var(--accent-soft); color: var(--accent); }
+#nav a.on { background: var(--hover); color: var(--text); font-weight: 600; }
+#nav a.on svg { color: var(--accent); }
 
 #status { margin-top: auto; display: flex; flex-direction: column; gap: 5px; padding: 12px 8px 2px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
 #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); margin-right: 8px; }
@@ -267,3 +269,32 @@ section + section { margin-top: 4px; }
   .page { padding: 24px 20px 48px; }
   .note { grid-template-columns: 1fr; }
 }
+
+.pick { position: relative; display: inline-block; }
+.pick > button { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 150px; padding: 7px 12px; background: var(--panel); text-align: left; }
+.pick > button::after { content: ""; width: 7px; height: 7px; border: solid var(--muted); border-width: 0 1.6px 1.6px 0; transform: translateY(-2px) rotate(45deg); transition: transform 0.15s var(--ease); }
+.pick.open > button { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.pick.open > button::after { transform: translateY(2px) rotate(-135deg); }
+.pick ul { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 100%; margin: 0; padding: 5px; list-style: none; background: var(--raise); border: 1px solid var(--strong); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+.pick li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.pick li .hint { color: var(--faint); font-size: 12.5px; margin-left: auto; padding-left: 16px; }
+.pick li.active { background: var(--hover); }
+.pick li[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+
+.setting.stack { flex-direction: column; align-items: stretch; gap: 8px; }
+.setting .help { color: var(--faint); font-size: 12.5px; }
+.field { display: flex; gap: 8px; }
+.field input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 13px; padding: 9px 12px; }
+.field input.bad { border-color: var(--bad); box-shadow: 0 0 0 3px rgba(255, 141, 125, 0.15); }
+.state { font-size: 12.5px; min-height: 18px; }
+.state.ok { color: var(--good); }
+.state.bad { color: var(--bad); }
+
+.graph .detail h3 { margin: 4px 0 2px; font-size: 16px; line-height: 1.35; word-break: break-word; }
+.graph .detail .meta { color: var(--faint); font-size: 12.5px; margin-bottom: 12px; }
+.graph .detail .actions { display: flex; gap: 8px; margin-bottom: 14px; }
+.graph .detail .back { background: transparent; border: 0; padding: 0; color: var(--muted); font-size: 12.5px; margin-bottom: 8px; }
+.graph .detail .back:hover { color: var(--text); background: transparent; }
+.graph aside a .swatch { margin-right: 8px; }
+.graph .hint-box { position: absolute; bottom: 70px; left: 16px; z-index: 2; color: var(--muted); font-size: 12.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; }
+.state:empty { display: none; }
