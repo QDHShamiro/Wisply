@@ -1,5 +1,10 @@
 use std::sync::atomic::{AtomicIsize, Ordering};
 
+#[cfg(windows)]
+const TITLE: &str = "Choose a folder";
+#[cfg(windows)]
+const OK_LABEL: &str = "Select folder";
+
 static OWNER: AtomicIsize = AtomicIsize::new(0);
 
 pub fn set_owner(hwnd: isize) {
@@ -31,6 +36,8 @@ fn choose(start: Option<&str>) -> Option<String> {
             let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
             let options = dialog.GetOptions().ok()?;
             dialog.SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM).ok()?;
+            let _ = dialog.SetTitle(&HSTRING::from(TITLE));
+            let _ = dialog.SetOkButtonLabel(&HSTRING::from(OK_LABEL));
             if let Some(dir) = start
                 && let Ok(item) = SHCreateItemFromParsingName::<_, _, IShellItem>(&HSTRING::from(dir), None)
             {

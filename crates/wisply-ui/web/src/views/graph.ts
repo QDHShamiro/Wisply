@@ -124,7 +124,7 @@ function seed(data: GraphData): { g: Graph<Attrs>; colors: Map<string, string>; 
       t,
       x: (Math.random() - 0.5) * 100,
       y: (Math.random() - 0.5) * 100,
-      size: k === "project" ? 8 + Math.sqrt(deg[i]) * 1.2 : 3 + Math.sqrt(deg[i]) * 1.4,
+      size: k === "project" ? 3 + Math.sqrt(deg[i]) * 0.5 : 1.2 + Math.sqrt(deg[i]) * 0.5,
       color: OTHER,
       deg: deg[i],
     });
@@ -306,7 +306,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
 
   const center = (n: string) => {
     const d = renderer.getNodeDisplayData(n);
-    if (d) void renderer.getCamera().animate({ x: d.x, y: d.y, ratio: 0.4 }, { duration: 350 });
+    if (d) void renderer.getCamera().animate({ x: d.x, y: d.y, ratio: 0.6 }, { duration: 350 });
   };
 
   const pick = (n: string | null) => {
@@ -364,6 +364,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
       labelDensity: 0.35,
       labelGridCellSize: 110,
       minEdgeThickness: 0.8,
+      zoomToSizeRatioFunction: () => 1,
     },
     nodeReducer: (n, _d, a) => {
       const out: Record<string, unknown> = {

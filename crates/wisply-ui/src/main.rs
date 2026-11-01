@@ -18,6 +18,8 @@ const SIZE: (f64, f64) = (1280.0, 820.0);
 const MIN_SIZE: (f64, f64) = (720.0, 480.0);
 const START: &str = "wisply://localhost/";
 const BACKGROUND: (u8, u8, u8, u8) = (19, 19, 18, 255);
+const BROWSER_ARGS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --lang=en-US --accept-lang=en-US";
 const QUIET_ENV: &str = "WISPLY_UI_QUIET";
 const HELP: &str = "the Wisply window, open it with wisply ui";
 const ICON_SMALL: &[u8] = include_bytes!("../icons/32.png");
@@ -85,6 +87,11 @@ fn main() -> wry::Result<()> {
         })
         .with_focused(std::env::var_os(QUIET_ENV).is_none())
         .with_url(START);
+    #[cfg(windows)]
+    let builder = {
+        use wry::WebViewBuilderExtWindows;
+        builder.with_additional_browser_args(BROWSER_ARGS)
+    };
     #[cfg(any(windows, target_os = "macos"))]
     let webview = builder.build(&window)?;
     #[cfg(not(any(windows, target_os = "macos")))]
