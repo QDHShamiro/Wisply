@@ -20,6 +20,9 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   skill frontmatter, agent name collisions and the configured MCP servers. For Claude Code it also names unused
   skills, plugins and MCP servers, slow hooks and hook timeouts, ranks denied tool calls and checks the default
   permission mode. `wisply doctor` shows whether the Wisply status line is set up. `/wisply:doctor` runs both.
+- `wisply headless start|stop|status|install`: a browser without a window for servers and CI. `install` downloads
+  Chrome for Testing, `start` launches it with the extension and its own profile and waits until it is connected.
+  `scripts/ci-browser.sh` now tests it on Windows, macOS and Linux.
 - `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
   on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with
   `*` for changes and `↑2 ↓1` for ahead/behind, the GitHub pull request of the branch with its checks, model, effort,
