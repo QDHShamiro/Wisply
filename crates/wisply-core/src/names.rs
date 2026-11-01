@@ -33,6 +33,7 @@ const SYSTEM: &[&str] = &[
     "squeeze",
     "secure",
     "think",
+    "update",
 ];
 const MEMORY: &[&str] = &["remember", "recall", "forget", "todo", "memory", "hook", "wiki", "code"];
 const MEMORY_LANE: &[&str] = &["suggest", "tokens", "grep", "squeeze", "board"];

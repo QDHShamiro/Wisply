@@ -87,7 +87,7 @@ pub fn verify(home: &Path, tool: &Tool) -> Check {
     Check::Verified(version)
 }
 
-fn api(path: &str) -> Result<Value, String> {
+pub(crate) fn api(path: &str) -> Result<Value, String> {
     let mut resp = AGENT
         .get(format!("{API}{path}"))
         .header("Accept", "application/vnd.github+json")
@@ -102,7 +102,7 @@ fn api(path: &str) -> Result<Value, String> {
     serde_json::from_str(&body).map_err(|_| "GitHub sent no JSON".into())
 }
 
-fn asset_url(release: &Value, name: &str) -> Result<String, String> {
+pub(crate) fn asset_url(release: &Value, name: &str) -> Result<String, String> {
     release["assets"]
         .as_array()
         .into_iter()
@@ -112,7 +112,7 @@ fn asset_url(release: &Value, name: &str) -> Result<String, String> {
         .ok_or_else(|| format!("the release has no {name}"))
 }
 
-fn text(url: &str) -> Result<String, String> {
+pub(crate) fn text(url: &str) -> Result<String, String> {
     let mut resp = AGENT.get(url).call().map_err(|e| format!("download failed ({e})"))?;
     if resp.status().as_u16() != 200 {
         return Err(format!("download answered {}", resp.status().as_u16()));
@@ -129,7 +129,7 @@ pub fn sum_for(sums: &str, name: &str) -> Option<String> {
     })
 }
 
-fn download(url: &str, to: &Path, want: &str) -> Result<(), String> {
+pub(crate) fn download(url: &str, to: &Path, want: &str) -> Result<(), String> {
     let mut resp = AGENT.get(url).call().map_err(|e| format!("download failed ({e})"))?;
     if resp.status().as_u16() != 200 {
         return Err(format!("download answered {}", resp.status().as_u16()));
