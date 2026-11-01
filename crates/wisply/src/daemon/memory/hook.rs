@@ -75,7 +75,14 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         return with_store(d, |s| compact_text(s, &here));
     }
     let commits = if here.is_empty() || cwd.is_empty() { Vec::new() } else { commits(&cwd) };
-    with_store(d, |s| start_text(s, &here, commits))
+    let text = with_store(d, |s| start_text(s, &here, commits))?;
+    Ok(match crate::update::notice(&d.home) {
+        Some(line) => format!(
+            "{text}
+{line}"
+        ),
+        None => text,
+    })
 }
 
 fn listed(head: &str, rows: Vec<(i64, String)>) -> Vec<String> {

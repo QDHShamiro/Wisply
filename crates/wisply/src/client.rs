@@ -25,6 +25,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     if first == "more" {
         return crate::more::run(&home, &args[1..]);
     }
+    if first == "update" {
+        return crate::update::run(&home, &args[1..]);
+    }
     if matches!(first, "setup" | "install" | "uninstall") {
         return crate::setup::run(&home, &args);
     }
