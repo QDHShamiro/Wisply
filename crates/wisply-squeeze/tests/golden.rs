@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 #[test]
-fn every_fixture_matches_the_python_squeeze() {
+fn every_fixture_matches_the_squeeze() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden");
     let mut checked = 0;
     for entry in fs::read_dir(&dir).expect("golden dir") {
@@ -13,6 +13,11 @@ fn every_fixture_matches_the_python_squeeze() {
         let text = fs::read_to_string(&input).expect("golden input");
         let want = fs::read_to_string(input.with_extension("out")).expect("golden output");
         let got = wisply_squeeze::squeeze(&text).map_or_else(|| "<unchanged>".to_string(), |s| s.body);
+        if std::env::var_os("WISPLY_BLESS").is_some() {
+            fs::write(input.with_extension("out"), &got).expect("bless");
+            checked += 1;
+            continue;
+        }
         if got != want {
             let at = got
                 .lines()
