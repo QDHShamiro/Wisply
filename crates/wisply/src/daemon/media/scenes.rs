@@ -9,7 +9,7 @@ use regex::Regex;
 use serde_json::{Map, Value, json};
 use wisply_core::Fail;
 
-use super::super::web::{distinct, thumb};
+use super::super::web::{distinct_moved, fine};
 use super::listen::{self, Heard};
 use super::tools::{self, Seg};
 use super::watch::{Job, Kind};
@@ -25,6 +25,9 @@ const DOWNLOAD_MAX_S: f64 = 900.0;
 const READ_WIDTH: u32 = 960;
 const MAX_HEIGHT: i64 = 720;
 const GRABBERS: usize = 4;
+const READERS: usize = 4;
+const BATCH: usize = 6;
+const MIN_MOVED: f64 = 0.0008;
 const VIDEO_FORMAT: &str = "bv*[height<=720][ext=mp4]/bv*[height<=720]/b[height<=720]/b";
 const TRY_PAGE: &str = "wisply open <url>, then wisply watch e40 (plays it in the browser)";
 
@@ -325,42 +328,64 @@ pub fn download(home: &Path, job: &Job, meta: &Value, dir: &Path) -> Result<Path
     Ok(path)
 }
 
+fn frame_path(dir: &Path, at: f64) -> PathBuf {
+    dir.join(format!("f-{}-{READ_WIDTH}.jpg", (at * 1000.0) as i64))
+}
+
+fn grab_batch(exe: &Path, src: &str, heads: Option<&str>, times: &[f64], dir: &Path) {
+    let missing: Vec<f64> = times.iter().copied().filter(|at| !frame_path(dir, *at).is_file()).collect();
+    if missing.is_empty() {
+        return;
+    }
+    let mut args: Vec<String> = ["-y", "-loglevel", "error", "-nostdin"].map(String::from).to_vec();
+    for at in &missing {
+        args.extend(["-an".into(), "-sn".into(), "-ss".into(), format!("{at:.3}")]);
+        if let Some(h) = heads.filter(|h| !h.is_empty()) {
+            args.extend(["-headers".into(), h.to_string()]);
+        }
+        args.extend(["-i".into(), src.to_string()]);
+    }
+    let scale = format!("scale={READ_WIDTH}:-2");
+    for (i, at) in missing.iter().enumerate() {
+        args.extend(["-map".into(), format!("{i}:v:0"), "-frames:v".into(), "1".into(), "-vf".into(), scale.clone()]);
+        args.extend(["-q:v".into(), "4".into(), frame_path(dir, *at).display().to_string()]);
+    }
+    let _ = tools::run(exe, &args, FRAME_WAIT);
+    let lost: Vec<f64> = missing.iter().copied().filter(|at| !frame_path(dir, *at).is_file()).collect();
+    if lost.len() < missing.len() || missing.len() == 1 {
+        return;
+    }
+    for at in lost {
+        grab_batch(exe, src, heads, &[at], dir);
+    }
+}
+
 fn grab(home: &Path, src: &str, heads: Option<&str>, times: &[f64], dir: &Path) -> Result<Vec<Tile>, Fail> {
     let exe = tools::need_ffmpeg(home)?;
-    let one = |at: f64| -> Option<Tile> {
-        let path = dir.join(format!("f-{}-{READ_WIDTH}.jpg", (at * 1000.0) as i64));
-        if !path.is_file() {
-            let mut args: Vec<String> =
-                ["-y", "-loglevel", "error", "-ss", format!("{at:.3}").as_str()].map(String::from).to_vec();
-            if let Some(h) = heads.filter(|h| !h.is_empty()) {
-                args.extend(["-headers".into(), h.to_string()]);
-            }
-            let scale = format!("scale={READ_WIDTH}:-2");
-            args.extend(
-                ["-i", src, "-frames:v", "1", "-vf", scale.as_str(), "-q:v", "4", path.display().to_string().as_str()]
-                    .map(String::from),
-            );
-            let _ = tools::run(&exe, &args, FRAME_WAIT);
-        }
-        image::open(&path).ok().map(|img| (at, img.to_rgb8()))
-    };
-    let one = &one;
-    let mut got: Vec<Tile> = Vec::new();
-    for chunk in times.chunks(GRABBERS) {
+    let exe = &exe;
+    let per = times.len().div_ceil(GRABBERS).clamp(1, BATCH);
+    for group in times.chunks(per * GRABBERS) {
         thread::scope(|s| {
-            let jobs: Vec<_> = chunk.iter().map(|at| s.spawn(move || one(*at))).collect();
-            got.extend(jobs.into_iter().filter_map(|j| j.join().ok().flatten()));
+            for part in group.chunks(per) {
+                s.spawn(move || grab_batch(exe, src, heads, part, dir));
+            }
         });
+    }
+    let mut got: Vec<Tile> = Vec::new();
+    for at in times {
+        if let Ok(img) = image::open(frame_path(dir, *at)) {
+            got.push((*at, img.to_rgb8()));
+        }
     }
     Ok(got)
 }
 
 fn pick(tiles: Vec<Tile>, n: usize) -> Vec<Tile> {
-    if tiles.len() <= n {
+    if tiles.len() <= 1 {
         return tiles;
     }
-    let thumbs: Vec<Vec<u8>> = tiles.iter().map(|(_, img)| thumb(&DynamicImage::ImageRgb8(img.clone()))).collect();
-    let keep = distinct(&thumbs, n);
+    let thumbs: Vec<Vec<u8>> = tiles.iter().map(|(_, img)| fine(&DynamicImage::ImageRgb8(img.clone()))).collect();
+    let keep = distinct_moved(&thumbs, n, MIN_MOVED);
     tiles.into_iter().enumerate().filter(|(i, _)| keep.contains(i)).map(|(_, t)| t).collect()
 }
 
@@ -405,10 +430,18 @@ pub fn pictures(
 
 #[cfg(windows)]
 pub fn read_text(tiles: &[Tile]) -> Vec<String> {
+    let mut read: Vec<Option<Vec<String>>> = Vec::with_capacity(tiles.len());
+    for chunk in tiles.chunks(READERS) {
+        thread::scope(|s| {
+            let jobs: Vec<_> =
+                chunk.iter().map(|(_, img)| s.spawn(move || super::super::desk::ocr_lines(img).ok())).collect();
+            read.extend(jobs.into_iter().map(|j| j.join().ok().flatten()));
+        });
+    }
     let mut seen = std::collections::HashSet::new();
     let mut rows = Vec::new();
-    for (at, img) in tiles {
-        let Ok(lines) = super::super::desk::ocr_lines(img) else { break };
+    for ((at, _), lines) in tiles.iter().zip(read) {
+        let Some(lines) = lines else { break };
         let new: Vec<String> = lines
             .into_iter()
             .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))

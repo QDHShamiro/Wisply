@@ -150,6 +150,9 @@ fixes and open points. Search works by words and meaning, in any language. Every
 `watch <link|file>` gives an overview of any video (chapters, speech, screen text, scenes), `frames e40` turns a
 video on the page into one contact sheet, `listen` returns only the speech, `shot e57` looks at one image.
 
+Pictures are sized to the model's 28 px token grid, so no token is spent on a sliver of a tile. Scenes that look the
+same are left out: a screen recording that shows four different things gives four tiles, not twelve.
+
 ## Memory, notes and code map
 
 Three things in one program, so the AI does not read ten files or ask you again what you decided last week.
