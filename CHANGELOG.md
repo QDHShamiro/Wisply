@@ -8,6 +8,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Changed
+- `headroom` is several times faster. Lines are no longer copied one by one, the template of a line is only built when
+  a kept or repeated line needs it, the error-word check skips lines that cannot match, numbers and JSON strings take
+  an ASCII path, and the hook reads its input once, squeezes without a thread for normal sizes, hashes the full
+  output eight bytes at a time, writes the log after the answer is out and no longer checks the folders on every
+  call. What is cut and what is kept stays the same. `cargo test -p wisply-squeeze --test bench -- --ignored
+  --nocapture` and `cargo test -p wisply --test hook_speed -- --ignored --nocapture` measure it.
 - `frames`, `watch` and `shot`: fewer image tokens, faster. Contact sheets now fit the model's 28 px token grid
   (no second resize, no empty cells, bigger tiles when there are few), near-identical scenes are dropped instead of
   padding the sheet to the full count, and `shot` sizes snap to whole tokens (1024 px wide became 1008). Video frames

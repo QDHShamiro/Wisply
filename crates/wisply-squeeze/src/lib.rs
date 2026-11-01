@@ -21,7 +21,7 @@ pub struct Squeezed {
 }
 
 pub fn clean(text: &str) -> String {
-    log::clean(text).join("\n")
+    log::lines(&pat::strip_ansi(text)).join("\n")
 }
 
 pub fn decode(raw: &[u8]) -> String {
@@ -68,12 +68,15 @@ pub fn read_limited(mut from: impl std::io::Read, max: usize) -> Vec<u8> {
 }
 
 pub fn squeeze(text: &str) -> Option<Squeezed> {
-    let lines = log::clean(text);
-    let plain = lines.join("\n");
-    let chars_in = text::len(&plain);
-    if lines.len() <= MIN_LINES && chars_in <= MIN_CHARS {
+    let stripped = pat::strip_ansi(text);
+    let lines = log::lines(&stripped);
+    if lines.len() <= MIN_LINES
+        && lines.iter().map(|l| text::len(l)).sum::<usize>() + lines.len().saturating_sub(1) <= MIN_CHARS
+    {
         return None;
     }
+    let plain = lines.join("\n");
+    let chars_in = text::len(&plain);
     let (out, json) = match json::parse(&plain) {
         Some((obj, rows)) => (json::squeeze(&obj, rows), true),
         None => (log::squeeze(&lines), false),
