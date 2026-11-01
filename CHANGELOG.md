@@ -14,6 +14,14 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
 
 ### Added
+- `wisply pc`: an optimizer for Windows, macOS and Linux. `pc` gives a score from 0 to 100 with the 3 biggest slowdowns
+  and a numbered fix for each; `pc fix <n|all>`, `pc clean [--dry]`, `pc startup [off|on <n>]`, `pc game`, `pc
+  afk|play|auto`, `pc net [host]`, `pc disk`, `pc updates`, `pc on|off`, `pc log [n]`. The daemon watches every 5 seconds
+  (new crate `wisply-pc`) and warns by system notification about RAM above 85 %, fast growing programs, CPU above 80 %
+  and a busy disk, naming the program. With `pc on` it lowers priorities of builds and agents and runs a game mode
+  (restored exactly, also after a daemon crash), gives memory back and cleans temp files, caches, old build folders
+  and logs with a protection list (Minecraft, open projects, `build/libs`, secrets, documents). Closing programs and
+  switching autostarts off always need a yes. The status line gets a `pc` field.
 - `wisply doctor ai [tool]`: the measuring half of Claude Code's `/doctor` for every AI CLI it finds (Claude
   Code, Codex, Gemini, Qwen, OpenCode, Cursor, Continue), read-only and without a model. It checks the install,
   that settings and config files parse (JSON and TOML, with line and column), instruction files and their size,
