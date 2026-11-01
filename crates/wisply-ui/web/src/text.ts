@@ -132,6 +132,7 @@ export const T = {
     same: "No difference",
     none: "Nothing to compare. wisply think blind <before> <after> puts a pair here.",
     missing: "File is gone.",
+    big: "Image is over 8 MB, too big to show here.",
     cut: "… cut, the file is longer",
   },
   settings: {

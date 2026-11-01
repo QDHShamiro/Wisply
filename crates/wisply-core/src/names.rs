@@ -33,6 +33,7 @@ const SYSTEM: &[&str] = &[
     "squeeze",
     "secure",
     "think",
+    "update",
 ];
 const MEMORY: &[&str] = &["remember", "recall", "forget", "todo", "memory", "hook", "wiki", "code"];
 const MEMORY_LANE: &[&str] = &["suggest", "tokens", "grep", "squeeze", "board"];
@@ -179,7 +180,7 @@ mod tests {
                     dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames grep help \
                     hover improve inbox js keep keys launch listen log memory net open phone press read recall record \
                     reload remember reply research routine routines run scroll search secure select selftest shot snap squeeze \
-                    status stop tab table tabs text think todo tokens tools type ui unread upload version viewport voice wait watch \
+                    status stop tab table tabs text think todo tokens tools type ui unread update upload version viewport voice wait watch \
                     wiki windows";
         assert_eq!(known(), want.split(' ').collect::<Vec<_>>());
     }

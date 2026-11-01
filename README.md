@@ -21,6 +21,8 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#what-it-does">What it does</a> ·
   <a href="#how-it-works">How it works</a> ·
+  <a href="#memory-notes-and-code-map">Memory, notes, code</a> ·
+  <a href="#headroom-long-logs-in-short">Headroom</a> ·
   <a href="#the-numbers">Numbers</a> ·
   <a href="#commands">Commands</a> ·
   <a href="#safety">Safety</a>
@@ -84,6 +86,10 @@ Antigravity): [Install](#install).
 | 📱 **Your Android phone** | `phone snap` shows the screen as text, `phone tap p3` taps, over USB debugging. |
 | 🧠 **Learns your tasks** | Do something twice and it becomes a routine that runs in one call. |
 | 💾 **Remembers** | A memory on your computer: decisions, to-dos and what happened in earlier sessions, ~500 tokens at the start of each session. |
+| 📓 **Works with Obsidian** | Your notes are a folder of plain Markdown files. Open it in Obsidian or in Wisply's own window; the AI finds the notes with `recall`. Session notes and drafts write themselves. |
+| 🗺️ **Knows your code** | A code map of every project (like Graphify, built in): who defines and calls what, an outline per file, a search by meaning, and what a change touches. Far fewer files to read. |
+| 📉 **Headroom** | Long Bash logs and JSON reach the model as their important lines. The full text stays on disk. |
+| 🪟 **A window** | `wisply ui`: projects, notes, to-dos, search and a graph of notes and code. |
 | 🔎 **Researches by itself** | `research "question"` asks 10 search engines and sites at once, reads the best pages and returns the passages that answer it, with links. No AI model, ~1,500 tokens. |
 | 🎞️ **Watches videos** | Chapters, speech, the text on screen and 12 scenes in one image. |
 | 🔍 **Thinks without AI** | `wisply think` checks code, web, texts and images with rules that fit the project and your own CLAUDE.md rules, fixes what is safe, proves it with your build and keeps a blind A/B for you. |
@@ -144,6 +150,107 @@ fixes and open points. Search works by words and meaning, in any language. Every
 `watch <link|file>` gives an overview of any video (chapters, speech, screen text, scenes), `frames e40` turns a
 video on the page into one contact sheet, `listen` returns only the speech, `shot e57` looks at one image.
 
+Pictures are sized to the model's 28 px token grid, so no token is spent on a sliver of a tile. Scenes that look the
+same are left out: a screen recording that shows four different things gives four tiles, not twelve.
+
+## Memory, notes and code map
+
+Three things in one program, so the AI does not read ten files or ask you again what you decided last week.
+
+### Notes: a Markdown folder that Obsidian opens
+
+Your notes are plain `.md` files in one folder, the **vault** (`~/.wisply/vault`, or any folder you choose with
+`wisply config vault <folder>`, for example an existing Obsidian vault). Wisply does not lock them in: open the folder
+in Obsidian and everything works as before (`.obsidian` is left alone), or use Wisply's own window.
+
+```
+vault/
+  Sessions/<project>/   one note per finished session: what was decided, fixed, still open
+  Research/             reports from `wisply research`
+  Knowledge/            Mistakes/ and Patterns/ you have learned, with an INDEX.md
+  Rules/                rules the AI should follow
+  Inbox/                drafts that wait for your yes or no
+```
+
+- **`recall "words"`** searches the vault, session notes, Claude's own memory files and the to-dos by words and by
+  meaning, in any language. One line per note, `recall 42` opens one in full.
+- **Notes write themselves.** After a session a local model drafts the notes. Drafts land in `Inbox/`:
+  `wisply wiki` lists them, `wiki accept 3` files one into the right folder, `wiki drop 3` throws it away. No new drafts
+  while 30 wait, so the inbox never floods.
+- **Wikilinks and backlinks** work in the window's editor, the same `[[Note]]` syntax as in Obsidian.
+- **`open obsidian://open?vault=V&file=Note`** starts Obsidian through Wisply when you want to look at a note yourself.
+- Keys and passwords are cut out before anything is saved. Everything stays on your computer.
+
+### Code map: know the project before reading it
+
+`wisply code` keeps a map of each project folder: every function, class, struct, trait and interface, and who calls
+it. It reads Java, Kotlin, Rust, Python, JavaScript, TypeScript, Go, C#, C, C++, PHP, Ruby, Lua, Swift, Scala and Dart
+through tree-sitter, refreshes itself when files change and builds a meaning index in the background (on your
+computer, no cloud). It does the job a separate code-graph tool like Graphify does, built in.
+
+```
+$ wisply code                          the project at a glance: languages, files and lines, main folders
+$ wisply code ShopManager              where it is defined and every place that uses it
+$ wisply code "where do we save the player's balance"
+                                       search by meaning, not by name
+$ wisply code outline src/Shop.java    all methods of one file with signatures
+$ wisply code body ShopManager.buy     just that method, not the 900-line file
+$ wisply code callers buy              who calls it
+$ wisply code impact --tests           what my current changes touch, and which tests cover it
+```
+
+The answer is a few lines of text with file and line. The AI opens only the files it names. A graph of the same map
+(notes and code, per project) is in the window.
+
+### The window
+
+```
+wisply ui
+```
+
+Projects, notes (editor with wikilinks and backlinks), to-dos, search, what each session is doing, a graph of notes
+and code, and the **Blind** page where you pick between two versions in `wisply think`.
+
+## Headroom: long logs in short
+
+A build, a test run or a server log can print thousands of lines, and the model pays for every one of them. Headroom
+is a hook that runs after each Bash command. When the output is longer than 60 lines or 4,000 characters it keeps
+what matters and cuts the rest:
+
+- the first 10 and the last 30 lines,
+- every line with an error, exception, failure, panic, warning, timeout or similar word, plus the two lines after it,
+- stack traces shortened, repeated lines folded into one with a count,
+- long JSON shortened the same way.
+
+The model gets that short version and a name for the full text. One command shows any part of it again:
+
+```
+wisply more hr-3fa91c04de --grep "panicked"
+wisply more hr-3fa91c04de --lines 400-440
+```
+
+- **Nothing is lost.** The full output is saved in `~/.wisply/headroom/out`.
+- **Honest numbers.** Every tenth session is left untouched on purpose, so you can compare the same work with and
+  without Headroom.
+- **Stays out of the way.** It runs without the daemon inside a 50 ms budget. File listings (`ls`, `find`,
+  `git log` ...), Wisply's own output (already short) and the saved text itself are never shortened. A file
+  `~/.wisply/headroom/off` turns it off.
+
+`wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
+keeps the rest in a file.
+
+## Updates
+
+Wisply keeps itself current. Once a day the daemon looks for a newer stable release on GitHub. When there is one it
+downloads the archive for your system, checks its SHA-256 against `SHA256SUMS.txt`, and installs it in the background
+once nothing has talked to Wisply for 5 minutes. It never does this while a game runs.
+
+- The install is the normal `setup`, run by a small helper. It starts the new daemon, checks that it answers as the new
+  version and goes back to the old programs and extension by itself if it does not.
+- `wisply update` checks and installs now, `wisply update --check` only looks, `wisply update --rollback` goes back.
+- `wisply config update notify` only tells you (once a day, in the start info), `config update off` turns it off.
+- Builds you run from a source checkout are never touched.
+
 ## The numbers
 
 Every number comes from a run you can repeat: `wisply bench`, `wisply bench --real`, `wisply selftest`.
@@ -159,6 +266,9 @@ Brave, Windows 11. Tokens are characters / 4.
 | A screenshot, when you need one | ~2,350 | ~700 (1024 px JPEG) | **−70%** |
 
 A 10-step task: **~37,000 tokens with screenshots, ~890 with Wisply.**
+
+`wisply tokens` shows the same for your own use. From the author's PC over 30 days: 22,438 commands, 5.2M tokens
+used, ~34M without Wisply, **84% saved**.
 
 <details>
 <summary><b>Whole page text on 6 real sites, and speed</b></summary>
@@ -198,10 +308,12 @@ A 10-step task: **~37,000 tokens with screenshots, ~890 with Wisply.**
 | Tokens for a first look at a page | **~440** (measured) | ~15,850 (measured) | 15,000–30,000 on dense pages ([1]) | not published ([2]) |
 | Repeated tasks | learned routines, one call | saved shortcuts | – | – |
 | Memory across sessions | ✅ local | – | – | – |
-| Headless, CI | ❌ real browser only | – | ✅ | ✅ |
+| Headless mode | ❌ needs a browser window (Xvfb on a Linux CI machine) | – | ✅ | ✅ |
 
-`–` = not built in, as far as the public docs say. For headless tests and CI, take Playwright. Wisply is for an
-agent on your own computer that has to use your logged-in browser and your apps, cheaply.
+`–` = not built in, as far as the public docs say. Wisply drives a real browser window with its extension loaded.
+It has no `--headless` mode, but a window is all it needs: Wisply's own CI runs it in Chrome for Testing on Windows,
+macOS and Linux (under Xvfb there), see `scripts/ci-browser.sh`. For headless test suites, take Playwright. Wisply is
+for an agent on your own computer that has to use your logged-in browser and your apps, cheaply.
 
 [1]: https://lite.ego.app/article/playwright-mcp-token-problem
 [2]: https://github.com/vercel-labs/agent-browser
@@ -279,8 +391,13 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Apps** | `launch spotify` · `windows` · `snap w2` · `read w2` (OCR) · `click d5` · `press ctrl+s` |
 | **Clean up** | `done` · `keep t3` (hand it to you) · `config cleanup off` |
 | **Routines** | `routines` · `run <name> k=v` · `record start` … `record stop` |
-| **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` |
+| **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
+| **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
+| **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
+| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) |
+| **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |
+| **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` |
 
 <details>
 <summary><b>All commands</b></summary>
@@ -329,7 +446,24 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | Keep | `remember "fact" [--kind decision] [--global]` · "merk dir …" / "remember …" in a prompt · learned from finished sessions |
 | Find | `recall "words" [--all]` · `recall 42` · `forget 42` |
 | To-dos | `todo [--all]` · `todo add "task" --list x` · `todo doing\|done\|drop 12` · `todo note 12 "text"` |
-| Model | `memory` · `memory model` · `memory learn` · `memory import claude-mem` · `config memory_api <url>` · `memory off` |
+| Notes | `wiki` · `wiki show 3` · `wiki accept 3 [folder]` · `wiki drop 3` · `config vault <folder>` · `config vault_inbox Inbox` |
+| Model | `memory` · `memory model` · `memory learn` · `memory lessons` · `memory import claude-mem` · `config memory_api <url>` · `memory off` |
+
+**Code map** (per project folder, kept in `~/.wisply/code`)
+
+| | |
+|---|---|
+| Look | `code` (overview) · `code Name` (definition and uses) · `code "what it does"` (by meaning) · `code outline <file>` · `code body <Name>` |
+| Follow | `code callers <Name>` · `code impact [--base main] [--tests]` (what the current changes touch) · `code ... --project <path>` |
+
+**Long output, search and checks**
+
+| | |
+|---|---|
+| Headroom | `more <hr-id> [--lines 400-440] [--grep "a\|b"]` · `~/.wisply/headroom/off` turns it off |
+| Search | `grep <pattern> [folder\|file ...] [-i] [-w] [-l] [-C 2] [--glob '*.py'] [--all]` |
+| Safety check | `secure [folder] [--history] [--no-deps]` (keys, vulnerable dependencies, risky code) |
+| Numbers | `tokens` (used and saved, last 30 days) · `bench` · `selftest` · `log stats` |
 
 **Think** (critical thinking without AI, runs in `~/.wisply/think`)
 
@@ -359,7 +493,8 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 <summary><b>Files it creates, and how to remove it</b></summary>
 
 Everything lives in `~/.wisply/` (`%USERPROFILE%\.wisply\` on Windows): the programs in `bin\`, the extension, the
-memory database, routines, the last 300 tasks they are learned from (`wisply routine forget` clears them), a 24 h
+memory database, your notes (`vault\`, plain Markdown), the code maps (`code\`), the full text behind every Headroom
+cut (`headroom\out\`), routines, the last 300 tasks they are learned from (`wisply routine forget` clears them), a 24 h
 output cache and an action log without typed text or secrets. Windows also gets the browser link in the registry and
 `.wisply\bin` in your user `Path`; macOS and Linux get host files in each browser's `NativeMessagingHosts` folder and
 `wisply` in `~/.local/bin`.
@@ -393,6 +528,8 @@ wisply uninstall --purge  # also removes the files in ~/.wisply (memory and note
 
 ## What's new
 
+- **Next** `wisply research` (10 search engines, no AI, reports saved to your vault) and `wisply think` (finds, fixes
+  and proves improvements in code, web pages, texts and images without an AI model).
 - **3.0** Lighting is now **Wisply**. One Rust program: no Python, no venv, the MCP server takes ~12 MB per session
   and answers its first call in ~30 ms. A window (`wisply ui`) with your projects, notes, to-dos and a graph of notes
   and code. Long Bash logs reach the model as their important lines. Your data moves from `~/.lighting` to

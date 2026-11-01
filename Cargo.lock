@@ -4366,6 +4366,7 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "sha2 0.10.9",
+ "toml",
  "ureq",
  "windows",
  "winresource",
@@ -4427,6 +4428,7 @@ name = "wisply-think"
 version = "3.0.1"
 dependencies = [
  "image",
+ "libc",
  "regex",
  "serde_json",
  "wisply-core",

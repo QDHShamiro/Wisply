@@ -12,6 +12,7 @@ use crate::daemon::MARKER;
 
 const HOOK_INPUT_WAIT: Duration = Duration::from_millis(1000);
 const HOOK_INPUT_MAX: u64 = 64 * 1024;
+const THINK_INPUT_MAX: u64 = 4 * 1024 * 1024;
 const START_WAIT: Duration = Duration::from_secs(12);
 
 pub fn run(raw: &[String]) -> ExitCode {
@@ -23,6 +24,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     let first = args.first().map(String::as_str).unwrap_or("");
     if first == "more" {
         return crate::more::run(&home, &args[1..]);
+    }
+    if first == "update" {
+        return crate::update::run(&home, &args[1..]);
     }
     if matches!(first, "setup" | "install" | "uninstall") {
         return crate::setup::run(&home, &args);
@@ -78,7 +82,8 @@ pub fn send(home: &Path, args: &[String]) -> ExitCode {
     };
     let hook = first == "hook" && args.len() == 2;
     let wants_input = (first == "suggest" && args.len() == 1) || (first == "done" && quiet) || hook;
-    let hook_input = if wants_input && !io::stdin().is_terminal() { read_hook_input() } else { String::new() };
+    let hook_input =
+        if wants_input && !io::stdin().is_terminal() { read_stdin(HOOK_INPUT_MAX).0 } else { String::new() };
     let mut sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
     if sid.is_empty() {
         sid = json_str(&hook_input, "session_id");
@@ -108,7 +113,14 @@ pub fn send(home: &Path, args: &[String]) -> ExitCode {
         argv.push(hook_input.replace('\0', " "));
     }
     if wants_stdin(&argv) && !io::stdin().is_terminal() {
-        let text = read_hook_input();
+        let (text, cut) = read_stdin(THINK_INPUT_MAX);
+        if cut {
+            eprintln!(
+                "wisply: the text on stdin is over {} MB, only the first {} MB were read",
+                THINK_INPUT_MAX >> 20,
+                THINK_INPUT_MAX >> 20
+            );
+        }
         if !text.trim().is_empty() {
             argv.push(format!("--input={}", text.replace('\0', " ")));
         }
@@ -262,12 +274,14 @@ fn wants_stdin(argv: &[String]) -> bool {
     words.contains(&"save") && !has("--file")
 }
 
-fn read_hook_input() -> String {
+fn read_stdin(max: u64) -> (String, bool) {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
-        let mut text = String::new();
-        let _ = io::stdin().take(HOOK_INPUT_MAX).read_to_string(&mut text);
-        let _ = tx.send(text);
+        let mut raw = Vec::new();
+        let _ = io::stdin().take(max + 1).read_to_end(&mut raw);
+        let cut = raw.len() as u64 > max;
+        raw.truncate(usize::try_from(max).unwrap_or(usize::MAX));
+        let _ = tx.send((String::from_utf8_lossy(&raw).into_owned(), cut));
     });
     rx.recv_timeout(HOOK_INPUT_WAIT).unwrap_or_default()
 }
