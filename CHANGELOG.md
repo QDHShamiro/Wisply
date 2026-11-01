@@ -14,12 +14,23 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
 
 ### Added
+- `wisply doctor ai [tool]`: the measuring half of Claude Code's `/doctor` for every AI CLI it finds (Claude
+  Code, Codex, Gemini, Qwen, OpenCode, Cursor, Continue), read-only and without a model. It checks the install,
+  that settings and config files parse (JSON and TOML, with line and column), instruction files and their size,
+  skill frontmatter, agent name collisions and the configured MCP servers. For Claude Code it also names unused
+  skills, plugins and MCP servers, slow hooks and hook timeouts, ranks denied tool calls and checks the default
+  permission mode. `wisply doctor` shows whether the Wisply status line is set up. `/wisply:doctor` runs both.
 - `wisply statusline`: a status line for Claude Code that comes with Wisply. `setup` turns it on, `wisply statusline
   on|off` (or `/wisply:statusline`) switches it, `set <segment> on|off` picks what it shows. It shows git branch with
   `*` for changes and `↑2 ↓1` for ahead/behind, the GitHub pull request of the branch with its checks, model, effort,
   context bar, tokens and the 5-hour and weekly limits. Git and GitHub state is fetched in the background and cached,
   so drawing the line never starts a program. A status line of your own is never overwritten without `--force`, and
   `off` brings it back.
+- Automatic updates: the daemon checks the newest stable release once a day, downloads the archive for the system,
+  checks its SHA-256 against `SHA256SUMS.txt`, and installs it through `setup` run by a helper once no command came for
+  5 minutes and no game runs. The helper restarts the daemon, requires it to answer as the new version and otherwise
+  puts the kept programs (`*.old`) and the extension back. `wisply update [--check|--rollback]`, `config update
+  auto|notify|off` (default `auto`), result and new versions in the start info. See `SPEC-update.md`.
 - `wisply think`: critical thinking without AI. A run keeps goal, criteria, ideas, checkpoints, measurements and
   lessons; `scan` checks code (Rust, Java/Paper plugins, Python, JS/TS), web (alt text, contrast, viewport), texts
   (broken links, repeated words, long sentences), images (size, PNG recompress) and skills, with the packs that fit the
