@@ -25,6 +25,9 @@ const ICONS: Record<string, string> = {
   blind: "M4 4h16v16H4zM12 4v16",
   settings: "M4 7h10M18 7h2M4 17h2M10 17h10M16 4v6M8 14v6",
   search: "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM20 20l-4-4",
+  dark: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z",
+  light: "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+  glass: "M5 4h14l-1.5 16h-11zM6 9h12",
 };
 
 export function icon(name: string): SVGElement {

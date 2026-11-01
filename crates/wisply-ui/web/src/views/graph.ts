@@ -6,14 +6,8 @@ import { board, type GraphData } from "../api";
 import { ago, enc, go, h, mount } from "../dom";
 import { T } from "../text";
 
-const PALETTE = ["#ff9f4a", "#6fc3e8", "#e9d56f", "#82d9a2", "#ef8fb0", "#b9a6f2", "#5fd3c4", "#f2866b", "#c7d96a", "#9fb4cc"];
-const OTHER = "#8a8a8a";
-const DIM = "#383838";
-const EDGE = "rgba(255, 255, 255, 0.2)";
-const EDGE_ON = "rgba(255, 255, 255, 0.9)";
-const LABEL = "#f5f5f5";
-const BACKDROP = "#262626";
-const BACKDROP_LINE = "rgba(255, 255, 255, 0.3)";
+const PALETTE = ["#4f7cff", "#ff3d8b", "#12c99b", "#ff9f1a", "#a259ff", "#ff5c39", "#1bb8f0", "#8bc34a", "#e040fb", "#00bfa5"];
+const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const FONT = "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif";
 const STORE = "wisply.graph.v3:";
 const SYNC_MAX = 3000;
@@ -125,7 +119,7 @@ function seed(data: GraphData): { g: Graph<Attrs>; colors: Map<string, string>; 
       x: (Math.random() - 0.5) * 100,
       y: (Math.random() - 0.5) * 100,
       size: k === "project" ? 3 + Math.sqrt(deg[i]) * 0.5 : 1.2 + Math.sqrt(deg[i]) * 0.5,
-      color: OTHER,
+      color: css("--g-other"),
       deg: deg[i],
     });
   });
@@ -152,12 +146,13 @@ function seed(data: GraphData): { g: Graph<Attrs>; colors: Map<string, string>; 
     } else names.set(c, c);
   });
   g.forEachNode((_, a) => {
-    a.color = colors.get(a.cluster) ?? OTHER;
+    a.color = colors.get(a.cluster) ?? css("--g-other");
   });
   return { g, colors, names };
 }
 
 export async function graph(view: HTMLElement, project?: string): Promise<() => void> {
+  const [LABEL, DIM, EDGE, EDGE_ON, BACKDROP, BACKDROP_LINE] = ["--g-label", "--g-dim", "--g-edge", "--g-edge-on", "--g-back", "--g-back-line"].map(css);
   mount(view, h("div", { class: "empty", style: "margin:24px" }, T.graph.loading));
   const data = await board<GraphData>("graph", ...(project ? [project] : []));
   const { g, colors, names } = seed(data);
@@ -391,7 +386,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
       const [s, t] = gr.extremities(e);
       if (!shown(gr.getNodeAttributes(s) as Attrs) || !shown(gr.getNodeAttributes(t) as Attrs)) return { visibility: "hidden" };
       const n = lit();
-      if (n) return s === n || t === n ? { color: EDGE_ON, size: 1.6 } : { color: "rgba(255, 255, 255, 0.05)" };
+      if (n) return s === n || t === n ? { color: EDGE_ON, size: 1.6 } : { color: DIM };
       return { color: EDGE };
     },
   });

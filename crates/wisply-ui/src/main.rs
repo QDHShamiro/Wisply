@@ -3,6 +3,7 @@
 mod assets;
 mod bridge;
 mod folder;
+mod win;
 
 use std::borrow::Cow;
 
@@ -17,7 +18,7 @@ const TITLE: &str = "Wisply";
 const SIZE: (f64, f64) = (1280.0, 820.0);
 const MIN_SIZE: (f64, f64) = (720.0, 480.0);
 const START: &str = "wisply://localhost/";
-const BACKGROUND: (u8, u8, u8, u8) = (19, 19, 18, 255);
+const BACKGROUND: (u8, u8, u8, u8) = (0, 0, 0, 0);
 const BROWSER_ARGS: &str =
     "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --lang=en-US --accept-lang=en-US";
 const QUIET_ENV: &str = "WISPLY_UI_QUIET";
@@ -52,6 +53,7 @@ fn main() -> wry::Result<()> {
     let builder = WindowBuilder::new()
         .with_title(TITLE)
         .with_theme(Some(Theme::Dark))
+        .with_transparent(true)
         .with_window_icon(icon(if cfg!(windows) { ICON_SMALL } else { ICON_BIG }))
         .with_inner_size(LogicalSize::new(SIZE.0, SIZE.1))
         .with_min_inner_size(LogicalSize::new(MIN_SIZE.0, MIN_SIZE.1))
@@ -65,10 +67,11 @@ fn main() -> wry::Result<()> {
     #[cfg(windows)]
     {
         use tao::platform::windows::WindowExtWindows;
-        folder::set_owner(window.hwnd());
+        win::set_owner(window.hwnd());
     }
     let builder = WebViewBuilder::new()
         .with_background_color(BACKGROUND)
+        .with_transparent(true)
         .with_custom_protocol("wisply".into(), |_, req| {
             let (status, kind, body) = assets::serve(req.uri().path());
             Response::builder()

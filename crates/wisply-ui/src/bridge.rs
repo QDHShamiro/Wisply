@@ -14,6 +14,7 @@ const RETRY: Duration = Duration::from_millis(100);
 const ALLOWED: &[&str] =
     &["board", "status", "abort", "tokens", "brain", "memory", "todo", "wiki", "config", "version"];
 const PICK_FOLDER: &str = "pick-folder";
+const THEME: &str = "theme";
 const CLI: &str = if cfg!(windows) { "wisply.exe" } else { "wisply" };
 
 fn argv_of(msg: &Value) -> Vec<String> {
@@ -33,6 +34,8 @@ pub fn ask(home: &Path, proxy: &EventLoopProxy<Ev>, body: &str) {
     thread::spawn(move || {
         let (code, out) = if argv.first().is_some_and(|a| a == PICK_FOLDER) {
             super::folder::pick(argv.get(1).map(String::as_str))
+        } else if argv.first().is_some_and(|a| a == THEME) {
+            super::win::theme(argv.get(1).map(String::as_str))
         } else if allowed(&argv) {
             call(&home, &argv, secret.as_deref())
         } else {

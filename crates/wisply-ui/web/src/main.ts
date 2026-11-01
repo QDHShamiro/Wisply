@@ -1,4 +1,4 @@
-import { board, type Pulse } from "./api";
+import { board, call, type Pulse } from "./api";
 import { enc, go, h, icon, mount } from "./dom";
 import { T } from "./text";
 import { blind } from "./views/blind";
@@ -9,6 +9,12 @@ import { search } from "./views/search";
 import { learned, settings, tokens } from "./views/side";
 
 const STATUS_MS = 5000;
+const THEME_KEY = "wisply.theme";
+const THEMES = ["light", "dark", "glass"] as const;
+type Theme = (typeof THEMES)[number];
+let theme: Theme = THEMES.find((t) => t === localStorage.getItem(THEME_KEY)) ?? "dark";
+document.documentElement.dataset.theme = theme;
+void call(["theme", theme]);
 const side = document.getElementById("side") as HTMLElement;
 const view = document.getElementById("view") as HTMLElement;
 const status = h("div", { id: "status" });
@@ -34,12 +40,42 @@ const find = h("input", {
     if (k.key === "Enter" && q) go(`#/search/${enc(q)}`);
   },
 });
+const themes = h("div", { class: "themes", role: "group", "aria-label": T.theme.label });
+function drawThemes(): void {
+  mount(
+    themes,
+    ...THEMES.map((t) =>
+      h(
+        "button",
+        {
+          type: "button",
+          class: t === theme ? "on" : "",
+          title: T.theme[t],
+          "aria-label": T.theme[t],
+          "aria-pressed": String(t === theme),
+          onclick: () => {
+            if (t === theme) return;
+            theme = t;
+            localStorage.setItem(THEME_KEY, t);
+            document.documentElement.dataset.theme = t;
+            void call(["theme", t]);
+            drawThemes();
+            void route();
+          },
+        },
+        icon(t),
+      ),
+    ),
+  );
+}
+drawThemes();
 mount(
   side,
   h("a", { class: "brand", href: "#/" }, h("img", { src: "icon.svg", alt: "" }), h("span", {}, T.app)),
   h("div", { class: "search" }, icon("search"), find, h("kbd", {}, "Ctrl K")),
   nav,
   status,
+  themes,
 );
 window.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {

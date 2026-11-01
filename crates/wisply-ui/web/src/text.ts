@@ -1,5 +1,6 @@
 export const T = {
   app: "Wisply",
+  theme: { label: "Theme", light: "Light", dark: "Dark", glass: "Glass" },
   nav: { projects: "Projects", graph: "Graph", live: "Live", tokens: "Tokens", learned: "Learned", blind: "Blind", settings: "Settings", search: "Search" },
   find: "Search notes…",
   status: {

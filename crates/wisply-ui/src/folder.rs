@@ -1,15 +1,7 @@
-use std::sync::atomic::{AtomicIsize, Ordering};
-
 #[cfg(windows)]
 const TITLE: &str = "Choose a folder";
 #[cfg(windows)]
 const OK_LABEL: &str = "Select folder";
-
-static OWNER: AtomicIsize = AtomicIsize::new(0);
-
-pub fn set_owner(hwnd: isize) {
-    OWNER.store(hwnd, Ordering::Relaxed);
-}
 
 pub fn pick(start: Option<&str>) -> (i32, String) {
     match choose(start.filter(|s| !s.trim().is_empty())) {
@@ -43,7 +35,7 @@ fn choose(start: Option<&str>) -> Option<String> {
             {
                 let _ = dialog.SetFolder(&item);
             }
-            let owner = OWNER.load(Ordering::Relaxed);
+            let owner = super::win::owner();
             dialog.Show((owner != 0).then_some(HWND(owner as *mut _))).ok()?;
             let item = dialog.GetResult().ok()?;
             let name = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
