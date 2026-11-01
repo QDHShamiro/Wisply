@@ -82,12 +82,12 @@ function kinds(d: TokenData): HTMLElement {
     h("h2", { style: "margin-top:0" }, T.tokens.byKind),
     h(
       "div",
-      { class: "kinds" },
-      h("div", { class: "kind head" }, h("span", {}, T.tokens.kind), h("span", {}, T.tokens.runs), h("span", {}, T.tokens.used), h("span", {}, T.tokens.without), h("span", {}, T.tokens.saved), h("span", {})),
+      { class: "krows" },
+      h("div", { class: "krow head" }, h("span", {}, T.tokens.kind), h("span", {}, T.tokens.runs), h("span", {}, T.tokens.used), h("span", {}, T.tokens.without), h("span", {}, T.tokens.saved), h("span", {})),
       d.groups.map((g) =>
         h(
           "div",
-          { class: "kind" },
+          { class: "krow" },
           h("span", { class: "name" }, g.name.charAt(0).toUpperCase() + g.name.slice(1)),
           h("span", {}, g.runs.toLocaleString("en-US")),
           h("span", {}, short(g.used)),
