@@ -293,10 +293,12 @@ used, ~34M without Wisply, **84% saved**.
 | Tokens for a first look at a page | **~440** (measured) | ~15,850 (measured) | 15,000–30,000 on dense pages ([1]) | not published ([2]) |
 | Repeated tasks | learned routines, one call | saved shortcuts | – | – |
 | Memory across sessions | ✅ local | – | – | – |
-| Headless, CI | ❌ real browser only | – | ✅ | ✅ |
+| Headless mode | ❌ needs a browser window (Xvfb on a Linux CI machine) | – | ✅ | ✅ |
 
-`–` = not built in, as far as the public docs say. For headless tests and CI, take Playwright. Wisply is for an
-agent on your own computer that has to use your logged-in browser and your apps, cheaply.
+`–` = not built in, as far as the public docs say. Wisply drives a real browser window with its extension loaded.
+It has no `--headless` mode, but a window is all it needs: Wisply's own CI runs it in Chrome for Testing on Windows,
+macOS and Linux (under Xvfb there), see `scripts/ci-browser.sh`. For headless test suites, take Playwright. Wisply is
+for an agent on your own computer that has to use your logged-in browser and your apps, cheaply.
 
 [1]: https://lite.ego.app/article/playwright-mcp-token-problem
 [2]: https://github.com/vercel-labs/agent-browser
