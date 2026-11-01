@@ -82,7 +82,7 @@ fn sessions_are_learned_into_notes_and_vault_pages() {
     let lines = [
         json!({"type": "ai-title", "aiTitle": "Shop cart"}),
         json!({"type": "user", "message": {"content": words}}),
-        json!({"type": "assistant", "message": {"content": [{"type": "text", "text": "Moving it now."}]}}),
+        json!({"type": "assistant", "message": {"content": [{"type": "text", "text": "Moving it now."}, {"type": "tool_use", "name": "Edit", "input": {"file_path": "cart.rs"}}]}}),
     ];
     let transcript = home.join("t.jsonl");
     fs::write(&transcript, lines.iter().map(|l| l.to_string() + "\n").collect::<String>()).unwrap();

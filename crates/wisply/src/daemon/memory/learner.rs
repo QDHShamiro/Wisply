@@ -13,18 +13,7 @@ use super::chat::{self, ChatError, Provider};
 use super::index::vault;
 
 const KINDS: &[&str] = &["decision", "preference", "bugfix", "feature", "fact", "discovery", "change"];
-const SYSTEM: &str = "You keep the long-term memory of a coding assistant. From the session log, keep only what helps in a FUTURE \
-session: decisions with their reason, the user's preferences and rules, bugs fixed with the root cause, \
-non-obvious facts (paths, ports, commands, versions, accounts; never passwords, keys or tokens). Skip routine \
-steps, file listings, what anyone sees in the code, progress and status (counts, timings, test or CI runs, \
-what is running right now) and plans; what is still open goes into next, never into a note. Each note stands \
-alone: its title starts with the project or tool, like 'Wisply: hints need words and meaning'. Write \
-English, short and concrete. At most 6 notes; fewer is fine, none is fine. For the session record write only \
-what THIS part of the log adds, one short line per point, what and why, never how: summary = what changed \
-and where, why = the reasons behind the decisions, rejected = what was tried and dropped and why, next = what \
-is left open at the end of this part. lessons = at most 2 things worth a permanent page in the user's \
-knowledge base: mistake = an error with its root cause and the fix, rule = a fixed rule the user gave, \
-pattern = a reusable way of doing something; none is fine.";
+const SYSTEM: &str = "Long-term memory of a coding assistant. Input: condensed session log (USER, CLAUDE, EDIT, RAN, ERROR lines). Output JSON only. notes (max 6, none is fine): only what helps in a FUTURE session: decision + reason, user preference or rule, bug + root cause + fix, non-obvious fact (path, port, command, version, account). Never secrets. Skip routine steps, progress, counts, test or CI runs, plans, anything already in the code or in 'Known notes'. Title starts with the project or tool ('Wisply: hints need words and meaning'). English, one concrete sentence per body. Record, only what THIS part adds, one short line per point: summary = what changed and where; why = reasons for decisions; rejected = tried and dropped + why; next = still open at the end. lessons (max 2, none is fine): mistake = error + root cause + fix; rule = fixed rule from the user; pattern = reusable way of working.";
 const DRAFT_SYSTEM: &str = "Write one page for the user's knowledge base from the note and the session context. Fill each section with \
 1 to 4 short lines in the language of the section headings; leave a section empty when the note says nothing \
 for it. Concrete names, versions and commands, never passwords, keys or tokens. The title says the lesson in \
@@ -33,6 +22,9 @@ const NOTES_PER_CHUNK: usize = 6;
 const LESSONS_PER_CHUNK: usize = 2;
 const WIKI_PER_SESSION: usize = 2;
 const MIN_CHARS: usize = 600;
+const MIN_USERS: usize = 2;
+const KNOWN: usize = 6;
+const KNOWN_CHARS: usize = 90;
 const QUIET_S: f64 = 600.0;
 const RETRY_S: f64 = 1800.0;
 const POLL_S: f64 = 60.0;
@@ -141,6 +133,17 @@ fn draft(home: &Path, store: &mut Store, p: &Provider, lesson: &Value, project: 
     write_draft(&inbox(home), &kind, &named, &page);
 }
 
+fn known_titles(store: &mut Store, project: &str, title: &str, part: &str) -> String {
+    let probe = format!("{title} {}", oneline(part, 300));
+    let hits = store.search(&probe, project, KNOWN, None, 0.0).unwrap_or_default();
+    let lines: Vec<String> = hits
+        .iter()
+        .filter(|h| h.note.kind != "draft")
+        .map(|h| format!("- {}", oneline(&h.note.title, KNOWN_CHARS)))
+        .collect();
+    if lines.is_empty() { String::new() } else { format!("Known notes:\n{}\n", lines.join("\n")) }
+}
+
 fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usize, Stop> {
     let path = Path::new(&row.transcript);
     if !path.exists() {
@@ -154,7 +157,7 @@ fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usiz
     if project != row.project {
         store.session_project(&row.id, &project).map_err(db)?;
     }
-    if c.text.chars().count() < MIN_CHARS {
+    if c.text.chars().count() < MIN_CHARS || (c.users < MIN_USERS && c.edits == 0) {
         store.session_short(&row.id, c.end, began, &c.title).map_err(db)?;
         return Ok(0);
     }
@@ -173,7 +176,8 @@ fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usiz
         }
         let shown = if project.is_empty() { "-" } else { project.as_str() };
         let title = if r.title.is_empty() { "-" } else { r.title.as_str() };
-        let user = format!("Project: {shown}\nSession title: {title}\n\nSession log:\n{part}");
+        let known = known_titles(store, &project, &r.title, &part);
+        let user = format!("Project: {shown}\nSession title: {title}\n{known}\nSession log:\n{part}");
         let answer = chat::chat(p, SYSTEM, &user, &schema)?;
         let out = parse(&answer).ok_or_else(|| Stop::Fail(format!("{} sent no JSON object", p.name())))?;
         for n in out.get("notes").and_then(Value::as_array).into_iter().flatten() {

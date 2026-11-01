@@ -137,7 +137,8 @@ claude   wisply recall "game pause"
 ```
 
 When a session ends, a local model (downloaded by Wisply, never run while you play a game) keeps its decisions,
-fixes and open points. Search works by words and meaning, in any language. Everything stays in one SQLite file in
+fixes and open points. Wisply first boils the log down to your messages, edits, errors and git steps, so the model
+reads a fraction of it and does not repeat notes it already has. Search works by words and meaning, in any language. Everything stays in one SQLite file in
 `~/.wisply/memory`; keys and passwords are cut out before anything is stored.
 
 ### Images and video
