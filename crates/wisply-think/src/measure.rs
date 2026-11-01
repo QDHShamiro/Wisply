@@ -82,18 +82,22 @@ fn shell(cmd: &str) -> Command {
     c
 }
 
-fn kill_tree(child: &mut Child) {
-    let pid = child.id().to_string();
-    let mut k = if cfg!(windows) {
-        let mut k = Command::new("taskkill");
-        k.args(["/T", "/F", "/PID", &pid]);
-        k
-    } else {
-        let mut k = Command::new("kill");
-        k.args(["-9", &format!("-{pid}")]);
-        k
-    };
+#[cfg(windows)]
+fn kill_group(child: &Child) {
+    let mut k = Command::new("taskkill");
+    k.args(["/T", "/F", "/PID", &child.id().to_string()]);
     let _ = quiet(&mut k).stdout(Stdio::null()).stderr(Stdio::null()).status();
+}
+
+#[cfg(unix)]
+fn kill_group(child: &Child) {
+    if let Ok(pid) = i32::try_from(child.id()) {
+        let _ = unsafe { libc::killpg(pid, libc::SIGKILL) };
+    }
+}
+
+fn kill_tree(child: &mut Child) {
+    kill_group(child);
     let _ = child.kill();
     let _ = child.wait();
 }
