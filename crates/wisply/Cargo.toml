@@ -8,6 +8,10 @@ publish.workspace = true
 
 [[bin]]
 name = "wisply"
+path = "src/fast.rs"
+
+[[bin]]
+name = "wisply-full"
 path = "src/main.rs"
 
 [[bin]]

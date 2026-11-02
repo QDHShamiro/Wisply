@@ -187,7 +187,7 @@ fn settings() -> PathBuf {
 }
 
 fn own_exe() -> Result<PathBuf, String> {
-    env::current_exe().map_err(|e| format!("cannot find this program: {e}"))
+    crate::setup::place::client_exe().map_err(|e| format!("cannot find this program: {e}"))
 }
 
 fn save_enabled(home: &Path, on: bool) -> Result<(), String> {

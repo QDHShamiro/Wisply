@@ -25,7 +25,7 @@ docs/                                          README graphics (compare/how SVGs
 .github/workflows/                             v3.yml (every push/PR, 3 systems), release.yml (tag v* -> archives, clients, mcpb, SHA256SUMS), registry.yml
 ```
 
-`bin/` is not in git. `wisply setup` copies `wisply`, `wisply-ui` and `wisply-task` to `~/.wisply/bin` and sets
+`bin/` is not in git. `wisply setup` copies `wisply` (the small client, starts in ~10 ms), `wisply-full` (daemon and every other command; `wisply` hands to it what it cannot do itself and reports `wisply-full is missing` if it is not next to it), `wisply-ui` and `wisply-task` to `~/.wisply/bin` and sets
 `WISPLY_BIN` (plus `WISPLY_CLIENT` on macOS/Linux; the old `LIGHTING_BIN` too until 3.1) in `~/.claude/settings.json`, so hooks and the MCP server start
 from there; the plugin's own `bin/` is only the fallback before the first setup.
 
@@ -156,7 +156,7 @@ Found while building 2.x (Python) and still true for the browser, Windows and Cl
 
 ## 3. Build order when changing things
 
-1. Rust: `cargo build --release -p wisply -p wisply-ui`, then `target/release/wisply.exe setup --manual`. Setup renames
+1. Rust: `cargo build --release -p wisply -p wisply-ui` (builds `wisply` and `wisply-full`), then `target/release/wisply.exe setup --manual`. Setup renames
    the running exe in `~/.wisply/bin` before copying (Windows locks a running exe against writes, not against
    renames) and stops a daemon that runs the old build; the next command starts the new one.
 2. Extension: edit `extension/*.js`, check the modules parse (copy to `.mjs`, `node --check`), then `wisply ext-reload`.

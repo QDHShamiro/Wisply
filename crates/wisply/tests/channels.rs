@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 
-const EXE: &str = env!("CARGO_BIN_EXE_wisply");
+const EXE: &str = env!("CARGO_BIN_EXE_wisply-full");
 
 struct Home(PathBuf);
 

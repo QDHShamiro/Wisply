@@ -6,7 +6,7 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const EXE: &str = env!("CARGO_BIN_EXE_wisply");
+const EXE: &str = env!("CARGO_BIN_EXE_wisply-full");
 const TITLE: &str = "LtProbe";
 
 struct Home(PathBuf);

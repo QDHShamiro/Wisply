@@ -9,7 +9,8 @@ use sha2::{Digest, Sha256};
 pub const HOST_NAME: &str = "dev.qdhshamiro.wisply";
 pub const MAIN: &str = "wisply";
 pub const ALIAS: &str = "lighting";
-pub const EXES: &[&str] = &[MAIN, "wisply-ui", "wisply-task"];
+pub const FULL: &str = "wisply-full";
+pub const EXES: &[&str] = &[MAIN, FULL, "wisply-ui", "wisply-task"];
 const SOURCE_DEPTH: usize = 4;
 const BLOCKLIST: &str = "paypal.com\npaypal.me\nstripe.com\ncheckout.stripe.com\nklarna.com\nsofort.com\ngiropay.de\n\
 paysafecard.com\nwise.com\nrevolut.com\nn26.com\nbunq.com\nsparkasse.de\ndkb.de\ning.de\ncomdirect.de\ncommerzbank.de\n\
@@ -18,6 +19,13 @@ bankofamerica.com\nchase.com\nwellsfargo.com\n";
 
 pub fn exe_name(stem: &str) -> String {
     if cfg!(windows) { format!("{stem}.exe") } else { stem.to_string() }
+}
+
+pub fn client_exe() -> io::Result<PathBuf> {
+    let me = std::env::current_exe()?;
+    let thin = me.with_file_name(exe_name(MAIN));
+    let is_full = me.file_stem().is_some_and(|n| n == FULL);
+    Ok(if is_full && thin.is_file() { thin } else { me })
 }
 
 pub fn source_root() -> Option<PathBuf> {
@@ -101,12 +109,20 @@ pub fn copy_exes(home: &Path) -> io::Result<(PathBuf, bool)> {
     fs::create_dir_all(&bin)?;
     let mut daemon_new = false;
     for stem in EXES {
-        let src = if *stem == MAIN { me.clone() } else { from.join(exe_name(stem)) };
-        if src.is_file() && replace(&src, &bin.join(exe_name(stem)))? {
-            daemon_new |= *stem == MAIN;
+        let sibling = from.join(exe_name(stem));
+        let src = if sibling.is_file() {
+            sibling
+        } else if matches!(*stem, MAIN | FULL) {
+            me.clone()
+        } else {
+            continue;
+        };
+        if replace(&src, &bin.join(exe_name(stem)))? {
+            daemon_new |= matches!(*stem, MAIN | FULL);
         }
     }
-    replace(&me, &bin.join(exe_name(ALIAS)))?;
+    let thin = from.join(exe_name(MAIN));
+    replace(if thin.is_file() { &thin } else { &me }, &bin.join(exe_name(ALIAS)))?;
     Ok((dst, daemon_new))
 }
 

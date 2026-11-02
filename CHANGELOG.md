@@ -8,6 +8,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Changed
+- `wisply.exe` is now a small client (3 MB instead of 19 MB) for `status`, `recall`, `code`, `more` and the hooks
+  (`hook post` included): a call takes about 10 ms instead of about 108 ms, because Windows spends ~100 ms starting a
+  large exe before `main` runs. Output and exit codes are byte for byte the same. The big program is `wisply-full`
+  next to it: the daemon and every other command (`setup`, `update`, `mcp`, `think`, `statusline`, ...) run there, as
+  does any call while the daemon is down. Setup and the self-update place both programs (a 3.0 install with one exe
+  updates as before); if `wisply-full` is missing `wisply` says so and points to `wisply setup`. The single
+  `wisply.exe` on the Releases page is still the full client.
 - `wisply code "what it does"` works without any model: names are split (camelCase, snake_case), words are stemmed, a
   built-in list of code synonyms (save, write, store, persist / strip, remove, scrub / secret, key, password, token /
   changed, modified, dirty) widens the question, and the words of the function body, strings, signature and path count

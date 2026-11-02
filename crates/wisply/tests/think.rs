@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 
 use serde_json::json;
 
-const EXE: &str = env!("CARGO_BIN_EXE_wisply");
+const EXE: &str = env!("CARGO_BIN_EXE_wisply-full");
 
 struct Home(PathBuf);
 
