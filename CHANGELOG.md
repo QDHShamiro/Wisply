@@ -7,6 +7,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Added
+- Phone app in `app/` (Flutter, Android, iPhone, tablet layout): pair by QR, a board of your agents with status colours,
+  agent detail with the last lines, reply and stop, settings with unpair. It talks to the daemon's Phone API v1 over
+  Tailscale; Android keeps an event connection open in a foreground service and shows local notifications, iPhone shows
+  them while the app is open. The token sits in the Keystore or Keychain. CI builds the APK and an unsigned IPA
+  (`.github/workflows/app.yml`); `app/README.md` covers install, Sideloadly re-signing every 7 days and Tailscale.
+
 ### Changed
 - Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
   WebFetch tools (`hooks/hooks.json` matcher). The limit is a character budget (1,200; 2,000 for logs) instead of a line
