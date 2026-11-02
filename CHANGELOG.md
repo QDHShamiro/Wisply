@@ -7,6 +7,11 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Added
+- Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a
+  `wisply more` ref; whole-file `Read` and `cat file` views of 150+ lines / ~3k+ tokens come back as head, outline
+  and tail. Edit/Write and PreCompact clear the per-session table; `Write` on a known file adds an "use Edit" hint
+  (new `PreToolUse` and `PreCompact` entries in `hooks/hooks.json`). `~/.wisply/headroom/reads-off` turns it off.
 ### Changed
 - `wisply.exe` is now a small client (3 MB instead of 19 MB) for `status`, `recall`, `code`, `more` and the hooks
   (`hook post` included): a call takes about 10 ms instead of about 108 ms, because Windows spends ~100 ms starting a

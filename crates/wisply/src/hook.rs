@@ -66,14 +66,27 @@ pub fn post() {
         return;
     }
     let parsed = serde_json::from_slice::<Value>(&input);
+    let paths = Paths::new(&root);
+    if let Ok(event) = &parsed
+        && event["hook_event_name"].as_str().is_some_and(|n| n != "PostToolUse")
+    {
+        if let Some(text) = crate::reads::other_event(&paths.state, event) {
+            let mut out = io::stdout().lock();
+            let _ = out.write_all(text.as_bytes());
+            let _ = out.flush();
+        }
+        return;
+    }
     let editing = parsed.as_ref().is_ok_and(|e| e["tool_name"].as_str().is_some_and(|t| EDIT_TOOLS.contains(&t)));
+    if editing && let Ok(event) = &parsed {
+        crate::reads::forget(&paths.state, event);
+    }
     if editing && let Some(text) = wisply_think::after_edit(&root, &input) {
         let mut out = io::stdout().lock();
         let _ = out.write_all(text.as_bytes());
         let _ = out.flush();
         return;
     }
-    let paths = Paths::new(&root);
     if paths.state.join("off").exists() {
         return;
     }
@@ -128,7 +141,9 @@ fn handle(mut event: Value, paths: &Paths, started: Instant, budget: Duration) -
     entry.insert("t".into(), json!(unix_ms()));
     entry.insert("sid".into(), event["session_id"].clone());
     entry.insert("tool".into(), json!(tool));
-    let reply = if tool == "Bash" {
+    let reply = if let Some(done) = crate::reads::post_tool(&paths.state, &mut event, &mut entry) {
+        Some(done)
+    } else if tool == "Bash" {
         bash(&mut event, paths, started + budget, &mut entry)?
     } else {
         if let Some(name) = kept_ref(&event["tool_input"].to_string()) {
@@ -337,7 +352,7 @@ pub fn fnv(parts: &[&str]) -> u64 {
     h
 }
 
-fn quick(parts: &[&str]) -> u64 {
+pub fn quick(parts: &[&str]) -> u64 {
     let mut h = FNV_START;
     for part in parts {
         let (words, tail) = part.as_bytes().as_chunks::<8>();

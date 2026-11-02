@@ -242,6 +242,15 @@ wisply more hr-3fa91c04de --lines 400-440
   `git log` ...), Wisply's own output (already short) and the saved text itself are never shortened. A file
   `~/.wisply/headroom/off` turns it off.
 
+Reads get the same treatment. Within one session Wisply remembers each file Claude read (path, range, size, change
+time, hash). Reading the same unchanged range again returns one line (`unchanged since your read 3 min ago, lines 1-120;
+wisply more <ref> for the text`) instead of the file. Any Edit or Write on the file, and every compaction, forgets
+it, and changed content is never stubbed. A whole file of 150+ lines and ~3k+ tokens, read by the Read tool or
+`cat file`, arrives as its first 40 lines, an outline with line numbers and its last 15 lines; reading the whole file
+a second time returns all of it. Ranged reads, short files and files already edited in the session stay whole.
+`Write` onto a file that was read in the session adds a hint to use Edit (it never blocks). A file
+`~/.wisply/headroom/reads-off` turns the read handling off.
+
 `wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
 keeps the rest in a file.
 
