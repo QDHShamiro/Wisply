@@ -214,6 +214,25 @@ wisply ui
 Projects, notes (editor with wikilinks and backlinks), to-dos, search, what each session is doing, a graph of notes
 and code, and the **Blind** page where you pick between two versions in `wisply think`.
 
+## Compact earlier, keep the thread
+
+Long sessions get expensive because every request re-reads the whole context. `wisply doctor ai claude` shows from
+your own transcripts how many requests ran above 200k and 400k tokens and what compacting at 250k would have saved.
+To try it:
+
+```
+wisply config compact 250k      # same as: wisply setup --compact 250k
+wisply config compact off       # back to Claude Code's own window
+```
+
+This writes `autoCompactWindow` into `~/.claude/settings.json` (100k to 1M, nothing else is touched) and says if an
+environment variable or a per-model setting would override it. It is off until you set it.
+
+Whatever the window, a hook runs before each compact (`PreCompact`): without any model it condenses the transcript
+into a short handoff (goal, latest request, decisions, open to-dos, last errors, changed files, under 300 ms) and puts
+it back right after the summary (`SessionStart` with `source: compact`). `wisply memory off` turns it off. How to
+compare 250k with 400k over two weeks: [docs/compact-ab.md](docs/compact-ab.md).
+
 ## Headroom: long logs in short
 
 A build, a test run or a server log can print thousands of lines, and the model pays for every one of them. Headroom
@@ -446,7 +465,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
-| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) |
+| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) · `config compact 250k` |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |

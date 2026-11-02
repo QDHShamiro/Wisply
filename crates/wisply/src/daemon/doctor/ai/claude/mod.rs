@@ -5,6 +5,7 @@ mod install;
 mod mode;
 mod transcripts;
 mod usage;
+mod window;
 
 use std::env;
 use std::fs;
@@ -81,6 +82,7 @@ pub fn rows() -> (Vec<Row>, String) {
     rows.extend(usage::rows(&env, &scan));
     rows.extend(transcripts::rows(&scan));
     rows.extend(context::rows(&env));
+    rows.extend(window::rows(&env));
     rows.extend(mode::rows(&env));
     (rows, scan.window())
 }

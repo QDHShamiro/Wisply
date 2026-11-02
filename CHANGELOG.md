@@ -45,6 +45,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
 
 ### Added
+- Earlier auto-compact, off by default: `wisply config compact 250k` (or `wisply setup --compact 250k`) writes
+  `autoCompactWindow` into Claude Code's `settings.json` and names any `CLAUDE_CODE_AUTO_COMPACT_WINDOW` or per-model
+  window that would override it; `compact off` removes it. `wisply doctor ai claude` gets a `context length` row: the
+  share of requests above 200k and 400k context and what 250k would have saved, from your transcripts. The
+  `PreCompact` hook now writes a handoff (goal, latest request, decisions, open to-dos, last errors, changed files)
+  from the transcript tail without a model, and `SessionStart` after a compact hands it back. The two-week 250k
+  against 400k comparison is in docs/compact-ab.md.
 - `recall` ranks by how many of your words a note really contains (title counts more than body), folds near-identical
   notes into the best one, favours recent notes (half-life 45 days), and shows the sentence that matches instead of the
   start of the note. It also lists matching open to-dos first, so "Lighting loeschen" finds the to-do. Default 6 lines

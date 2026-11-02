@@ -3,6 +3,7 @@ mod board;
 pub mod chat;
 mod code;
 mod embed;
+mod handoff;
 mod hook;
 pub mod index;
 pub mod learn;

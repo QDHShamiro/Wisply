@@ -1,6 +1,6 @@
 mod claude;
 mod num;
-mod transcript;
+pub(in crate::daemon) mod transcript;
 
 use std::collections::BTreeMap;
 use std::fs;
