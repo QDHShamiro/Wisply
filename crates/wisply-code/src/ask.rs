@@ -1,9 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
 use rusqlite::{Connection, Row, params};
 
+use super::find::Lex;
 use super::index::Index;
 
 const TOP: i64 = 12;
@@ -18,27 +19,6 @@ const BODY_MAX: i64 = 150;
 const EMBED_LINES: i64 = 30;
 pub const MEANT: &[&str] =
     &["function", "method", "constructor", "class", "struct", "enum", "trait", "interface", "record", "macro"];
-const CODE_STOP: &[&str] = &[
-    "function",
-    "funktion",
-    "method",
-    "methode",
-    "class",
-    "klasse",
-    "code",
-    "file",
-    "datei",
-    "does",
-    "called",
-    "aufgerufen",
-    "passiert",
-    "happens",
-    "happen",
-    "wird",
-    "werden",
-    "gets",
-];
-
 #[derive(Debug, Clone)]
 pub struct Sym {
     pub id: i64,
@@ -50,17 +30,6 @@ pub struct Sym {
     pub end: i64,
     pub parent: String,
     pub sig: String,
-}
-
-fn stem(term: &str) -> &str {
-    for tail in ["ing", "s"] {
-        if let Some(root) = term.strip_suffix(tail)
-            && root.chars().count() >= 3
-        {
-            return root;
-        }
-    }
-    term
 }
 
 fn is_test_path(path: &str) -> bool {
@@ -317,52 +286,20 @@ impl Index {
         Ok(out.join("\n"))
     }
 
-    pub fn by_name(&self, text: &str, why: &str) -> rusqlite::Result<String> {
-        let mut terms: Vec<String> = Vec::new();
-        for w in text.to_lowercase().split(|c: char| !c.is_alphanumeric() && c != '_') {
-            if w.chars().count() >= 3
-                && !CODE_STOP.contains(&w)
-                && !wisply_memory::stop_word(w)
-                && !terms.iter().any(|t| t == w)
-            {
-                terms.push(w.to_string());
-            }
+    pub fn by_name(&mut self, text: &str, why: &str) -> rusqlite::Result<String> {
+        if self.lex.is_none() {
+            self.lex = Some(Lex::build(&self.db)?);
         }
-        terms.truncate(8);
-        let mut found: HashMap<i64, (Sym, f64)> = HashMap::new();
-        for t in &terms {
-            let stem = stem(t);
-            let like = format!("%{stem}%");
-            let rows = syms(
-                &self.db,
-                "select * from symbols where low like ?1 or lower(sig) like ?1 or lower(path) like ?1 limit 400",
-                [&like],
-            )?;
-            let seen: i64 = self.db.query_row(
-                "select count(*) from symbols where low like ?1 or lower(sig) like ?1 or lower(path) like ?1",
-                [&like],
-                |r| r.get(0),
-            )?;
-            let rare = 1.0 / (1.0 + (1.0 + seen as f64).ln());
-            for s in rows {
-                let in_name = s.low.contains(stem);
-                let gain = rare * if in_name { 2.0 } else { 1.0 };
-                found.entry(s.id).or_insert_with(|| (s, 0.0)).1 += gain;
-            }
-        }
-        let mut ranked: Vec<_> = found.into_values().collect();
-        ranked.sort_by(|a, b| {
-            b.1.total_cmp(&a.1)
-                .then_with(|| MEANT.contains(&b.0.kind.as_str()).cmp(&MEANT.contains(&a.0.kind.as_str())))
-                .then_with(|| a.0.name.len().cmp(&b.0.name.len()))
-                .then_with(|| a.0.path.cmp(&b.0.path))
-        });
-        if ranked.is_empty() {
+        let hits = self.lex.as_ref().map(|l| l.search(text, LIMIT as usize)).unwrap_or_default();
+        if hits.is_empty() {
             return Ok(format!("{why}; no names contain those words either"));
         }
         let mut lines = vec![format!("{why}, names with those words:")];
-        lines.extend(ranked.iter().take(LIMIT as usize).map(|h| place(&h.0)));
-        Ok(lines.join("\n"))
+        lines.extend(hits.iter().map(|s| place(s)));
+        Ok(lines.join(
+            "
+",
+        ))
     }
 
     pub fn meant_total(&self) -> rusqlite::Result<i64> {
@@ -488,15 +425,13 @@ mod tests {
 
     #[test]
     fn names_with_several_words_beat_names_with_one() {
-        let ix = index("names");
+        let mut ix = index("names");
         sym(&ix, "save", "src/x.rs", "");
         sym(&ix, "save_note", "src/y.rs", "");
         sym(&ix, "forget_note", "src/z.rs", "");
         let out = ix.by_name("where do we save notes", "no meaning").unwrap();
         let first = out.lines().nth(1).unwrap_or("");
         assert!(first.contains("save_note"), "{out}");
-        assert_eq!(stem("notes"), "note");
-        assert_eq!(stem("is"), "is");
         assert!(is_test_path("crates/x/tests/a.rs") && !is_test_path("src/latest.rs"));
     }
 }

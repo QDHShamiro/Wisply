@@ -187,7 +187,8 @@ vault/
 
 `wisply code` keeps a map of each project folder: every function, class, struct, trait and interface, and who calls
 it. It reads Java, Kotlin, Rust, Python, JavaScript, TypeScript, Go, C#, C, C++, PHP, Ruby, Lua, Swift, Scala and Dart
-through tree-sitter, refreshes itself when files change and builds a meaning index in the background (on your
+through tree-sitter, refreshes itself when files change and finds code by what it does without any model: names split into
+words, stems, code synonyms and BM25 over symbols, function bodies and paths, in well under a millisecond (on your
 computer, no cloud). It does the job a separate code-graph tool like Graphify does, built in.
 
 ```

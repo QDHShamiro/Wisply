@@ -1,0 +1,15 @@
+where do we save notes	add_note
+strip secrets before saving	scrub
+index changed files	refresh
+search notes by words and vectors	search@store.rs
+split a query into search terms	terms|fts_query
+fold duplicate hits together	fold
+find the project root of a folder	root_of
+list code files of a repo	listing|git_files
+pick the sentence that matches the words	snippet
+mark a todo as done	todo_set|todo@memory/mod.rs|setTodo
+delete a note	forget
+remember which projects were used recently	used|active
+convert unix time to a local date	local_parts|date|day
+ask the embedding server for vectors	embed@embed.rs
+shorten text to one line with ellipsis	shorten|clip|oneline|one_line

@@ -10,6 +10,8 @@ use tree_sitter::Parser;
 use tree_sitter_language_pack::{PackConfig, configure, download, get_language};
 
 use super::extract::extract;
+use super::find::Lex;
+use super::words::bag;
 
 const LANGS: &[(&str, &str)] = &[
     ("java", "java"),
@@ -62,14 +64,17 @@ const LIST_TTL: Duration = Duration::from_secs(3);
 const SCHEMA: &str = "
 create table if not exists files(path text primary key, mtime real, lang text, lines integer);
 create table if not exists symbols(id integer primary key, path text, name text, low text, kind text, line integer,
-  end_line integer, parent text, sig text);
+  end_line integer, parent text, sig text, bag text default '');
 create index if not exists symbols_low on symbols(low);
 create index if not exists symbols_path on symbols(path);
 create table if not exists refs(path text, name text, low text, line integer, caller text);
 create index if not exists refs_low on refs(low);
 create index if not exists refs_path on refs(path);
 create table if not exists vecs(id integer primary key, v blob);
+create table if not exists meta(k text primary key, v text);
 ";
+const BAG_VERSION: &str = "1";
+const BAG_LINES: i64 = 40;
 
 static FAILED: LazyLock<Mutex<HashMap<String, Instant>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -82,6 +87,7 @@ pub struct Index {
     pub db: Connection,
     pub left: usize,
     listed: Option<(Instant, Vec<String>)>,
+    pub(crate) lex: Option<Lex>,
 }
 
 pub fn lang_of(path: &str) -> Option<&'static str> {
@@ -111,8 +117,14 @@ impl Index {
         db.busy_timeout(Duration::from_secs(15))?;
         db.pragma_update(None, "journal_mode", "wal")?;
         db.execute_batch(SCHEMA)?;
+        let _ = db.execute("alter table symbols add column bag text default ''", []);
+        let version: Option<String> = db.query_row("select v from meta where k = 'bag'", [], |r| r.get(0)).ok();
+        if version.as_deref() != Some(BAG_VERSION) {
+            db.execute("delete from files", [])?;
+            db.execute("insert or replace into meta(k, v) values ('bag', ?1)", [BAG_VERSION])?;
+        }
         let _ = configure(&PackConfig { cache_dir: Some(dir.join("parsers")), ..PackConfig::default() });
-        Ok(Index { root: root.to_path_buf(), db, left: 0, listed: None })
+        Ok(Index { root: root.to_path_buf(), db, left: 0, listed: None, lex: None })
     }
 
     pub fn refresh(&mut self, budget: Option<Duration>) -> rusqlite::Result<usize> {
@@ -177,10 +189,15 @@ impl Index {
             tx.execute("delete from vecs where id in (select id from symbols where path = ?1)", [rel])?;
             tx.execute("delete from symbols where path = ?1", [rel])?;
             tx.execute("delete from refs where path = ?1", [rel])?;
+            let text = String::from_utf8_lossy(&data);
+            let starts: Vec<usize> = std::iter::once(0).chain(text.match_indices('\n').map(|(i, _)| i + 1)).collect();
             for d in &defs {
+                let from = starts.get((d.line - 1).max(0) as usize).copied().unwrap_or(text.len());
+                let to = starts.get((d.end.min(d.line - 1 + BAG_LINES)).max(0) as usize).copied().unwrap_or(text.len());
+                let words = bag(text.get(from..to).unwrap_or(""));
                 tx.execute(
-                    "insert into symbols(path, name, low, kind, line, end_line, parent, sig) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                    params![rel, d.name, d.name.to_lowercase(), d.kind, d.line, d.end, d.parent, d.sig],
+                    "insert into symbols(path, name, low, kind, line, end_line, parent, sig, bag) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![rel, d.name, d.name.to_lowercase(), d.kind, d.line, d.end, d.parent, d.sig, words],
                 )?;
             }
             for r in &refs {
@@ -204,6 +221,9 @@ impl Index {
             }
         }
         tx.commit()?;
+        if changed + gone.len() > 0 {
+            self.lex = None;
+        }
         Ok(changed + gone.len())
     }
 }
