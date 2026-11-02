@@ -1,6 +1,7 @@
 import { board, call, type Pulse } from "./api";
 import { enc, go, h, icon, mount } from "./dom";
 import { T } from "./text";
+import { agents } from "./views/agents";
 import { blind } from "./views/blind";
 import { home } from "./views/home";
 import { live } from "./views/live";
@@ -25,6 +26,7 @@ const links: [string, string, string][] = [
   ["#/", "projects", T.nav.projects],
   ["#/graph", "graph", T.nav.graph],
   ["#/live", "live", T.nav.live],
+  ["#/agents", "agents", T.nav.agents],
   ["#/tokens", "tokens", T.nav.tokens],
   ["#/learned", "learned", T.nav.learned],
   ["#/blind", "blind", T.nav.blind],
@@ -107,6 +109,7 @@ async function route(): Promise<void> {
     else if (parts[0] === "t" && parts[1]) done = await (await import("./views/note")).note(view, { title: parts.slice(1).join("/") });
     else if (parts[0] === "graph") done = await (await import("./views/graph")).graph(view, parts[1] || undefined);
     else if (parts[0] === "live") done = await live(view);
+    else if (parts[0] === "agents") done = await agents(view);
     else if (parts[0] === "tokens") done = await tokens(view);
     else if (parts[0] === "learned") done = await learned(view);
     else if (parts[0] === "blind") done = await blind(view);

@@ -6,7 +6,8 @@ mod pipe;
 mod words;
 
 pub use home::{
-    address, default_home, home, home_var, is_default_home, key_token, make_key, old_home, same_token, user,
+    address, default_home, home, home_var, is_default_home, key_token, make_key, old_home, random_token, same_token,
+    user,
 };
 pub use l2::{Incoming, Reply, Request};
 pub use link::Link;

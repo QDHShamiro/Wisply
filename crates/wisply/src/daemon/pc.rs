@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use wisply_core::{Call, Fail};
 use wisply_pc::config::Config;
+use wisply_pc::mode::{Manual, Mode};
 use wisply_pc::{Pc, notify, plat};
 
 use super::{Daemon, Out, game};
@@ -61,4 +62,34 @@ pub fn status_line(d: &Daemon) -> Option<String> {
     let pc = lock(&d.home);
     let view = pc.last.as_ref()?;
     Some(format!("pc | {}/100 | acting {}", view.report.score, if pc.cfg.act { "on" } else { "off" }))
+}
+
+pub struct Facts {
+    pub free_gb: Option<f64>,
+    pub free_ram_gb: Option<f64>,
+    pub playing: bool,
+}
+
+const GB: f64 = 1_073_741_824.0;
+
+pub fn facts(home: &Path) -> Facts {
+    let pc = lock(home);
+    let Some(view) = pc.last.as_ref() else {
+        return Facts {
+            free_gb: None,
+            free_ram_gb: None,
+            playing: pc.manual == Some(Manual::Play) || !game::running().is_empty(),
+        };
+    };
+    let disks = &view.sample.disks;
+    let main = disks.iter().find(|d| d.mount.to_lowercase().starts_with('c')).or_else(|| disks.first());
+    let playing = match pc.manual {
+        Some(Manual::Play) => true,
+        Some(Manual::Afk) => false,
+        None => view.mode == Mode::Play,
+    };
+    let sample = &view.sample;
+    let ram = (sample.mem_total > 0)
+        .then(|| (sample.mem_total.saturating_sub(sample.mem_used) as f64 / GB * 10.0).round() / 10.0);
+    Facts { free_ram_gb: ram, free_gb: main.map(|d| (d.free as f64 / GB * 10.0).round() / 10.0), playing }
 }

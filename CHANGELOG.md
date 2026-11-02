@@ -8,11 +8,34 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- Agents page as a web page: tile grid grouped by project, filter chips, search, sort, header with running / waiting /
+  done / failed counts, limit, free RAM, build queue owner (`agents_lock`) and game mode; detail view with live output,
+  the agent's `RESULT.md` (`agents_work`, masked), reply and a two-click stop. The phone server serves the same page
+  at `http://<host>:47999/` (shell files only, data still needs the pairing token; `mobile pair` prints a `web:` link).
+  Animations use transform and opacity and respect `prefers-reduced-motion`. New: `agents status`.
+- Fix: `claude` output larger than the pipe buffer (long `claude logs`) no longer stalls for 30 s.
 - Builds can live outside the repo: `WISPLY_SOURCE` points setup at the source folder (used by the setup test).
 - Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a
   `wisply more` ref; whole-file `Read` and `cat file` views of 150+ lines / ~3k+ tokens come back as head, outline
   and tail. Edit/Write and PreCompact clear the per-session table; `Write` on a known file adds an "use Edit" hint
   (new `PreToolUse` and `PreCompact` entries in `hooks/hooks.json`). `~/.wisply/headroom/reads-off` turns it off.
+- `wisply agents`: one table of every Claude session (`claude agents --json --all`) with name, folder name, status
+  (`running`, `waiting`, `done`, `limit`, `error`), time, tokens, estimated cost and the last line with keys, tokens,
+  mail addresses and paths masked. Also an Agents page in `wisply ui`, an `agents 2 run 1 wait` field in the status
+  line and a line in `wisply status`.
+- Limit guard: the daemon reads "usage limit reached" / "hit your limit" with the reset time and, two minutes after it
+  and never while the game mode runs, continues every background session the limit stopped exactly once
+  (`claude --bg --resume <session> "weiter"`). Sessions that did not run are never started. Events go to
+  `~/.wisply/agents/guard.log`; `config agents_resume off` and `config agents off` switch it off.
+- Events `done`, `waiting`, `limit`, `resumed` and, from other tools through `wisply notify event <kind> <title>`,
+  `ci_red`, `ci_green`, `disk`: a Windows notification that never takes focus (`config agents_notify`) and the
+  `/v1/events` stream.
+- `wisply mobile`: the phone API of the Wisply app (`pair` with QR code and PNG, `list`, `revoke`, `status`, `on`,
+  `off`). It binds only to localhost and Tailscale addresses (never `0.0.0.0`), needs a per-device token (only its
+  hash is stored), allows 20 requests per second per token, answers `401` without a valid token and takes pairing
+  codes once within 10 minutes. Config: `phone_api` (off until the first `mobile pair`), `phone_port`, `phone_bind`,
+  `phone_tailscale`.
+
 ### Changed
 - `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
 - Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and

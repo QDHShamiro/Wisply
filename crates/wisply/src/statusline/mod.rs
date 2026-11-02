@@ -1,3 +1,4 @@
+mod agents;
 mod cache;
 pub(crate) mod config;
 mod git;
@@ -94,7 +95,8 @@ fn draw(home: &Path) -> String {
     let time = now();
     let git = cwd_of(&input).and_then(|cwd| git_view(home, &cwd, time, &cfg));
     let line = render::line(&input, git.as_ref(), time, &cfg);
-    render::with_extra(line, cfg.shown("pc").then(|| pc::field(home, time)).flatten())
+    let line = render::with_extra(line, cfg.shown("pc").then(|| pc::field(home, time)).flatten());
+    render::with_extra(line, cfg.shown("agents").then(|| agents::field(home, time)).flatten())
 }
 
 fn wants_extras(cfg: &Config) -> bool {

@@ -68,6 +68,15 @@ fn defaults() -> Map<String, Value> {
         ("vault", json!("")),
         ("vault_inbox", json!("Inbox")),
         ("update", json!("auto")),
+        ("agents", json!(true)),
+        ("agents_resume", json!(true)),
+        ("agents_notify", json!(true)),
+        ("agents_work", json!("")),
+        ("agents_lock", json!("")),
+        ("phone_api", json!(false)),
+        ("phone_port", json!(47841)),
+        ("phone_bind", json!("")),
+        ("phone_tailscale", json!(true)),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
@@ -180,14 +189,29 @@ mod tests {
     fn config_reads_and_writes_like_2x() {
         let h = home("rw");
         let (all, changed) = command(&h, &[]).unwrap();
-        assert!(!changed && all.starts_with("audio = \"auto\"\nbrain = true\nbrowser = \"auto\""), "{all}");
+        assert!(
+            !changed
+                && all.starts_with(
+                    "agents = true
+agents_lock = \"\"
+agents_notify = true
+agents_resume = true
+agents_work = \"\"
+audio = \"auto\"
+brain = true
+browser = \"auto\""
+                ),
+            "{all}"
+        );
         assert_eq!(command(&h, &args(&["shot_width"])).unwrap(), ("shot_width = 1024".into(), false));
         assert_eq!(command(&h, &args(&["pointer", "off"])).unwrap(), ("pointer = false".into(), true));
         assert_eq!(command(&h, &args(&["shot_width", "800"])).unwrap(), ("shot_width = 800".into(), true));
         assert!(!on(&load(&h), "pointer") && on(&load(&h), "window"));
         assert_eq!(text(&load(&h), "browser"), "auto");
         let fail = |a: &[&str]| command(&h, &args(a)).unwrap_err().text();
-        assert!(fail(&["nope"]).starts_with("err: unknown config key 'nope' -> try: one of: audio, brain"));
+        assert!(fail(&["nope"]).starts_with(
+            "err: unknown config key 'nope' -> try: one of: agents, agents_lock, agents_notify, agents_resume, agents_work, audio, brain"
+        ));
         assert_eq!(
             fail(&["focus", "sometimes"]),
             "err: focus is one of never, away, idle -> try: wisply config focus never"

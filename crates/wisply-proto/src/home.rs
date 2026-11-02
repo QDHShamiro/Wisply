@@ -94,6 +94,10 @@ fn random_bytes() -> io::Result<[u8; 32]> {
     Ok(key)
 }
 
+pub fn random_token() -> io::Result<String> {
+    Ok(hex(&random_bytes()?))
+}
+
 pub fn same_token(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
