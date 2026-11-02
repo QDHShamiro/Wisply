@@ -8,6 +8,7 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Changed
+- `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
 - Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
   WebFetch tools (`hooks/hooks.json` matcher). The limit is a character budget (1,200; 2,000 for logs) instead of a line
   count: lines over 340 characters are cut to 300 with the full text one `wisply more` away, grep/rg output is grouped

@@ -1,5 +1,6 @@
 ---
 description: Check every part of Wisply and your AI CLIs and repair what is broken (like /doctor, for Wisply)
+disable-model-invocation: true
 ---
 Run `wisply doctor` and show its lines unchanged.
 If its last line says `wisply doctor --fix repairs N`, run `wisply doctor --fix` and show that output unchanged too.
