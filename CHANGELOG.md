@@ -14,12 +14,36 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   output eight bytes at a time, writes the log after the answer is out and no longer checks the folders on every
   call. What is cut and what is kept stays the same. `cargo test -p wisply-squeeze --test bench -- --ignored
   --nocapture` and `cargo test -p wisply --test hook_speed -- --ignored --nocapture` measure it.
+- Session notes cost about 4 to 10 times fewer model tokens: the transcript is condensed harder before the local model
+  sees it (no tool calls except edits and git/PR commands, no code blocks, no "let me ..." narration, repeats gone),
+  the prompt is shorter with a fixed format, the model gets the titles of notes it already has so it does not write
+  them twice, and sessions without edits and with a single message are skipped.
+- "merk dir ..." / "remember ..." understands more phrasings (denk dran, vergiss nicht, don't forget, keep in mind,
+  note that, ...), drops leftovers like "dass" or "that" and stores a clean sentence.
+- More secrets are cut out before anything is stored: Anthropic, Stripe, Google, npm, GitLab, GitHub fine-grained and
+  Discord bot tokens, Bearer and Authorization headers, Discord/Slack/Teams webhook URLs, passwords in URLs, private
+  key blocks, "Passwort ist ...".
 - `frames`, `watch` and `shot`: fewer image tokens, faster. Contact sheets now fit the model's 28 px token grid
   (no second resize, no empty cells, bigger tiles when there are few), near-identical scenes are dropped instead of
   padding the sheet to the full count, and `shot` sizes snap to whole tokens (1024 px wide became 1008). Video frames
   come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
 
 ### Added
+- `recall` ranks by how many of your words a note really contains (title counts more than body), folds near-identical
+  notes into the best one, favours recent notes (half-life 45 days), and shows the sentence that matches instead of the
+  start of the note. It also lists matching open to-dos first, so "Lighting loeschen" finds the to-do. Default 6 lines
+  instead of 8 and a shorter footer: about 30% fewer characters on 15 real questions, all 15 right notes in the top 3.
+- `code callers` groups calls per function and shows tests last; the name search behind meaning questions strips plural
+  endings, weighs rare words higher and also reads file paths; the file list is cached for 3 seconds, so a repeated
+  `wisply code` answers in about 160 ms instead of 225 ms.
+- `wisply pc`: an optimizer for Windows, macOS and Linux. `pc` gives a score from 0 to 100 with the 3 biggest slowdowns
+  and a numbered fix for each; `pc fix <n|all>`, `pc clean [--dry]`, `pc startup [off|on <n>]`, `pc game`, `pc
+  afk|play|auto`, `pc net [host]`, `pc disk`, `pc updates`, `pc on|off`, `pc log [n]`. The daemon watches every 5 seconds
+  (new crate `wisply-pc`) and warns by system notification about RAM above 85 %, fast growing programs, CPU above 80 %
+  and a busy disk, naming the program. With `pc on` it lowers priorities of builds and agents and runs a game mode
+  (restored exactly, also after a daemon crash), gives memory back and cleans temp files, caches, old build folders
+  and logs with a protection list (Minecraft, open projects, `build/libs`, secrets, documents). Closing programs and
+  switching autostarts off always need a yes. The status line gets a `pc` field.
 - `wisply doctor ai [tool]`: the measuring half of Claude Code's `/doctor` for every AI CLI it finds (Claude
   Code, Codex, Gemini, Qwen, OpenCode, Cursor, Continue), read-only and without a model. It checks the install,
   that settings and config files parse (JSON and TOML, with line and column), instruction files and their size,

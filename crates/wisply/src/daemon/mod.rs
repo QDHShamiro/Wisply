@@ -15,6 +15,7 @@ mod hotkey;
 mod lane;
 mod media;
 mod memory;
+mod pc;
 mod phone;
 mod record;
 mod research;
@@ -225,6 +226,7 @@ pub fn serve() -> ExitCode {
         last_cmd: AtomicU64::new(secs()),
     });
     memory::index::start(d.home.clone());
+    pc::start(d.home.clone());
     {
         let quiet = Arc::clone(&d);
         let gate = crate::update::Gate {

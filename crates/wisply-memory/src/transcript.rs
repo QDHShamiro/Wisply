@@ -17,12 +17,28 @@ const ARG_CHARS: usize = 160;
 const ARG_KEYS: &[&str] = &["file_path", "path", "pattern", "skill", "url", "query", "prompt"];
 const EDITS: &[&str] = &["Edit", "Write", "NotebookEdit"];
 const EDIT_WEIGHT: usize = 3;
+const LEAN_USER: usize = 700;
+const LEAN_CLAUDE: usize = 320;
+const LEAN_ERROR: usize = 160;
+const LEAN_MIN_CLAUDE: usize = 40;
+const LEAN_CMD: usize = 120;
+const KEEP_CMDS: &[&str] =
+    &["git commit", "git merge", "git push", "gh pr", "git revert", "git reset", "git checkout -b"];
 
 static REMINDER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?s)<system-reminder>.*?</system-reminder>|<local-command-caveat>.*?</local-command-caveat>")
         .expect("reminder pattern")
 });
 static TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"</?[a-zA-Z][\w-]*(?:\s[^<>]*)?>").expect("tag pattern"));
+static FILLER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^(?:now |ok,? |okay,? |sure,? |alright,? |good,? |great,? )*(?:let me|let's|i'll|i will|i'm going to|lass mich|ich werde|jetzt|gleich|first,? )")
+        .expect("filler pattern")
+});
+static DECISION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)because|root cause|instead|decid|chose|weil|ursache|stattdessen|entschied|fix|bug|found|finding|error|fehler|forbidden|never|nie ")
+        .expect("decision pattern")
+});
+static FENCE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)```.*?(?:```|$)").expect("fence pattern"));
 static ABSOLUTE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:[A-Za-z]:[\\/]|/)").expect("path pattern"));
 
 #[derive(Debug, Default)]
@@ -32,6 +48,14 @@ pub struct Condensed {
     pub title: String,
     pub paths: Vec<String>,
     pub more: bool,
+    pub users: usize,
+    pub edits: usize,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Style {
+    Full,
+    Lean,
 }
 
 pub fn cut(text: &str, n: usize) -> String {
@@ -81,7 +105,8 @@ fn result_text(c: &Value) -> String {
     }
 }
 
-fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>) -> Vec<String> {
+fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>, style: Style) -> Vec<String> {
+    let lean = style == Style::Lean;
     let content = d.get("message").and_then(|m| m.get("content"));
     let items: Vec<Value> = match content {
         Some(Value::String(s)) => vec![serde_json::json!({"type": "text", "text": s})],
@@ -92,9 +117,21 @@ fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>) -> Vec<String> {
     for c in &items {
         let piece = match c.get("type").and_then(Value::as_str) {
             Some("text") => {
-                let text = clean(c.get("text").and_then(Value::as_str).unwrap_or(""));
+                let mut text = clean(c.get("text").and_then(Value::as_str).unwrap_or(""));
+                if lean {
+                    text = FENCE.replace_all(&text, "[code]").into_owned();
+                }
                 let who = if kind == "user" { "USER: " } else { "CLAUDE: " };
-                if text.is_empty() { String::new() } else { format!("{who}{}", cut(&text, TEXT_CHARS)) }
+                let cap = match (lean, kind == "user") {
+                    (false, _) => TEXT_CHARS,
+                    (true, true) => LEAN_USER,
+                    (true, false) => LEAN_CLAUDE,
+                };
+                let skip = lean
+                    && kind != "user"
+                    && (text.chars().count() < LEAN_MIN_CLAUDE
+                        || (FILLER.is_match(&text) && !DECISION.is_match(&text)));
+                if text.is_empty() || skip { String::new() } else { format!("{who}{}", cut(&text, cap)) }
             }
             Some("tool_use") => {
                 let name = c.get("name").and_then(Value::as_str).unwrap_or("");
@@ -105,10 +142,21 @@ fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>) -> Vec<String> {
                     let times = if EDITS.contains(&name) { EDIT_WEIGHT } else { 1 };
                     paths.extend(std::iter::repeat_n(f.to_string(), times));
                 }
-                format!("TOOL {}", tool_line(name, &input))
+                if lean {
+                    let cmd = input.get("command").map(shown).unwrap_or_default();
+                    if EDITS.contains(&name) {
+                        file.map(|f| format!("EDIT {}", cut(f, ARG_CHARS))).unwrap_or_default()
+                    } else if (name == "Bash" || name == "PowerShell") && KEEP_CMDS.iter().any(|k| cmd.contains(k)) {
+                        format!("RAN {}", cut(&cmd, LEAN_CMD))
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    format!("TOOL {}", tool_line(name, &input))
+                }
             }
             Some("tool_result") if c.get("is_error").is_some_and(truthy) => {
-                format!("ERROR: {}", cut(&result_text(c), TOOL_CHARS))
+                format!("ERROR: {}", cut(&result_text(c), if lean { LEAN_ERROR } else { TOOL_CHARS }))
             }
             _ => String::new(),
         };
@@ -120,6 +168,10 @@ fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>) -> Vec<String> {
 }
 
 pub fn condense(path: &Path, offset: u64, limit: Option<usize>) -> std::io::Result<Condensed> {
+    condense_as(path, offset, limit, Style::Lean)
+}
+
+pub fn condense_as(path: &Path, offset: u64, limit: Option<usize>, style: Style) -> std::io::Result<Condensed> {
     let limit = limit.unwrap_or(CHUNK_CHARS * CHUNKS);
     let mut file = BufReader::new(File::open(path)?);
     file.seek(SeekFrom::Start(offset))?;
@@ -147,7 +199,15 @@ pub fn condense(path: &Path, offset: u64, limit: Option<usize>) -> std::io::Resu
         if !["user", "assistant"].contains(&kind) || side {
             continue;
         }
-        for piece in pieces(&d, kind, &mut out.paths) {
+        for piece in pieces(&d, kind, &mut out.paths, style) {
+            if style == Style::Lean && parts.last() == Some(&piece) {
+                continue;
+            }
+            if style == Style::Lean && piece.starts_with("EDIT ") && parts.contains(&piece) {
+                continue;
+            }
+            out.users += usize::from(piece.starts_with("USER: "));
+            out.edits += usize::from(piece.starts_with("EDIT "));
             size += piece.chars().count() + 1;
             parts.push(piece);
         }
@@ -213,7 +273,7 @@ mod tests {
         let body = lines.join("\n") + "\n{\"type\":\"user\"";
         let path = dir.join("t.jsonl");
         fs::write(&path, &body).unwrap();
-        let c = condense(&path, 0, None).unwrap();
+        let c = condense_as(&path, 0, None, Style::Full).unwrap();
         let want = "USER: fix the cart\nCLAUDE: On it\nTOOL Edit C:/x/a.rs\nERROR: boom token: [secret]\nTOOL Bash: cargo test";
         assert_eq!(c.text, want);
         assert_eq!((c.title.as_str(), c.more, c.paths.len()), ("Cart fix", false, 3));
@@ -227,6 +287,56 @@ mod tests {
         let long = format!("{}\n{}", "a".repeat(CHUNK_CHARS - 5), "b".repeat(10));
         assert_eq!(chunks(&long).len(), 2);
         assert_eq!(chunks("x\ny"), ["x\ny"]);
+        let lean = condense(&path, 0, None).unwrap();
+        assert_eq!(
+            lean.text,
+            "USER: fix the cart
+EDIT C:/x/a.rs
+ERROR: boom token: [secret]"
+        );
+        assert_eq!((lean.users, lean.edits), (1, 1));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[ignore]
+    fn measure_transcripts() {
+        let list = std::env::var("WISPLY_MEASURE").unwrap_or_default();
+        for f in list.split(',').filter(|f| !f.is_empty()) {
+            let path = Path::new(f);
+            let name = path.file_name().map(|n| n.to_string_lossy().chars().take(8).collect::<String>());
+            let t = std::time::Instant::now();
+            let full = match condense_as(path, 0, None, Style::Full) {
+                Ok(c) => c,
+                Err(e) => {
+                    println!("MEASURE skip {f}: {e}");
+                    continue;
+                }
+            };
+            let full_ms = t.elapsed().as_millis();
+            let span = std::env::temp_dir().join(format!("measure-span-{}.jsonl", std::process::id()));
+            let mut head = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::Read::take(File::open(path).unwrap(), full.end), &mut head)
+                .unwrap();
+            std::fs::write(&span, head).unwrap();
+            let t = std::time::Instant::now();
+            let lean = condense_as(&span, 0, None, Style::Lean).unwrap();
+            let lean_ms = t.elapsed().as_millis();
+            let _ = std::fs::remove_file(&span);
+            if std::env::var("WISPLY_SHOW").is_ok() {
+                println!("SHOW {}", lean.text.chars().take(1400).collect::<String>());
+            }
+            let row = [(&full, full_ms), (&lean, lean_ms)].map(|(c, ms)| {
+                format!(
+                    "{} chars ~{} tok {}ms users={} edits={}",
+                    c.text.chars().count(),
+                    c.text.len() / 4,
+                    ms,
+                    c.users,
+                    c.edits
+                )
+            });
+            println!("MEASURE {} | full {} | lean {}", name.unwrap_or_default(), row[0], row[1]);
+        }
     }
 }
