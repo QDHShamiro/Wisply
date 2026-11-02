@@ -27,11 +27,11 @@ pub struct Git {
     pub pr: Option<Pr>,
 }
 
-fn paint(code: u8, text: &str) -> String {
+pub(super) fn paint(code: u8, text: &str) -> String {
     format!("{ESC}[38;5;{code}m{text}{ESC}[0m")
 }
 
-fn tone(pct: i64) -> u8 {
+pub(super) fn tone(pct: i64) -> u8 {
     if pct < WARM_AT {
         GREEN
     } else if pct < HOT_AT {
@@ -206,6 +206,14 @@ const PARTS: [(&str, Part); 9] = [
     ("limit5h", five_hour_part),
     ("limitweek", week_part),
 ];
+
+pub fn with_extra(line: String, extra: Option<String>) -> String {
+    match extra {
+        Some(e) if line.is_empty() => e,
+        Some(e) => format!("{line} {} {e}", paint(DIM, "|")),
+        None => line,
+    }
+}
 
 pub fn line(input: &Value, git: Option<&Git>, now: u64, cfg: &Config) -> String {
     let ctx = Ctx { input, git, now, cfg };

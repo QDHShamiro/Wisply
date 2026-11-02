@@ -286,7 +286,7 @@ fn memory_keeps_notes_and_todos_in_memory_db() {
     assert_eq!(said, "remembered #1 (wisply forget 1 undoes it)");
     let (code, found) = home.run(&["recall", "which", "browser"]);
     assert!(code == 0 && found.starts_with("#1 ") && found.contains(" fact: Brave is the only browser. | "), "{found}");
-    assert!(found.ends_with("~Nt = its size; words only, the model is not running)"), "{found}");
+    assert!(found.ends_with("~Nt = size; words only, the model is not running)"), "{found}");
     let (code, full) = home.run(&["recall", "#1"]);
     let body = "\nBrave is the only browser.\nBrave is the only browser. Never Chrome.";
     assert!(code == 0 && full.contains(", user, ") && full.ends_with(body), "{full}");

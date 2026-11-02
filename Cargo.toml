@@ -24,6 +24,7 @@ wisply-proto = { path = "crates/wisply-proto" }
 wisply-code = { path = "crates/wisply-code" }
 wisply-squeeze = { path = "crates/wisply-squeeze" }
 wisply-think = { path = "crates/wisply-think" }
+wisply-pc = { path = "crates/wisply-pc" }
 proptest = { version = "1", default-features = false, features = ["std"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 roxmltree = "0.21"

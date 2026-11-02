@@ -3,6 +3,7 @@ pub(crate) mod config;
 mod git;
 mod github;
 pub(crate) mod install;
+mod pc;
 mod proc;
 mod render;
 
@@ -92,7 +93,8 @@ fn draw(home: &Path) -> String {
     let input = read_input();
     let time = now();
     let git = cwd_of(&input).and_then(|cwd| git_view(home, &cwd, time, &cfg));
-    render::line(&input, git.as_ref(), time, &cfg)
+    let line = render::line(&input, git.as_ref(), time, &cfg);
+    render::with_extra(line, cfg.shown("pc").then(|| pc::field(home, time)).flatten())
 }
 
 fn wants_extras(cfg: &Config) -> bool {

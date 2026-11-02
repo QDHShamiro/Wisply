@@ -18,7 +18,19 @@ const SECRET_PATTERNS: &[&str] = &[
     r"\bAKIA[0-9A-Z]{16}\b",
     r"\bxox[abpr]-[A-Za-z0-9-]{10,}",
     r"\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
-    r"(?i)((?:password|passwort|passwd|secret|token|api[_-]?key|license[_-]?key)\s*[:=]\s*)\S{6,}",
+    r"\bsk-ant-[A-Za-z0-9_-]{10,}",
+    r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}",
+    r"\bAIza[0-9A-Za-z_-]{30,}",
+    r"\b(?:npm|glpat|hf|dop_v1|shpat|pypi)[_-][A-Za-z0-9_-]{16,}",
+    r"\bgithub_pat_[A-Za-z0-9_]{20,}",
+    r"\b[MNO][A-Za-z0-9_-]{23,25}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}",
+    r#"(?i)((?:password|passwort|kennwort)\s+(?:ist|is)\s+["'`]?)[^\s"'`,;]{4,}"#,
+    r"(?i)((?:discord(?:app)?\.com|hooks\.slack\.com|webhook\.office\.com)/(?:api/)?(?:webhooks|services)/)\S+",
+    r"(?i)(\bbearer\s+)[A-Za-z0-9._~+/=-]{12,}",
+    r"(?i)(authorization\s*[:=]\s*(?:basic|token)\s+)\S{8,}",
+    r"(?i)(://[^\s:/@]+:)[^\s@/]{3,}(@)",
+    r"(?s)(-----BEGIN [A-Z ]*PRIVATE KEY-----).*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)",
+    r#"(?i)((?:password|passwort|passwd|pwd|kennwort|secret|client[_-]?secret|token|access[_-]?token|auth[_-]?token|api[_-]?key|apikey|license[_-]?key|private[_-]?key)[\w-]*\s*[:=]\s*["'`]?)[^\s"'`,;]{4,}"#,
 ];
 
 static STOPS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| STOP.split_whitespace().collect());
@@ -34,10 +46,28 @@ pub fn scrub(text: &str) -> String {
     let mut out = text.to_string();
     for rx in SECRETS.iter() {
         out = rx
-            .replace_all(&out, |m: &Captures| format!("{}[secret]", m.get(1).map_or("", |g| g.as_str())))
+            .replace_all(&out, |m: &Captures| {
+                format!("{}[secret]{}", m.get(1).map_or("", |g| g.as_str()), m.get(2).map_or("", |g| g.as_str()))
+            })
             .into_owned();
     }
     out
+}
+
+static LEAD: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^[\s,:;.\-–—]*(?:(?:bitte|please|mal|doch|dir|dass|daß|that|to)\b[\s,:;.\-–—]*)+")
+        .expect("lead pattern")
+});
+
+pub fn fact(raw: &str) -> String {
+    let flat = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    let body = LEAD.replace(&flat, "");
+    let body = body.trim().trim_end_matches(['.', ',', ';', ':', ' ']).trim();
+    let mut chars = body.chars();
+    match chars.next() {
+        Some(c) => format!("{}{}", c.to_uppercase(), chars.as_str()),
+        None => String::new(),
+    }
 }
 
 pub fn oneline(text: &str, n: usize) -> String {
@@ -97,6 +127,31 @@ mod tests {
     fn text_helpers_match_2x() {
         assert_eq!(scrub("token: abcdef123 and ghp_abcdefghijklmnopqrstuv1"), "token: [secret] and [secret]");
         assert_eq!(scrub("password=hunter22!"), "password=[secret]");
+        let fakes = [
+            "key sk-ant-api03-AbCdEfGhIjKlMnOpQrSt",
+            "key sk-proj1234567890abcdefghij",
+            "ghp_abcdefghijklmnopqrstuvwxyz0123",
+            "github_pat_11ABCDEFG0abcdefghijkl_mnop",
+            "AKIAABCDEFGHIJKLMNOP",
+            "xoxb-1234567890-abcdefghij",
+            "Authorization: Bearer abcdefghijklmnop1234",
+            "https://discord.com/api/webhooks/123456789/AbCdEfGh_ijkl-MNOP",
+            "Passwort ist hunter2secret",
+            "db_password = 'S3cr3tValue'",
+            "mysql://root:topsecretpw@localhost/db",
+            "AIzaSyA1234567890abcdefghijklmnopqrstuv",
+            "stripe sk_live_abcdefghij1234567890",
+        ];
+        for f in fakes {
+            let out = scrub(f);
+            let secret = f.rsplit(['/', ' ', ':', '=', '\'']).next().unwrap_or("");
+            assert!(out.contains("[secret]") && (secret.len() < 8 || !out.contains(secret)), "{f} -> {out}");
+        }
+        assert_eq!(fact("dass Brave der einzige Browser ist."), "Brave der einzige Browser ist");
+        assert_eq!(fact(", bitte dass  total   wichtig"), "Total wichtig");
+        assert_eq!(fact("that the port is 25565"), "The port is 25565");
+        assert_eq!(fact("to use Maven"), "Use Maven");
+        assert_eq!(fact("Tomorrow ist frei"), "Tomorrow ist frei");
         assert_eq!(oneline("  a \n b\tc  ", 10), "a b c");
         assert_eq!(oneline("abcdef ghij", 8), "abcdef…");
         assert_eq!(fts_query("Wie deploye ich den Wächter? a.b-c x"), r#""deploye"* OR "wächter"* OR "a.b-c"*"#);

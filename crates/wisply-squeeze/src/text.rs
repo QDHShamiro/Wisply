@@ -14,6 +14,7 @@ pub(crate) fn rstrip(s: &str) -> &str {
     s.trim_end_matches(is_space)
 }
 
+#[cfg(test)]
 pub(crate) fn words(s: &str) -> impl Iterator<Item = &str> {
     s.split(is_space).filter(|w| !w.is_empty())
 }

@@ -11,6 +11,7 @@ const FOLDERS: usize = 10;
 const LIMIT: i64 = 10;
 const CALLERS: i64 = 12;
 const ALL_CALLERS: i64 = 60;
+const CALLER_ROWS: i64 = 400;
 const OUTLINE_MAX: usize = 80;
 const SIG: usize = 110;
 const BODY_MAX: i64 = 150;
@@ -49,6 +50,26 @@ pub struct Sym {
     pub end: i64,
     pub parent: String,
     pub sig: String,
+}
+
+fn stem(term: &str) -> &str {
+    for tail in ["ing", "s"] {
+        if let Some(root) = term.strip_suffix(tail)
+            && root.chars().count() >= 3
+        {
+            return root;
+        }
+    }
+    term
+}
+
+fn is_test_path(path: &str) -> bool {
+    let low = path.to_lowercase();
+    low.contains("/test")
+        || low.starts_with("test")
+        || low.contains("_test.")
+        || low.contains(".test.")
+        || low.contains(".spec.")
 }
 
 fn sym(r: &Row) -> rusqlite::Result<Sym> {
@@ -148,25 +169,35 @@ impl Index {
     }
 
     fn callers_lines(&self, low: &str, limit: i64) -> rusqlite::Result<Vec<String>> {
-        let mut q =
-            self.db.prepare("select path, line, caller from refs where low = ?1 order by path, line limit ?2")?;
-        let rows: Vec<(String, i64, String)> = q
-            .query_map(params![low, limit + 1], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<String>>(2)?.unwrap_or_default()))
+        let mut q = self.db.prepare(
+            "select r.path, r.line, r.caller, exists(select 1 from symbols s where s.path = r.path and s.name = r.caller              and lower(s.parent) like '%test%') from refs r where r.low = ?1 order by r.path, r.line limit ?2",
+        )?;
+        let rows: Vec<(String, i64, String, bool)> = q
+            .query_map(params![low, CALLER_ROWS], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<String>>(2)?.unwrap_or_default(), r.get(3)?))
             })?
             .collect::<Result<_, _>>()?;
-        let total: i64 = self.db.query_row("select count(*) from refs where low = ?1", [low], |r| r.get(0))?;
         if rows.is_empty() {
             return Ok(vec!["  no calls found".into()]);
         }
+        let total = rows.len();
+        let mut groups: Vec<(bool, String, String, Vec<i64>)> = Vec::new();
+        for (path, line, caller, in_test) in rows {
+            let test = in_test || is_test_path(&path);
+            match groups.iter_mut().find(|g| g.1 == path && g.2 == caller) {
+                Some(g) => g.3.push(line),
+                None => groups.push((test, path, caller, vec![line])),
+            }
+        }
+        groups.sort_by_key(|g| g.0);
         let mut out = vec![format!("called from ({total}):")];
-        out.extend(
-            rows.iter()
-                .take(limit as usize)
-                .map(|(p, l, c)| format!("  {p}:{l}{}", if c.is_empty() { String::new() } else { format!(" in {c}") })),
-        );
-        if total > limit {
-            out.push("  ... wisply code callers <name> lists all".into());
+        out.extend(groups.iter().take(limit as usize).map(|(test, path, caller, lines)| {
+            let at: Vec<String> = lines.iter().map(i64::to_string).collect();
+            let who = if caller.is_empty() { String::new() } else { format!(" in {caller}") };
+            format!("  {path}:{}{who}{}", at.join(","), if *test { " [test]" } else { "" })
+        }));
+        if groups.len() > limit as usize {
+            out.push(format!("  ... {} more, wisply code callers <name> lists all", groups.len() - limit as usize));
         }
         Ok(out)
     }
@@ -298,29 +329,33 @@ impl Index {
             }
         }
         terms.truncate(8);
-        let mut found: HashMap<i64, (Sym, BTreeSet<String>, BTreeSet<String>)> = HashMap::new();
+        let mut found: HashMap<i64, (Sym, f64)> = HashMap::new();
         for t in &terms {
-            let like = format!("%{t}%");
-            for s in syms(&self.db, "select * from symbols where low like ?1 or lower(sig) like ?1 limit 400", [&like])?
-            {
-                let in_name = s.low.contains(t.as_str());
-                let hit = found.entry(s.id).or_insert_with(|| (s, BTreeSet::new(), BTreeSet::new()));
-                if in_name {
-                    hit.1.insert(t.clone())
-                } else {
-                    hit.2.insert(t.clone())
-                };
+            let stem = stem(t);
+            let like = format!("%{stem}%");
+            let rows = syms(
+                &self.db,
+                "select * from symbols where low like ?1 or lower(sig) like ?1 or lower(path) like ?1 limit 400",
+                [&like],
+            )?;
+            let seen: i64 = self.db.query_row(
+                "select count(*) from symbols where low like ?1 or lower(sig) like ?1 or lower(path) like ?1",
+                [&like],
+                |r| r.get(0),
+            )?;
+            let rare = 1.0 / (1.0 + (1.0 + seen as f64).ln());
+            for s in rows {
+                let in_name = s.low.contains(stem);
+                let gain = rare * if in_name { 2.0 } else { 1.0 };
+                found.entry(s.id).or_insert_with(|| (s, 0.0)).1 += gain;
             }
         }
         let mut ranked: Vec<_> = found.into_values().collect();
         ranked.sort_by(|a, b| {
-            let score = |h: &(Sym, BTreeSet<String>, BTreeSet<String>)| -(2 * h.1.len() as i64) - h.2.len() as i64;
-            (score(a), !MEANT.contains(&a.0.kind.as_str()), a.0.name.len(), &a.0.path).cmp(&(
-                score(b),
-                !MEANT.contains(&b.0.kind.as_str()),
-                b.0.name.len(),
-                &b.0.path,
-            ))
+            b.1.total_cmp(&a.1)
+                .then_with(|| MEANT.contains(&b.0.kind.as_str()).cmp(&MEANT.contains(&a.0.kind.as_str())))
+                .then_with(|| a.0.name.len().cmp(&b.0.name.len()))
+                .then_with(|| a.0.path.cmp(&b.0.path))
         });
         if ranked.is_empty() {
             return Ok(format!("{why}; no names contain those words either"));
@@ -403,5 +438,65 @@ impl Index {
             }
         }
         Ok(lines.join("\n"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn index(tag: &str) -> Index {
+        let dir = std::env::temp_dir().join(format!("code-ask-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let root = dir.join("proj");
+        fs::create_dir_all(&root).unwrap();
+        Index::open(&dir, &root).unwrap()
+    }
+
+    fn sym(ix: &Index, name: &str, path: &str, parent: &str) {
+        ix.db
+            .execute(
+                "insert into symbols(path, name, low, kind, line, end_line, parent, sig) values (?1, ?2, ?3, 'function', 1, 2, ?4, ?5)",
+                params![path, name, name.to_lowercase(), parent, format!("fn {name}()")],
+            )
+            .unwrap();
+    }
+
+    fn call(ix: &Index, path: &str, line: i64, caller: &str) {
+        ix.db
+            .execute(
+                "insert into refs(path, name, low, line, caller) values (?1, 'search', 'search', ?2, ?3)",
+                params![path, line, caller],
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn callers_are_grouped_and_tests_come_last() {
+        let ix = index("callers");
+        sym(&ix, "check", "src/a.rs", "tests");
+        call(&ix, "src/a.rs", 5, "check");
+        call(&ix, "src/b.rs", 9, "run");
+        call(&ix, "src/b.rs", 12, "run");
+        call(&ix, "tests/c.rs", 3, "other");
+        let out = ix.callers("search").unwrap();
+        let rows: Vec<&str> = out.lines().collect();
+        assert_eq!(rows[0], "called from (4):");
+        assert_eq!(rows[1], "  src/b.rs:9,12 in run");
+        assert!(rows[2].ends_with("[test]") && rows[3].ends_with("[test]"), "{out}");
+    }
+
+    #[test]
+    fn names_with_several_words_beat_names_with_one() {
+        let ix = index("names");
+        sym(&ix, "save", "src/x.rs", "");
+        sym(&ix, "save_note", "src/y.rs", "");
+        sym(&ix, "forget_note", "src/z.rs", "");
+        let out = ix.by_name("where do we save notes", "no meaning").unwrap();
+        let first = out.lines().nth(1).unwrap_or("");
+        assert!(first.contains("save_note"), "{out}");
+        assert_eq!(stem("notes"), "note");
+        assert_eq!(stem("is"), "is");
+        assert!(is_test_path("crates/x/tests/a.rs") && !is_test_path("src/latest.rs"));
     }
 }
