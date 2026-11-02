@@ -29,10 +29,11 @@ pub(crate) fn parse(text: &str) -> Option<(Value, bool)> {
     {
         return Some((v, false));
     }
-    let rows: Vec<&str> = s.split('\n').filter(|r| !strip(r).is_empty()).collect();
-    if rows.len() < 2 || !rows.iter().take(SCAN_ROWS).all(|r| lstrip(r).starts_with('{')) {
+    let mut filled = s.split('\n').filter(|r| !strip(r).is_empty());
+    if filled.clone().nth(1).is_none() || !filled.by_ref().take(SCAN_ROWS).all(|r| lstrip(r).starts_with('{')) {
         return None;
     }
+    let rows: Vec<&str> = s.split('\n').filter(|r| !strip(r).is_empty()).collect();
     let mut items = Vec::with_capacity(rows.len());
     let mut bad = 0;
     for row in &rows {
@@ -138,16 +139,36 @@ fn constant(items: &[Value]) -> Map<String, Value> {
         .collect()
 }
 
-fn brief(x: &Value) -> Value {
+fn dump_brief(out: &mut String, x: &Value) {
     match x {
-        Value::Object(m) => Value::Object(
-            m.iter()
-                .filter(|(_, v)| !matches!(v, Value::String(s) if len(s) > SIGNAL))
-                .map(|(k, v)| (k.clone(), brief(v)))
-                .collect(),
-        ),
-        Value::Array(a) => Value::Array(a.iter().take(ITEMS).map(brief).collect()),
-        other => other.clone(),
+        Value::Object(m) => {
+            out.push('{');
+            let mut first = true;
+            for (k, v) in m {
+                if matches!(v, Value::String(s) if s.len() > SIGNAL && len(s) > SIGNAL) {
+                    continue;
+                }
+                if !first {
+                    out.push_str(", ");
+                }
+                first = false;
+                string(out, k, false);
+                out.push_str(": ");
+                dump_brief(out, v);
+            }
+            out.push('}');
+        }
+        Value::Array(a) => {
+            out.push('[');
+            for (i, v) in a.iter().take(ITEMS).enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                dump_brief(out, v);
+            }
+            out.push(']');
+        }
+        other => dump(out, other, false, false),
     }
 }
 
@@ -155,8 +176,13 @@ fn picks(items: &[Value]) -> (Vec<usize>, usize) {
     let mut found = Vec::new();
     let mut kinds = HashSet::new();
     let mut bad = 0;
+    let mut dumped = String::new();
     for (i, it) in items.iter().enumerate() {
-        let dumped = dumps(&brief(it), false, false);
+        dumped.clear();
+        dump_brief(&mut dumped, it);
+        if !pat::may_be_important(&dumped) {
+            continue;
+        }
         let text = pat::quiet(head(&dumped, PICK_CHARS));
         if !pat::important(&text) {
             continue;
@@ -311,7 +337,25 @@ fn object<'a>(out: &mut String, pairs: impl Iterator<Item = (&'a String, &'a Val
     out.push('}');
 }
 
+fn push_int(out: &mut String, mut v: u64) {
+    let mut buf = [0u8; 20];
+    let mut at = buf.len();
+    loop {
+        at -= 1;
+        buf[at] = b'0' + (v % 10) as u8;
+        v /= 10;
+        if v == 0 {
+            break;
+        }
+    }
+    out.extend(buf[at..].iter().map(|&d| d as char));
+}
+
 fn number(out: &mut String, n: &Number) {
+    if let Some(u) = n.as_u64() {
+        push_int(out, u);
+        return;
+    }
     match n.as_f64() {
         Some(f) if n.is_f64() => out.push_str(&float(f)),
         _ => {
@@ -357,6 +401,11 @@ fn float(f: f64) -> String {
 
 fn string(out: &mut String, s: &str, ascii: bool) {
     out.push('"');
+    if !s.bytes().any(|b| b < b' ' || b == b'"' || b == b'\\' || (ascii && b > b'~')) {
+        out.push_str(s);
+        out.push('"');
+        return;
+    }
     for c in s.chars() {
         match c {
             '"' => out.push_str("\\\""),

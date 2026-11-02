@@ -13,6 +13,9 @@ use wisply_proto::home;
 use wisply_squeeze::{commas, squeeze};
 
 const MIN_CHARS: usize = 2000;
+const INLINE_MAX: usize = 400_000;
+const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
+const MIX: u64 = 0x9e37_79b9_7f4a_7c15;
 const BUDGET: Duration = Duration::from_millis(50);
 const HOLDOUT_EVERY: u64 = 10;
 const ERRORS_MAX: usize = 3;
@@ -62,7 +65,9 @@ pub fn post() {
     if io::stdin().lock().read_to_end(&mut input).is_err() {
         return;
     }
-    if let Some(text) = wisply_think::after_edit(&root, &input) {
+    let parsed = serde_json::from_slice::<Value>(&input);
+    let editing = parsed.as_ref().is_ok_and(|e| e["tool_name"].as_str().is_some_and(|t| EDIT_TOOLS.contains(&t)));
+    if editing && let Some(text) = wisply_think::after_edit(&root, &input) {
         let mut out = io::stdout().lock();
         let _ = out.write_all(text.as_bytes());
         let _ = out.flush();
@@ -72,37 +77,59 @@ pub fn post() {
     if paths.state.join("off").exists() {
         return;
     }
-    let (reply, kept) = run(&input, &paths, started, BUDGET);
+    let event = parsed.map_err(|e| format!("hook input is not JSON ({e})"));
+    let (reply, kept, entry) = run_event(event, &paths, started, BUDGET);
     if let Some(text) = reply {
         let mut out = io::stdout().lock();
         let _ = out.write_all(text.as_bytes());
         let _ = out.flush();
+    }
+    if let Some(entry) = entry {
+        note(&paths, &entry);
     }
     if kept {
         tidy(&paths);
     }
 }
 
+#[cfg(test)]
 fn run(input: &[u8], paths: &Paths, started: Instant, budget: Duration) -> (Option<String>, bool) {
-    match panic::catch_unwind(|| handle(input, paths, started, budget)) {
-        Ok(Ok(reply)) => {
+    let event = serde_json::from_slice::<Value>(input).map_err(|e| format!("hook input is not JSON ({e})"));
+    let (reply, kept, entry) = run_event(event, paths, started, budget);
+    if let Some(entry) = entry {
+        note(paths, &entry);
+    }
+    (reply, kept)
+}
+
+type Done = (Option<String>, bool, Option<Value>);
+
+fn run_event(event: Result<Value, String>, paths: &Paths, started: Instant, budget: Duration) -> Done {
+    let event = match event {
+        Ok(event) => event,
+        Err(why) => return (failed(paths, &why), false, None),
+    };
+    match panic::catch_unwind(panic::AssertUnwindSafe(|| handle(event, paths, started, budget))) {
+        Ok(Ok((reply, entry))) => {
             let kept = reply.is_some();
-            (reply, kept)
+            (reply, kept, entry)
         }
-        Ok(Err(why)) => (failed(paths, &why), false),
-        Err(_) => (failed(paths, "the hook crashed"), false),
+        Ok(Err(why)) => (failed(paths, &why), false, None),
+        Err(_) => (failed(paths, "the hook crashed"), false, None),
     }
 }
 
-fn handle(input: &[u8], paths: &Paths, started: Instant, budget: Duration) -> Result<Option<String>, String> {
-    let event: Value = serde_json::from_slice(input).map_err(|e| format!("hook input is not JSON ({e})"))?;
-    let tool = event["tool_name"].as_str().unwrap_or_default();
+type Handled = (Option<String>, Option<Value>);
+
+fn handle(mut event: Value, paths: &Paths, started: Instant, budget: Duration) -> Result<Handled, String> {
+    let tool = event["tool_name"].as_str().unwrap_or_default().to_owned();
+    let tool = tool.as_str();
     let mut entry = Map::new();
     entry.insert("t".into(), json!(unix_ms()));
     entry.insert("sid".into(), event["session_id"].clone());
     entry.insert("tool".into(), json!(tool));
     let reply = if tool == "Bash" {
-        bash(&event, paths, started + budget, &mut entry)?
+        bash(&mut event, paths, started + budget, &mut entry)?
     } else {
         if let Some(name) = kept_ref(&event["tool_input"].to_string()) {
             entry.insert("act".into(), json!("reload"));
@@ -110,11 +137,11 @@ fn handle(input: &[u8], paths: &Paths, started: Instant, budget: Duration) -> Re
         }
         None
     };
-    if entry.contains_key("act") {
+    let entry = entry.contains_key("act").then(|| {
         entry.insert("ms".into(), json!(started.elapsed().as_millis() as u64));
-        note(paths, &Value::Object(entry));
-    }
-    Ok(reply)
+        Value::Object(entry)
+    });
+    Ok((reply, entry))
 }
 
 fn act(entry: &mut Map<String, Value>, why: &str) -> Result<Option<String>, String> {
@@ -123,7 +150,7 @@ fn act(entry: &mut Map<String, Value>, why: &str) -> Result<Option<String>, Stri
 }
 
 fn bash(
-    event: &Value,
+    event: &mut Value,
     paths: &Paths,
     deadline: Instant,
     entry: &mut Map<String, Value>,
@@ -146,29 +173,37 @@ fn bash(
     if chars <= MIN_CHARS {
         return act(entry, "small");
     }
-    let text = stdout.to_owned();
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let _ = tx.send(squeeze(&text));
-    });
-    let squeezed = match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-        Ok(s) => s,
-        Err(RecvTimeoutError::Timeout) => return act(entry, "slow"),
-        Err(RecvTimeoutError::Disconnected) => return Err("squeeze crashed".into()),
+    let squeezed = if chars <= INLINE_MAX {
+        let done = squeeze(stdout);
+        if Instant::now() > deadline {
+            return act(entry, "slow");
+        }
+        done
+    } else {
+        let text = stdout.to_owned();
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = tx.send(squeeze(&text));
+        });
+        match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(s) => s,
+            Err(RecvTimeoutError::Timeout) => return act(entry, "slow"),
+            Err(RecvTimeoutError::Disconnected) => return Err("squeeze crashed".into()),
+        }
     };
     let Some(s) = squeezed else { return act(entry, "same") };
-    let name = format!("hr-{:010x}", fnv(&[event["tool_use_id"].as_str().unwrap_or_default(), s.plain.as_str()]) >> 24);
+    let name =
+        format!("hr-{:010x}", quick(&[event["tool_use_id"].as_str().unwrap_or_default(), s.plain.as_str()]) >> 24);
     let file = paths.out.join(format!("{name}.txt"));
-    let new = format!(
-        "wisply squeezed {} lines (~{} tokens) to {} lines (~{} tokens), all of it: {}\n{}",
+    let top = format!(
+        "wisply squeezed {} lines (~{} tokens) to {} lines (~{} tokens), all of it: {}\n",
         commas(s.lines_in),
         commas(s.chars_in / 4),
         s.lines_out,
         commas(s.chars_out / 4),
         slashed(&file),
-        s.body
     );
-    let small = new.chars().count();
+    let small = top.chars().count() + s.chars_out;
     if small >= chars {
         return act(entry, "same");
     }
@@ -178,13 +213,21 @@ fn bash(
     if fnv(&[event["session_id"].as_str().unwrap_or_default()]).is_multiple_of(HOLDOUT_EVERY) {
         return act(entry, "holdout");
     }
-    fs::create_dir_all(&paths.out)
-        .and_then(|()| fs::write(&file, &s.plain))
-        .map_err(|e| format!("cannot keep the full output ({e})"))?;
+    keep(&paths.out, &file, &s.plain).map_err(|e| format!("cannot keep the full output ({e})"))?;
     entry.insert("act".into(), json!("cut"));
-    let mut updated = response.clone();
-    updated["stdout"] = Value::String(new);
+    let mut updated = event["tool_response"].take();
+    updated["stdout"] = Value::String(top + &s.body);
     Ok(Some(json!({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": updated}}).to_string()))
+}
+
+fn keep(dir: &Path, file: &Path, text: &str) -> io::Result<()> {
+    match fs::write(file, text) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            fs::create_dir_all(dir)?;
+            fs::write(file, text)
+        }
+        other => other,
+    }
 }
 
 fn untouchable(cmd: &str) -> Option<&'static str> {
@@ -230,17 +273,28 @@ fn failed(paths: &Paths, why: &str) -> Option<String> {
     Some(json!({ "systemMessage": message }).to_string())
 }
 
+fn open_log(paths: &Paths, file: &Path) -> Option<fs::File> {
+    let open = || OpenOptions::new().create(true).append(true).open(file);
+    match open() {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            fs::create_dir_all(&paths.state).ok()?;
+            open().ok()
+        }
+        other => other.ok(),
+    }
+}
+
 fn note(paths: &Paths, entry: &Value) {
     let file = paths.state.join("log.jsonl");
-    if fs::metadata(&file).is_ok_and(|m| m.len() > LOG_MAX) {
+    let Some(mut f) = open_log(paths, &file) else { return };
+    let line = format!("{entry}\n");
+    if f.metadata().is_ok_and(|m| m.len() > LOG_MAX) {
+        drop(f);
         let _ = fs::rename(&file, paths.state.join("log.1.jsonl"));
+        let Some(fresh) = open_log(paths, &file) else { return };
+        f = fresh;
     }
-    if fs::create_dir_all(&paths.state).is_err() {
-        return;
-    }
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&file) {
-        let _ = f.write_all(format!("{entry}\n").as_bytes());
-    }
+    let _ = f.write_all(line.as_bytes());
 }
 
 fn tidy(paths: &Paths) {
@@ -281,6 +335,21 @@ pub fn fnv(parts: &[&str]) -> u64 {
         }
     }
     h
+}
+
+fn quick(parts: &[&str]) -> u64 {
+    let mut h = FNV_START;
+    for part in parts {
+        let (words, tail) = part.as_bytes().as_chunks::<8>();
+        for w in words {
+            h = (h ^ u64::from_le_bytes(*w)).wrapping_mul(MIX);
+            h ^= h >> 29;
+        }
+        let rest = tail.iter().enumerate().fold(part.len() as u64, |a, (i, &b)| a ^ (u64::from(b) << (8 * i)));
+        h = (h ^ rest).wrapping_mul(MIX);
+        h ^= h >> 32;
+    }
+    h.wrapping_mul(MIX) ^ (h >> 29)
 }
 
 fn unix_ms() -> u64 {
