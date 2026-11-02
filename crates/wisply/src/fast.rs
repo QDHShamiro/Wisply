@@ -12,6 +12,12 @@ use wisply_proto::{Conn, Reply, Request};
 mod hook;
 #[path = "more.rs"]
 mod more;
+#[path = "reads.rs"]
+mod reads;
+#[path = "readstate.rs"]
+mod readstate;
+#[path = "readview.rs"]
+mod readview;
 
 const MARKER: &str = "v3";
 const FULL: &str = if cfg!(windows) { "wisply-full.exe" } else { "wisply-full" };
