@@ -523,7 +523,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 |---|---|
 | Headroom | `more <hr-id> [--lines 400-440] [--grep "a\|b"]` · `~/.wisply/headroom/off` turns it off |
 | Search | `grep <pattern> [folder\|file ...] [-i] [-w] [-l] [-C 2] [--glob '*.py'] [--all]` |
-| Safety check | `secure [folder] [--history] [--no-deps]` (keys, vulnerable dependencies, risky code) |
+| Safety check | `secure [folder|site|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json]` (keys, vulnerable dependencies in Cargo/npm/pnpm/yarn/Maven/Gradle/pip/poetry, risky code, .gitignore, severity per line) · `secure allow <domain> [--remove]` (only these sites get the passive web check, 1 request/s) · `secure fix [folder] [--with claude|codex]` (FIX.md, branch `secure/fix-<date>`, AI fixes, re-check; never commits or pushes) · `config secure on|off` |
 | Numbers | `tokens` (used and saved, last 30 days) · `bench` · `selftest` · `log stats` |
 
 **Think** (critical thinking without AI, runs in `~/.wisply/think`)

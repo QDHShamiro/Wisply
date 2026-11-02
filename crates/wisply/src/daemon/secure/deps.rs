@@ -7,7 +7,7 @@ use std::time::Duration;
 use regex::Regex;
 use serde_json::{Value, json};
 
-use super::scan::Finding;
+use super::report::{Finding, Sev};
 
 const OSV_BATCH: &str = "https://api.osv.dev/v1/querybatch";
 const OSV_VULN: &str = "https://api.osv.dev/v1/vulns/";
@@ -106,9 +106,17 @@ pub fn collect(root: &Path, names: &[String]) -> (Vec<Dep>, Vec<String>) {
             "Cargo.lock" => deps.extend(cargo_lock(name, &read())),
             "package-lock.json" => deps.extend(npm_lock(name, &read())),
             "pom.xml" => deps.extend(pom(name, &read())),
+            "pnpm-lock.yaml" => deps.extend(super::deps2::pnpm_lock(name, &read())),
+            "yarn.lock" => deps.extend(super::deps2::yarn_lock(name, &read())),
+            "poetry.lock" => deps.extend(super::deps2::poetry_lock(name, &read())),
+            "build.gradle" | "build.gradle.kts" => deps.extend(super::deps2::gradle(name, &read())),
             f if f.starts_with("requirements") && f.ends_with(".txt") => deps.extend(requirements(name, &read())),
-            "package.json" if !names.iter().any(|n| n.ends_with("package-lock.json")) => {
-                notes.push(format!("{name}: no package-lock.json, exact versions unknown (npm install writes one)"));
+            "package.json"
+                if !names
+                    .iter()
+                    .any(|n| ["package-lock.json", "pnpm-lock.yaml", "yarn.lock"].iter().any(|l| n.ends_with(l))) =>
+            {
+                notes.push(format!("{name}: no lock file, exact versions unknown (npm install writes one)"));
             }
             _ => {}
         }
@@ -208,12 +216,14 @@ pub fn check(root: &Path, deps: &[Dep]) -> Result<Vec<Finding>, String> {
         let fix = fixes.last().map_or("no fixed version listed yet, check the advisory".to_string(), |v| {
             format!("update to {v} or newer")
         });
-        out.push(Finding {
-            file: dep.file.clone(),
-            line: line_of(root, dep),
-            why: format!("{} {} has {}{more}{about}", dep.name, dep.version, shown.join(", ")),
+        out.push(Finding::new(
+            Sev::High,
+            "dependency",
+            dep.file.clone(),
+            line_of(root, dep),
+            format!("{} {} has {}{more}{about}", dep.name, dep.version, shown.join(", ")),
             fix,
-        });
+        ));
     }
     Ok(out)
 }

@@ -7,6 +7,18 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Added
+- `wisply secure` grew into a defensive check of your own things: severity (high/medium/low) and a one-sentence fix on
+  every line, `--json`, more dangerous patterns (unsafe deserialization, path traversal, weak crypto, CORS `*`, debug
+  on, shell commands from input, Electron isolation), Discord webhooks and database passwords, key files and missing
+  `.gitignore` entries, pnpm/yarn/Gradle/poetry lock files for the OSV.dev check, and jars (plugin.yml, configs, class
+  strings), APKs (manifest: debuggable, cleartext, exported; keys in code), exe and Electron `app.asar` files.
+- `secure allow <domain>` plus `secure <domain>`: passive web check of allowed sites only (HTTPS, redirect,
+  certificate acceptance, security headers, cookie flags, exposed `/.env`, `/.git/HEAD`, backups, source maps,
+  directory listings, mixed content), one request per second, never follows a redirect to a site that is not allowed.
+- `secure fix [--with claude|codex]` writes FIX.md, creates `secure/fix-<date>`, lets the AI fix the list, checks again
+  and reports before/after; it never commits or pushes. `config secure off` switches the whole command off.
+
 ### Changed
 - `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
 - Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and

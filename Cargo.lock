@@ -4359,6 +4359,7 @@ dependencies = [
  "base64 0.22.1",
  "encoding_rs",
  "fancy-regex",
+ "flate2",
  "image",
  "pdf-extract",
  "regex",
