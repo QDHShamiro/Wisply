@@ -1,5 +1,6 @@
 ---
 description: Set up Wisply and switch Claude Code over to it
+disable-model-invocation: true
 ---
 Set up Wisply for this user and switch Claude Code over to it. Keep your report short.
 

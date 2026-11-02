@@ -446,7 +446,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
-| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) |
+| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |

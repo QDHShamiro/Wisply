@@ -8,6 +8,7 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Changed
+- `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
 - `wisply.exe` is now a small client (3 MB instead of 19 MB) for `status`, `recall`, `code`, `more` and the hooks
   (`hook post` included): a call takes about 10 ms instead of about 108 ms, because Windows spends ~100 ms starting a
   large exe before `main` runs. Output and exit codes are byte for byte the same. The big program is `wisply-full`

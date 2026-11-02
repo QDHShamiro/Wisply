@@ -1,5 +1,6 @@
 ---
 description: Measure Wisply speed and tokens, run the self-test
+disable-model-invocation: true
 ---
 Run `wisply bench` and show its table unchanged.
 Then run `wisply selftest` and report the last line plus any FAIL lines.

@@ -3,6 +3,10 @@ mod files;
 pub(super) mod frontmatter;
 mod install;
 mod mode;
+mod tokens;
+mod tokens_cache;
+mod tokens_files;
+mod tokens_scan;
 mod transcripts;
 mod usage;
 
@@ -79,6 +83,7 @@ pub fn rows() -> (Vec<Row>, String) {
     rows.extend(install::rows(&env));
     rows.extend(files::rows(&env));
     rows.extend(usage::rows(&env, &scan));
+    rows.extend(tokens::rows(&env, &tokens_scan::scan(&env)));
     rows.extend(transcripts::rows(&scan));
     rows.extend(context::rows(&env));
     rows.extend(mode::rows(&env));
