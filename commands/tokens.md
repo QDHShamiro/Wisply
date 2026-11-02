@@ -1,5 +1,6 @@
 ---
 description: Show how many tokens Wisply used and saved, and what the same steps would have cost without it
+disable-model-invocation: true
 argument-hint: "[days | today | all]"
 ---
 Run `wisply tokens $ARGUMENTS` and show its output unchanged in a code block.

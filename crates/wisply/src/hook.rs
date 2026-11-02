@@ -10,9 +10,10 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use wisply_proto::home;
-use wisply_squeeze::{commas, squeeze};
+use wisply_squeeze::{SHORT_CHARS, Squeezed, apply, commas, extract, squeeze, squeeze_tool};
 
-const MIN_CHARS: usize = 2000;
+const MIN_CHARS: usize = SHORT_CHARS;
+const TEXT_TOOLS: [&str; 3] = ["Grep", "WebSearch", "WebFetch"];
 const INLINE_MAX: usize = 400_000;
 const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 const MIX: u64 = 0x9e37_79b9_7f4a_7c15;
@@ -145,6 +146,8 @@ fn handle(mut event: Value, paths: &Paths, started: Instant, budget: Duration) -
         Some(done)
     } else if tool == "Bash" {
         bash(&mut event, paths, started + budget, &mut entry)?
+    } else if TEXT_TOOLS.contains(&tool) {
+        text_tool(&mut event, tool, paths, started + budget, &mut entry)?
     } else {
         if let Some(name) = kept_ref(&event["tool_input"].to_string()) {
             entry.insert("act".into(), json!("reload"));
@@ -207,6 +210,41 @@ fn bash(
         }
     };
     let Some(s) = squeezed else { return act(entry, "same") };
+    cut(event, "Bash", paths, entry, s, chars)
+}
+
+fn text_tool(
+    event: &mut Value,
+    tool: &str,
+    paths: &Paths,
+    deadline: Instant,
+    entry: &mut Map<String, Value>,
+) -> Result<Option<String>, String> {
+    let Some(text) = extract(tool, &event["tool_response"]) else { return act(entry, "shape") };
+    let chars = text.chars().count();
+    entry.insert("in".into(), json!(chars));
+    if kept_ref(&event["tool_input"].to_string()).is_some() {
+        return act(entry, "reload");
+    }
+    if chars <= MIN_CHARS {
+        return act(entry, "small");
+    }
+    let done = squeeze_tool(tool, &text);
+    if Instant::now() > deadline {
+        return act(entry, "slow");
+    }
+    let Some(s) = done else { return act(entry, "same") };
+    cut(event, tool, paths, entry, s, chars)
+}
+
+fn cut(
+    event: &mut Value,
+    tool: &str,
+    paths: &Paths,
+    entry: &mut Map<String, Value>,
+    s: Squeezed,
+    chars: usize,
+) -> Result<Option<String>, String> {
     let name =
         format!("hr-{:010x}", quick(&[event["tool_use_id"].as_str().unwrap_or_default(), s.plain.as_str()]) >> 24);
     let file = paths.out.join(format!("{name}.txt"));
@@ -231,7 +269,11 @@ fn bash(
     keep(&paths.out, &file, &s.plain).map_err(|e| format!("cannot keep the full output ({e})"))?;
     entry.insert("act".into(), json!("cut"));
     let mut updated = event["tool_response"].take();
-    updated["stdout"] = Value::String(top + &s.body);
+    if tool == "Bash" {
+        updated["stdout"] = Value::String(top + &s.body);
+    } else {
+        apply(tool, &mut updated, &(top + &s.body));
+    }
     Ok(Some(json!({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": updated}}).to_string()))
 }
 
@@ -376,6 +418,10 @@ fn slashed(path: &Path) -> String {
 }
 
 #[cfg(test)]
+#[path = "hook/tools.rs"]
+mod tools;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::env;
@@ -508,7 +554,7 @@ mod tests {
     #[test]
     fn small_and_image_outputs_are_left_alone() {
         let paths = scratch("small");
-        let (reply, _) = run(&bash_event("s", "npm test", &"x\n".repeat(900)), &paths, Instant::now(), SLOW_CI);
+        let (reply, _) = run(&bash_event("s", "npm test", &"x\n".repeat(500)), &paths, Instant::now(), SLOW_CI);
         assert!(reply.is_none());
         let image = json!({"tool_name": "Bash", "tool_input": {"command": "x"}, "tool_response": {"stdout": big_log(), "isImage": true}});
         assert!(run(image.to_string().as_bytes(), &paths, Instant::now(), SLOW_CI).0.is_none());
