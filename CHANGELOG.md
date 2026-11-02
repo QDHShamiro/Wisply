@@ -9,6 +9,7 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ### Added
 - Big-file view, checked live with Haiku: constants (`NAME = ...`) are in the outline, look-alike lines fold into one (`L36-L868 105x, every 8 lines: ...`), the hint names Read with offset/limit and Grep first. A 249-line test file comes back as 2.6k instead of 7.4k characters (full 14.7k), and Haiku found a mid-file value in one read.
+- Builds can live outside the repo: `WISPLY_SOURCE` points setup at the source folder (used by the setup test).
 - Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a
   `wisply more` ref; whole-file `Read` and `cat file` views of 150+ lines / ~3k+ tokens come back as head, outline
   and tail. Edit/Write and PreCompact clear the per-session table; `Write` on a known file adds an "use Edit" hint
@@ -58,6 +59,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
 
 ### Added
+- Earlier auto-compact, off by default: `wisply config compact 250k` (or `wisply setup --compact 250k`) writes
+  `autoCompactWindow` into Claude Code's `settings.json` and names any `CLAUDE_CODE_AUTO_COMPACT_WINDOW` or per-model
+  window that would override it; `compact off` removes it. `wisply doctor ai claude` gets a `context length` row: the
+  share of requests above 200k and 400k context and what 250k would have saved, from your transcripts. The
+  `PreCompact` hook now writes a handoff (goal, latest request, decisions, open to-dos, last errors, changed files)
+  from the transcript tail without a model, and `SessionStart` after a compact hands it back. The two-week 250k
+  against 400k comparison is in docs/compact-ab.md.
 - `recall` ranks by how many of your words a note really contains (title counts more than body), folds near-identical
   notes into the best one, favours recent notes (half-life 45 days), and shows the sentence that matches instead of the
   start of the note. It also lists matching open to-dos first, so "Lighting loeschen" finds the to-do. Default 6 lines
