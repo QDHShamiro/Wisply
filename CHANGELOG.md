@@ -8,6 +8,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Changed
+- Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
+  WebFetch tools (`hooks/hooks.json` matcher). The limit is a character budget (1,200; 2,000 for logs) instead of a line
+  count: lines over 340 characters are cut to 300 with the full text one `wisply more` away, grep/rg output is grouped
+  by file (path once, at most 6 hits per file, `+N more`), and web text loses cookie, sign-in and footer lines,
+  repeated lines and `utm_` parameters. Error lines are never dropped; short dense output (`git status`, listings) is
+  untouched. On 57 made-up outputs the text shrinks by 58% (125,051 to 52,859 characters, a median of 0.02 ms per call).
 - `wisply.exe` is now a small client (3 MB instead of 19 MB) for `status`, `recall`, `code`, `more` and the hooks
   (`hook post` included): a call takes about 10 ms instead of about 108 ms, because Windows spends ~100 ms starting a
   large exe before `main` runs. Output and exit codes are byte for byte the same. The big program is `wisply-full`
