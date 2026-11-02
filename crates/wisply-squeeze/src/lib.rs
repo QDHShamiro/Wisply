@@ -3,12 +3,20 @@ mod log;
 #[cfg(test)]
 mod oracle;
 mod pat;
+mod short;
 mod text;
+mod tool;
+mod web;
 
 pub use text::commas;
+pub use tool::{apply, extract, squeeze_tool};
 
 const MIN_LINES: usize = 60;
 const MIN_CHARS: usize = 4000;
+pub const SHORT_CHARS: usize = 1200;
+const WEB_CHARS: usize = 1500;
+const MID_CHARS: usize = 2000;
+const MID_GAIN: usize = 25;
 
 pub struct Squeezed {
     pub plain: String,
@@ -67,22 +75,16 @@ pub fn read_limited(mut from: impl std::io::Read, max: usize) -> Vec<u8> {
     out
 }
 
-pub fn squeeze(text: &str) -> Option<Squeezed> {
-    let stripped = pat::strip_ansi(text);
-    let lines = log::lines(&stripped);
-    if lines.len() <= MIN_LINES
-        && lines.iter().map(|l| text::len(l)).sum::<usize>() + lines.len().saturating_sub(1) <= MIN_CHARS
-    {
-        return None;
-    }
-    let plain = lines.join("\n");
-    let chars_in = text::len(&plain);
-    let (out, json) = match json::parse(&plain) {
-        Some((obj, rows)) => (json::squeeze(&obj, rows), true),
-        None => (log::squeeze(&lines), false),
-    };
-    let body = out.join("\n");
-    let chars_out = text::len(&body);
+fn finish(lines: &[&str], out: Vec<String>, json: bool) -> Option<Squeezed> {
+    let plain = lines.join(
+        "
+",
+    );
+    let body = out.join(
+        "
+",
+    );
+    let (chars_in, chars_out) = (text::len(&plain), text::len(&body));
     (chars_out < chars_in).then_some(Squeezed {
         lines_in: lines.len(),
         lines_out: out.len(),
@@ -92,6 +94,55 @@ pub fn squeeze(text: &str) -> Option<Squeezed> {
         body,
         plain,
     })
+}
+
+fn size<S: AsRef<str>>(lines: &[S]) -> usize {
+    lines.iter().map(|l| text::len(l.as_ref())).sum::<usize>() + lines.len().saturating_sub(1)
+}
+
+pub fn squeeze(text: &str) -> Option<Squeezed> {
+    let stripped = pat::strip_ansi(text);
+    let lines = log::lines(&stripped);
+    let chars = size(&lines);
+    if lines.len() <= MIN_LINES && chars <= MIN_CHARS {
+        if chars < SHORT_CHARS && lines.iter().all(|l| text::len(l) <= short::WIDE_CHARS) {
+            return None;
+        }
+        let (tight, grouped) = short::tighten(&lines);
+        if chars > MID_CHARS && !grouped {
+            let folded = log::squeeze(&tight);
+            if size(&folded) * 100 <= chars * (100 - MID_GAIN) {
+                return finish(&lines, folded, false);
+            }
+        }
+        return finish(&lines, tight, false);
+    }
+    let plain = lines.join(
+        "
+",
+    );
+    let (mut out, json) = match json::parse(&plain) {
+        Some((obj, rows)) => (json::squeeze(&obj, rows), true),
+        None => (log::squeeze(&lines), false),
+    };
+    if !json && let Some(mut grouped) = short::grep(&lines) {
+        if grouped.len() > MIN_LINES {
+            grouped = log::squeeze(&grouped);
+        }
+        if size(&grouped) < size(&out) {
+            out = grouped;
+        }
+    }
+    finish(&lines, out, json)
+}
+
+pub fn squeeze_web(text: &str) -> Option<Squeezed> {
+    let stripped = pat::strip_ansi(text);
+    let lines = log::lines(&stripped);
+    if size(&lines) < WEB_CHARS {
+        return None;
+    }
+    finish(&lines, web::web(&lines), false)
 }
 
 #[cfg(test)]
@@ -112,7 +163,26 @@ mod tests {
     #[test]
     fn small_outputs_stay_as_they_are() {
         assert!(squeeze("one\ntwo").is_none());
-        assert!(squeeze(&"x".repeat(4000)).is_none());
+        assert!(squeeze(&"x".repeat(300)).is_none());
+        assert!(
+            squeeze(
+                &format!(
+                    "{}
+",
+                    "word ".repeat(40)
+                )
+                .repeat(5)
+            )
+            .is_none()
+        );
+        assert!(
+            squeeze(
+                "git status
+on branch main
+nothing to commit"
+            )
+            .is_none()
+        );
         assert!(squeeze(&"ok\n".repeat(61)).is_some());
     }
 

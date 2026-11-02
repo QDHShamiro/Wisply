@@ -236,8 +236,8 @@ compare 250k with 400k over two weeks: [docs/compact-ab.md](docs/compact-ab.md).
 ## Headroom: long logs in short
 
 A build, a test run or a server log can print thousands of lines, and the model pays for every one of them. Headroom
-is a hook that runs after each Bash command. When the output is longer than 60 lines or 4,000 characters it keeps
-what matters and cuts the rest:
+is a hook that runs after each Bash, Grep, WebSearch and WebFetch call. When the output is longer than 60 lines or
+4,000 characters it keeps what matters and cuts the rest:
 
 - the first 5 to 10 and the last 10 to 20 lines, more of both the longer the output is,
 - every line with an error, exception, failure, panic, warning, timeout or similar word, plus the two lines after it ("0 errors" and `--no-fail-fast` do not count),
@@ -246,6 +246,14 @@ what matters and cuts the rest:
 - progress bars, download lines, spinners and colors dropped,
 - repeated lines folded into one with a count, lines that differ in one word (`Compiling a`, `Compiling b` ...) into `(+4 similar)`,
 - long JSON shortened the same way.
+
+Short outputs are measured in characters, not lines. From 1,200 characters on, lines longer than 340 characters are
+cut to 300 (lines with an error word stay whole), and from 2,000 characters a build or test log under 60 lines is
+folded the same way when that saves at least a quarter. Dense output such as `git status` or ten lines of a
+listing stays as it is. `grep` and `rg` results (`path:line:text`) are grouped by file, the path appears once,
+each file shows at most 6 hits plus `+N more`, and hits with an error word are never dropped. The same goes for the
+Grep tool. A page from WebFetch or a WebSearch summary loses cookie banners, sign-in and footer lines, repeated
+lines and `utm_` tracking parameters; link lists keep every link once. All of it is again one `wisply more` away.
 
 The model gets that short version and a name for the full text. One command shows any part of it again:
 
@@ -260,6 +268,15 @@ wisply more hr-3fa91c04de --lines 400-440
 - **Stays out of the way.** It runs without the daemon inside a 50 ms budget. File listings (`ls`, `find`,
   `git log` ...), Wisply's own output (already short) and the saved text itself are never shortened. A file
   `~/.wisply/headroom/off` turns it off.
+
+Reads get the same treatment. Within one session Wisply remembers each file Claude read (path, range, size, change
+time, hash). Reading the same unchanged range again returns one line (`unchanged since your read 3 min ago, lines 1-120;
+wisply more <ref> for the text`) instead of the file. Any Edit or Write on the file, and every compaction, forgets
+it, and changed content is never stubbed. A whole file of 150+ lines and ~3k+ tokens, read by the Read tool or
+`cat file`, arrives as its first 40 lines, an outline with line numbers and its last 15 lines; reading the whole file
+a second time returns all of it. Ranged reads, short files and files already edited in the session stay whole.
+`Write` onto a file that was read in the session adds a hint to use Edit (it never blocks). A file
+`~/.wisply/headroom/reads-off` turns the read handling off.
 
 `wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
 keeps the rest in a file.
@@ -465,7 +482,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
-| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...) · `config compact 250k` |
+| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) · `config compact 250k` |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |

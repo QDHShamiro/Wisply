@@ -1,5 +1,6 @@
 ---
 description: Switch the Wisply status line on or off and choose what it shows
+disable-model-invocation: true
 ---
 The user's argument is: $ARGUMENTS
 - empty or `status`: run `wisply statusline status` and show its lines unchanged.

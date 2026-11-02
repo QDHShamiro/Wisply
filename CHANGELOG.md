@@ -7,7 +7,19 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Added
+- Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a
+  `wisply more` ref; whole-file `Read` and `cat file` views of 150+ lines / ~3k+ tokens come back as head, outline
+  and tail. Edit/Write and PreCompact clear the per-session table; `Write` on a known file adds an "use Edit" hint
+  (new `PreToolUse` and `PreCompact` entries in `hooks/hooks.json`). `~/.wisply/headroom/reads-off` turns it off.
 ### Changed
+- `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
+- Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
+  WebFetch tools (`hooks/hooks.json` matcher). The limit is a character budget (1,200; 2,000 for logs) instead of a line
+  count: lines over 340 characters are cut to 300 with the full text one `wisply more` away, grep/rg output is grouped
+  by file (path once, at most 6 hits per file, `+N more`), and web text loses cookie, sign-in and footer lines,
+  repeated lines and `utm_` parameters. Error lines are never dropped; short dense output (`git status`, listings) is
+  untouched. On 57 made-up outputs the text shrinks by 58% (125,051 to 52,859 characters, a median of 0.02 ms per call).
 - `wisply.exe` is now a small client (3 MB instead of 19 MB) for `status`, `recall`, `code`, `more` and the hooks
   (`hook post` included): a call takes about 10 ms instead of about 108 ms, because Windows spends ~100 ms starting a
   large exe before `main` runs. Output and exit codes are byte for byte the same. The big program is `wisply-full`

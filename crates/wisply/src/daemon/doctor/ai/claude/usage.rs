@@ -96,11 +96,11 @@ fn plugin_rows(env: &Env, config: &Value) -> Vec<Row> {
     )]
 }
 
-fn normalized(name: &str) -> String {
+pub(super) fn normalized(name: &str) -> String {
     name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect()
 }
 
-fn mcp_names(env: &Env, config: &Value) -> Vec<String> {
+pub(super) fn mcp_names(env: &Env, config: &Value) -> Vec<String> {
     let mut names: BTreeSet<String> = BTreeSet::new();
     let project = at(config, &["projects", &env.project_key()]);
     for map in [config.get("mcpServers"), project.and_then(|p| p.get("mcpServers"))] {
