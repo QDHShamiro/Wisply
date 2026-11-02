@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-const EXE: &str = env!("CARGO_BIN_EXE_wisply");
+const EXE: &str = env!("CARGO_BIN_EXE_wisply-full");
 
 fn run(home: &Path, base: &str, args: &[&str]) -> (i32, String) {
     let out = Command::new(EXE)

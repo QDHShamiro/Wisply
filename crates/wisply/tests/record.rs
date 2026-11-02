@@ -12,7 +12,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetForegroundWindow, SetForegroundWindow};
 use windows::core::w;
 
-const EXE: &str = env!("CARGO_BIN_EXE_wisply");
+const EXE: &str = env!("CARGO_BIN_EXE_wisply-full");
 
 struct Home(PathBuf);
 

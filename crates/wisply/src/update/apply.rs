@@ -148,9 +148,12 @@ mod tests {
         fs::write(dir.join(&name), "new").unwrap();
         fs::write(dir.join(&name).with_extension("old"), "old").unwrap();
         fs::write(dir.join(exe_name("wisply-ui")), "ui-new").unwrap();
-        assert_eq!(swap_back(&dir), 1);
+        fs::write(dir.join(exe_name("wisply-full")), "full-new").unwrap();
+        fs::write(dir.join(exe_name("wisply-full")).with_extension("old"), "full-old").unwrap();
+        assert_eq!(swap_back(&dir), 2);
         assert_eq!(fs::read_to_string(dir.join(&name)).unwrap(), "old");
         assert_eq!(fs::read_to_string(dir.join(exe_name("wisply-ui"))).unwrap(), "ui-new");
+        assert_eq!(fs::read_to_string(dir.join(exe_name("wisply-full"))).unwrap(), "full-old");
         assert!(!dir.join(&name).with_extension("old").exists());
         assert_eq!(swap_back(&dir), 0);
         fs::remove_dir_all(&dir).unwrap();

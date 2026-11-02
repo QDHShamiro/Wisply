@@ -93,7 +93,7 @@ jobs:
       - name: Size
         if: steps.build.outcome == 'success'
         shell: bash
-        run: ls -l target/release/ | grep -E "wisply(-ui)?(\.exe)?$"
+        run: ls -l target/release/ | grep -E "wisply(-full|-ui)?(\.exe)?$"
       - name: Keep the Windows exe
         if: runner.os == 'Windows' && steps.build.outcome == 'success'
         uses: actions/upload-artifact@v7
@@ -101,6 +101,7 @@ jobs:
           name: wisply-v3-windows
           path: |
             target/release/wisply.exe
+            target/release/wisply-full.exe
             target/release/wisply-ui.exe
             target/release/wisply-task.exe
           retention-days: 7

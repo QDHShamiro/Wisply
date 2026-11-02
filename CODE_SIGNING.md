@@ -8,8 +8,8 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 
 ## What gets signed
 
-- `wisply.exe`, `wisply-ui.exe` and `wisply-task.exe` in `wisply-<version>-windows-x64.zip`, and the single
-  `wisply.exe` on the [Releases page](https://github.com/QDHShamiro/Wisply/releases).
+- `wisply.exe`, `wisply-full.exe`, `wisply-ui.exe` and `wisply-task.exe` in `wisply-<version>-windows-x64.zip`, and the single
+  `wisply.exe` (the full client, built as `wisply-full.exe`) on the [Releases page](https://github.com/QDHShamiro/Wisply/releases).
 - Only files built by the public release workflow (`.github/workflows/release.yml`) from a version tag of this
   repository go to SignPath. Nothing built on a personal computer is signed.
 - The signing key stays with SignPath. Every release needs a manual approval before it is signed.

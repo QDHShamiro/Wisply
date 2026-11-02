@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 
-const EXE: &str = env!("CARGO_BIN_EXE_wisply");
+const EXE: &str = env!("CARGO_BIN_EXE_wisply-full");
 const KEYS: [&str; 3] = ["GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY"];
 
 struct Home(PathBuf);

@@ -54,15 +54,15 @@ jobs:
             for t in aarch64-apple-darwin x86_64-apple-darwin; do
               cargo build --release --locked --target "$t" -p wisply -p wisply-ui
             done
-            for b in wisply wisply-ui; do
+            for b in wisply wisply-full wisply-ui; do
               lipo -create -output "out/$b" "target/aarch64-apple-darwin/release/$b" "target/x86_64-apple-darwin/release/$b"
             done
           else
             cargo build --release --locked -p wisply -p wisply-ui
             if [ "$RUNNER_OS" = Windows ]; then
-              cp target/release/wisply.exe target/release/wisply-ui.exe target/release/wisply-task.exe out/
+              cp target/release/wisply.exe target/release/wisply-full.exe target/release/wisply-ui.exe target/release/wisply-task.exe out/
             else
-              cp target/release/wisply target/release/wisply-ui out/
+              cp target/release/wisply target/release/wisply-full target/release/wisply-ui out/
             fi
           fi
       - name: Unsigned Windows programs
@@ -94,8 +94,10 @@ jobs:
         run: |
           v="${GITHUB_REF_NAME#v}"
           [ "$GITHUB_REF_TYPE" = tag ] || v="$(git rev-parse --short HEAD)"
-          L=out/wisply; [ "$RUNNER_OS" = Windows ] && L=out/wisply.exe
+          L=out/wisply-full; [ "$RUNNER_OS" = Windows ] && L=out/wisply-full.exe
           "$L" --version
+          T=out/wisply; [ "$RUNNER_OS" = Windows ] && T=out/wisply.exe
+          "$T" --version
           d="wisply-$v-${{ matrix.pack }}"
           mkdir -p "pack/$d/skills" dist
           cp -R out/. "pack/$d/"
