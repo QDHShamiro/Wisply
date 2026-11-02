@@ -12,7 +12,7 @@ use super::super::config;
 use super::super::hosts::Host;
 use super::super::web::{browser_exe, installed_browsers};
 use super::uia::{self, El};
-use super::win;
+use super::{input, win};
 
 const PAGES: &[(&str, &str)] =
     &[("brave", "brave://extensions/"), ("chrome", "chrome://extensions/"), ("edge", "edge://extensions/")];
@@ -32,6 +32,8 @@ const STEP: Duration = Duration::from_millis(300);
 const TOGGLE_SETTLE: Duration = Duration::from_millis(800);
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
 const ROW_GAP: i32 = 60;
+const ADDRESS_WORDS: &[&str] = &["address", "adresse", "url"];
+const VK_RETURN: u16 = 0x0D;
 
 fn wait<T>(limit: Duration, mut f: impl FnMut() -> Option<T>) -> Option<T> {
     let end = Instant::now() + limit;
@@ -90,6 +92,30 @@ fn dev_switch(hwnd: isize) -> Option<El> {
         .map(|(t, _, _)| (*t).clone())
 }
 
+fn address_bar(hwnd: isize) -> Option<El> {
+    let items = uia::collect(hwnd, false, None);
+    let edits: Vec<&El> = items.iter().filter(|e| e.role() == "edit").collect();
+    edits
+        .iter()
+        .find(|e| ADDRESS_WORDS.iter().any(|w| e.name().to_lowercase().contains(w)))
+        .or_else(|| edits.iter().min_by_key(|e| e.rect().1))
+        .map(|e| (*e).clone())
+}
+
+fn open_by_address_bar(exe_name: &str, url: &str) -> Option<isize> {
+    let hwnd = browser_window(exe_name, false)?;
+    let bar = wait(FIND_WAIT, || address_bar(hwnd))?;
+    win::set_foreground(hwnd);
+    bar.focus();
+    if !bar.set_value(url) {
+        return None;
+    }
+    thread::sleep(STEP);
+    input::key(VK_RETURN, false, false);
+    input::key(VK_RETURN, true, false);
+    wait(PAGE_WAIT, || browser_window(exe_name, true))
+}
+
 fn switched_on(el: &El) -> bool {
     el.describe().2.contains("[x]")
 }
@@ -139,6 +165,10 @@ fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail
             crate::spawn::detached(&exe, &[page(name)], exe.parent().unwrap_or(&d.home), &d.home.join("daemon.log"));
             log.push(format!("{name} opened a start page first, asked again for the extensions page"));
             wait(PAGE_WAIT, || browser_window(&exe_name, true))
+        })
+        .or_else(|| {
+            log.push(format!("{name} ignored the page on its command line, typed it into the address bar"));
+            open_by_address_bar(&exe_name, page(name))
         })
         .ok_or_else(|| Fail::new(format!("the extensions page did not open in {name}")))?;
     let dev = wait(FIND_WAIT, || dev_switch(hwnd))

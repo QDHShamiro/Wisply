@@ -7,6 +7,19 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Added
+- `wisply wait ci [--pr N|--branch B|--sha S] [--timeout 30m]` waits for the CI of a commit and prints one
+  `green`/`red` line (failed job and shortened error lines on red; result notices with `=failure` count as red; exit
+  0, 1 or 2). `wisply wait until "<command>" [--every 5s] [--timeout 10m]` repeats a command until it passes and
+  prints only the last output. A PreToolUse hook (`hook pre`) denies a Bash `sleep` of 60 seconds or more and points
+  at both (`~/.wisply/sleep-guard-off` turns it off). Measured over three weeks before: 187 CI polls, 293 monitor
+  calls and 1,931 sleeps (10 hours).
+
+### Fixed
+- Setup in Edge: when a browser ignores `edge://extensions/` on its command line (Edge on the Windows runner does),
+  Wisply types the page into the address bar. The v3 workflow no longer hides failures: the job is red when any step
+  reports `failure`.
+
 ### Changed
 - Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
   WebFetch tools (`hooks/hooks.json` matcher). The limit is a character budget (1,200; 2,000 for logs) instead of a line
