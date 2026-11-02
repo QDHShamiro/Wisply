@@ -1,5 +1,6 @@
 mod agents;
 pub(crate) mod claude_env;
+pub(crate) mod compact;
 mod migrate;
 pub(crate) mod place;
 #[cfg(windows)]
@@ -20,6 +21,9 @@ const PURGE_FILES: &[&str] =
 pub fn run(home: &Path, args: &[String]) -> ExitCode {
     let first = args.first().map(String::as_str).unwrap_or("");
     let flag = |f: &str| args.iter().any(|a| a == f);
+    if let Some(at) = args.iter().position(|a| a == "--compact") {
+        return compact_only(&args[at + 1..]);
+    }
     let global = flag("--register") || wisply_proto::home_var().is_none();
     let done = match first {
         "uninstall" => uninstall(home, flag("--purge"), global),
@@ -35,6 +39,20 @@ pub fn run(home: &Path, args: &[String]) -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("wisply {first}: {e}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn compact_only(rest: &[String]) -> ExitCode {
+    let size: Vec<String> = rest.iter().take(1).cloned().collect();
+    match compact::command(&claude_env::settings_file(), &size) {
+        Ok(text) => {
+            println!("{text}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("wisply setup --compact: {e}");
             ExitCode::from(1)
         }
     }
