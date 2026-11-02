@@ -17,6 +17,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   written once a minute.
 - `wisply recall` copes with typos (fuzzy match against the note words), mixed German/English questions (small
   built-in word list) and weights covered words per group instead of per word.
+- `headroom` is several times faster. Lines are no longer copied one by one, the template of a line is only built when
+  a kept or repeated line needs it, the error-word check skips lines that cannot match, numbers and JSON strings take
+  an ASCII path, and the hook reads its input once, squeezes without a thread for normal sizes, hashes the full
+  output eight bytes at a time, writes the log after the answer is out and no longer checks the folders on every
+  call. What is cut and what is kept stays the same. `cargo test -p wisply-squeeze --test bench -- --ignored
+  --nocapture` and `cargo test -p wisply --test hook_speed -- --ignored --nocapture` measure it.
 - Session notes cost about 4 to 10 times fewer model tokens: the transcript is condensed harder before the local model
   sees it (no tool calls except edits and git/PR commands, no code blocks, no "let me ..." narration, repeats gone),
   the prompt is shorter with a fixed format, the model gets the titles of notes it already has so it does not write

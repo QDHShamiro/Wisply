@@ -114,7 +114,38 @@ fn phrase(rest: &str, tail: &str) -> bool {
     sw(rest, tail) && boundary_after(rest, tail.len())
 }
 
+const STARTS: [&[u8; 3]; 22] = [
+    b"err", b"exc", b"fai", b"fat", b"tra", b"pan", b"war", b"den", b"ref", b"can", b"una", b"mis", b"und", b"seg",
+    b"abo", b"tim", b"kil", b"ass", b"sev", b"cri", b"no ", b"not",
+];
+
+const fn slot(a: u8, b: u8, c: u8) -> usize {
+    ((a as usize) * 961 + (b as usize) * 31 + c as usize) & 4095
+}
+
+const SEEN: [u64; 64] = {
+    let mut t = [0u64; 64];
+    let mut i = 0;
+    while i < STARTS.len() {
+        let n = slot(STARTS[i][0], STARTS[i][1], STARTS[i][2]);
+        t[n >> 6] |= 1 << (n & 63);
+        i += 1;
+    }
+    t
+};
+
+pub(crate) fn may_be_important(s: &str) -> bool {
+    s.as_bytes().windows(3).any(|w| {
+        let n = slot(w[0] | 0x20, w[1] | 0x20, w[2] | 0x20);
+        SEEN[n >> 6] >> (n & 63) & 1 != 0
+    })
+}
+
 pub(crate) fn important(s: &str) -> bool {
+    may_be_important(s) && important_slow(s)
+}
+
+fn important_slow(s: &str) -> bool {
     for (a, b) in runs(s) {
         let w = &s[a..b];
         let bytes = w.as_bytes();
@@ -617,8 +648,68 @@ fn hex_run(w: &str) -> bool {
 
 pub(crate) fn numbers(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
+    numbers_into(s, &mut out);
+    out
+}
+
+pub(crate) fn numbers_ascii(s: &str, out: &mut String) {
+    let b = s.as_bytes();
+    let wordb = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
     let mut i = 0;
+    while i < b.len() {
+        if !wordb(b[i]) {
+            out.push(b[i] as char);
+            i += 1;
+            continue;
+        }
+        let (mut j, mut digit, mut hex) = (i, false, true);
+        while j < b.len() && wordb(b[j]) {
+            digit |= b[j].is_ascii_digit();
+            hex &= b[j].is_ascii_hexdigit();
+            j += 1;
+        }
+        let run = &b[i..j];
+        if hex && run.len() >= 8 {
+            out.push('#');
+        } else if !digit {
+            out.push_str(&s[i..j]);
+        } else {
+            let mut k = 0;
+            while k < run.len() {
+                let tail = &run[k..];
+                let h = if tail.starts_with(b"0x") {
+                    tail[2..].iter().take_while(|c| c.is_ascii_hexdigit()).count()
+                } else {
+                    0
+                };
+                if h > 0 {
+                    out.push('#');
+                    k += 2 + h;
+                } else if tail[0].is_ascii_digit() {
+                    out.push('#');
+                    k += tail.iter().take_while(|c| c.is_ascii_digit()).count();
+                } else {
+                    out.push(tail[0] as char);
+                    k += 1;
+                }
+            }
+        }
+        i = j;
+    }
+}
+
+pub(crate) fn numbers_into(s: &str, out: &mut String) {
+    if s.is_ascii() {
+        return numbers_ascii(s, out);
+    }
+    let mut i = 0;
+    let b = s.as_bytes();
     while i < s.len() {
+        if b[i] < 0x80 && !(b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+            out.push(b[i] as char);
+            i += 1;
+            continue;
+        }
         let c = s[i..].chars().next().unwrap_or(' ');
         if !word(c) {
             out.push(c);
@@ -627,6 +718,11 @@ pub(crate) fn numbers(s: &str) -> String {
         }
         let end = run_end(s, i);
         let run = &s[i..end];
+        if !run.bytes().any(|x| x.is_ascii_digit()) && !hex_run(run) {
+            out.push_str(run);
+            i = end;
+            continue;
+        }
         if !s[..i].chars().next_back().is_some_and(word) && hex_run(run) && !run.starts_with("0x") {
             out.push('#');
             i = end;
@@ -653,7 +749,6 @@ pub(crate) fn numbers(s: &str) -> String {
         }
         i = end;
     }
-    out
 }
 
 const QUIET_KEYS: [&str; 4] = ["error", "fail", "exception", "warn"];
@@ -1010,6 +1105,7 @@ mod tests {
             let sa = strip_ansi(&mixed);
             prop_assert_eq!(sa.as_ref(), plain.as_ref(), "{:?}", mixed);
             prop_assert_eq!(important(&raw), old::IMPORTANT.is_match(&raw), "{:?}", raw);
+            prop_assert_eq!(important(&mixed), important_slow(&mixed), "{:?}", mixed);
         }
     }
 }

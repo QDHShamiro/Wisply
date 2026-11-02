@@ -1,5 +1,6 @@
 use crate::pat;
-use crate::text::{clip, head, rstrip, strip, words};
+use crate::text::{clip, head, is_space, rstrip, strip};
+use std::cell::OnceCell;
 use std::cmp::Reverse;
 use std::collections::HashMap;
 
@@ -18,31 +19,87 @@ const LINE_CHARS: usize = 300;
 const KIND_CHARS: usize = 60;
 const CUT_TAIL: usize = 20;
 
-pub(crate) fn clean(text: &str) -> Vec<String> {
-    let plain = pat::strip_ansi(text);
-    let mut out: Vec<String> = plain
+pub(crate) fn lines(plain: &str) -> Vec<&str> {
+    let mut out: Vec<&str> = plain
         .split('\n')
         .map(|line| {
             let line = line.strip_suffix('\r').unwrap_or(line);
             let line =
                 if line.contains('\r') { line.split('\r').rfind(|p| !strip(p).is_empty()).unwrap_or("") } else { line };
-            rstrip(line).to_string()
+            rstrip(line)
         })
         .collect();
-    while out.last().is_some_and(String::is_empty) {
+    while out.last().is_some_and(|l| l.is_empty()) {
         out.pop();
     }
     out
 }
 
+#[cfg(test)]
+pub(crate) fn clean(text: &str) -> Vec<String> {
+    lines(&pat::strip_ansi(text)).into_iter().map(str::to_string).collect()
+}
+
 struct Line<'a> {
     raw: &'a str,
-    tmpl: String,
+    body: &'a str,
+    tmpl: OnceCell<String>,
     flow: bool,
     frame: bool,
     hot: bool,
     noise: bool,
     summary: bool,
+}
+
+fn template(s: &str) -> String {
+    let nums = pat::numbers(s);
+    let mut out = String::with_capacity(nums.len());
+    for w in nums.split(is_space).filter(|w| !w.is_empty()) {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(w);
+    }
+    out
+}
+
+fn space_byte(c: u8) -> bool {
+    c.is_ascii_whitespace() || c == 0x0b || (0x1c..=0x1f).contains(&c)
+}
+
+fn kind_into(body: &str, buf: &mut String) {
+    buf.clear();
+    if body.is_ascii() {
+        let b = body.as_bytes();
+        let mut i = 0;
+        for _ in 0..3 {
+            while i < b.len() && space_byte(b[i]) {
+                i += 1;
+            }
+            if i == b.len() {
+                break;
+            }
+            let start = i;
+            while i < b.len() && !space_byte(b[i]) {
+                i += 1;
+            }
+            if !buf.is_empty() {
+                buf.push(' ');
+            }
+            pat::numbers_ascii(&body[start..i], buf);
+        }
+    } else {
+        for tok in body.split(is_space).filter(|w| !w.is_empty()).take(3) {
+            if !buf.is_empty() {
+                buf.push(' ');
+            }
+            pat::numbers_into(tok, buf);
+        }
+    }
+    if buf.len() > KIND_CHARS {
+        let cut = head(buf, KIND_CHARS).len();
+        buf.truncate(cut);
+    }
 }
 
 impl<'a> Line<'a> {
@@ -53,13 +110,11 @@ impl<'a> Line<'a> {
         let kind = pat::kind(raw);
         let hot = !frame && kind.hot;
         let summary = !hot && pat::summary(body);
-        let tmpl = words(&pat::numbers(body)).collect::<Vec<_>>().join(" ");
-        Line { raw, tmpl, flow, frame, hot, noise: kind.noise && !summary, summary }
+        Line { raw, body, tmpl: OnceCell::new(), flow, frame, hot, noise: kind.noise && !summary, summary }
     }
 
-    fn kind(&self) -> &str {
-        let end = self.tmpl.match_indices(' ').nth(2).map_or(self.tmpl.len(), |(i, _)| i);
-        head(&self.tmpl[..end], KIND_CHARS)
+    fn tmpl(&self) -> &str {
+        self.tmpl.get_or_init(|| template(self.body))
     }
 
     fn runtime(&self) -> bool {
@@ -84,7 +139,7 @@ fn marked(lines: &[Line], after: usize, trace: usize) -> Vec<bool> {
         if !line.hot && !line.summary {
             continue;
         }
-        let count = seen.entry(line.tmpl.as_str()).or_insert(0);
+        let count = seen.entry(line.tmpl()).or_insert(0);
         *count += 1;
         if *count > SAME {
             continue;
@@ -113,15 +168,24 @@ fn gap(run: &[&Line]) -> String {
         let indent = &run[0].raw[..run[0].raw.len() - run[0].raw.trim_start().len()];
         return format!("{indent}... {} frames", run.len());
     }
-    let mut kinds: Vec<(&str, usize, bool)> = Vec::new();
-    let mut at: HashMap<&str, usize> = HashMap::new();
+    let mut kinds: Vec<(String, usize, bool)> = Vec::new();
+    let mut at: HashMap<String, usize> = HashMap::new();
+    let (mut buf, mut last) = (String::new(), usize::MAX);
     for line in run.iter().filter(|l| !strip(l.raw).is_empty()) {
-        let kind = line.kind();
-        match at.get(kind) {
-            Some(&i) => kinds[i].1 += 1,
+        kind_into(line.body, &mut buf);
+        if kinds.get(last).is_some_and(|k| k.0 == buf) {
+            kinds[last].1 += 1;
+            continue;
+        }
+        match at.get(buf.as_str()) {
+            Some(&i) => {
+                kinds[i].1 += 1;
+                last = i;
+            }
             None => {
-                at.insert(kind, kinds.len());
-                kinds.push((kind, 1, line.hot));
+                last = kinds.len();
+                at.insert(buf.clone(), last);
+                kinds.push((buf.clone(), 1, line.hot));
             }
         }
     }
@@ -195,20 +259,20 @@ fn assemble(lines: &[Line], keep: &[bool]) -> Vec<(String, bool)> {
         };
         let mut j = i + 1;
         while let Some(Item::Line(l)) = items.get(j)
-            && !l.tmpl.is_empty()
-            && l.tmpl == first.tmpl
+            && !l.tmpl().is_empty()
+            && l.tmpl() == first.tmpl()
         {
             j += 1;
         }
         let mut line = clip(first.raw, LINE_CHARS);
         if j - i > 1 {
             line.push_str(&format!(" (x{})", j - i));
-        } else if !first.hot && !first.frame && first.tmpl.contains(' ') {
+        } else if !first.hot && !first.frame && first.tmpl().contains(' ') {
             while let Some(Item::Line(l)) = items.get(j)
                 && !l.hot
                 && !l.summary
                 && !l.frame
-                && similar(&first.tmpl, &l.tmpl)
+                && similar(first.tmpl(), l.tmpl())
             {
                 j += 1;
             }
@@ -224,8 +288,8 @@ fn assemble(lines: &[Line], keep: &[bool]) -> Vec<(String, bool)> {
     out
 }
 
-pub(crate) fn squeeze(raw: &[String]) -> Vec<String> {
-    let lines: Vec<Line> = raw.iter().map(|r| Line::new(r)).collect();
+pub(crate) fn squeeze<S: AsRef<str>>(raw: &[S]) -> Vec<String> {
+    let lines: Vec<Line> = raw.iter().map(|r| Line::new(r.as_ref())).collect();
     let mut out = Vec::new();
     for (after, trace) in [(AFTER, TRACE_LONG), (0, TRACE_TIGHT), (0, 0)] {
         out = assemble(&lines, &marked(&lines, after, trace));
@@ -263,8 +327,10 @@ mod tests {
     #[test]
     fn kind_is_the_first_three_template_words() {
         let line = Line::new("[12:00:01 INFO]: Player 42 joined from 10.0.0.1 port 5");
-        assert_eq!(line.tmpl, "Player # joined from #.#.#.# port #");
-        assert_eq!(line.kind(), "Player # joined");
+        assert_eq!(line.tmpl(), "Player # joined from #.#.#.# port #");
+        let mut kind = String::new();
+        kind_into(line.body, &mut kind);
+        assert_eq!(kind, "Player # joined");
         assert!(Line::new("\tat a.B(B.java:1)").flow);
         assert!(!Line::new("\tat a.B(B.java:1) error").hot);
         assert!(Line::new("  ● Test suite failed to run").hot);
