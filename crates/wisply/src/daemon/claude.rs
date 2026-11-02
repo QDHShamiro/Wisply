@@ -61,7 +61,7 @@ fn shim() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(env::var_os("APPDATA").unwrap_or_default()).join("npm").join("claude.cmd"))
 }
 
-fn claude_exe() -> PathBuf {
+pub(super) fn claude_exe() -> PathBuf {
     if !cfg!(windows) {
         return which("claude").unwrap_or_else(|| PathBuf::from("claude"));
     }
@@ -74,7 +74,7 @@ fn claude_exe() -> PathBuf {
     if native.is_file() { native } else { shim }
 }
 
-fn clean(cmd: &mut Command) -> &mut Command {
+pub(super) fn clean(cmd: &mut Command) -> &mut Command {
     for k in SESSION_ENV {
         cmd.env_remove(k);
     }

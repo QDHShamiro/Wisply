@@ -68,6 +68,7 @@ fn defaults() -> Map<String, Value> {
         ("vault", json!("")),
         ("vault_inbox", json!("Inbox")),
         ("update", json!("auto")),
+        ("secure", json!(true)),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }

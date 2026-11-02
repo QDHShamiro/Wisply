@@ -8,6 +8,17 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply secure` grew into a defensive check of your own things: severity (high/medium/low) and a one-sentence fix on
+  every line, `--json`, more dangerous patterns (unsafe deserialization, path traversal, weak crypto, CORS `*`, debug
+  on, shell commands from input, Electron isolation), Discord webhooks and database passwords, key files and missing
+  `.gitignore` entries, pnpm/yarn/Gradle/poetry lock files for the OSV.dev check, and jars (plugin.yml, configs, class
+  strings), APKs (manifest: debuggable, cleartext, exported; keys in code), exe and Electron `app.asar` files.
+- `secure allow <domain>` plus `secure <domain>`: passive web check of allowed sites only (HTTPS, redirect,
+  certificate acceptance, security headers, cookie flags, exposed `/.env`, `/.git/HEAD`, backups, source maps,
+  directory listings, mixed content), one request per second, never follows a redirect to a site that is not allowed.
+- `secure fix [--with claude|codex]` writes FIX.md, creates `secure/fix-<date>`, lets the AI fix the list, checks again
+  and reports before/after; it never commits or pushes. `config secure off` switches the whole command off.
+
 - `wisply pc` disk guard: every hour the daemon checks the system drive. Below 40 GB free (`disk_clean_gb`, with `pc on`)
   it cleans only safe things: temp files older than a day, package caches (npm, pip, cargo, gradle, Maven versions unused
   for 60 days), build folders untouched for 30 days (skipped when git-tracked or in a worktree with unmerged commits)
