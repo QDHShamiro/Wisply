@@ -1,0 +1,31 @@
+name: probe-edge
+on:
+  push:
+    branches: ["feat/wait-ci"]
+    paths: [".github/workflows/probe-edge.yml"]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Variants
+        shell: bash
+        run: |
+          EDGE="/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+          "$EDGE" --version || true
+          titles() { tasklist //v //fo csv //fi "imagename eq msedge.exe" | grep -v "N/A" | cut -d, -f1,9 | head -5; }
+          try() {
+            taskkill //F //IM msedge.exe > /dev/null 2>&1 || true
+            sleep 3
+            echo "== $1"
+            shift
+            "$EDGE" "$@" > /dev/null 2>&1 &
+            for i in 1 2 3 4 5 6; do sleep 4; echo "t=$((i*4))"; titles; done
+          }
+          tasklist //fi "imagename eq msedge.exe" | head -5
+          try A edge://extensions/
+          try B --no-first-run --new-window edge://extensions/
+          try C --no-first-run --user-data-dir="$RUNNER_TEMP/p1" edge://extensions/
+          try D --no-first-run --disable-features=msEdgeNewTabPageLoadingFirst "chrome://extensions/"
