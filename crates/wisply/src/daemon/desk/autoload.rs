@@ -34,6 +34,9 @@ const CLOSE_WAIT: Duration = Duration::from_secs(5);
 const ROW_GAP: i32 = 60;
 const ADDRESS_WORDS: &[&str] = &["address", "adresse", "url"];
 const VK_RETURN: u16 = 0x0D;
+const MENU_NAMES: &[&str] = &["main menu", "hauptmenü", "menu", "menü"];
+const MENU_WAIT: Duration = Duration::from_secs(4);
+const SEEN_MAX: usize = 12;
 
 fn wait<T>(limit: Duration, mut f: impl FnMut() -> Option<T>) -> Option<T> {
     let end = Instant::now() + limit;
@@ -116,6 +119,31 @@ fn open_by_address_bar(exe_name: &str, url: &str) -> Option<isize> {
     wait(PAGE_WAIT, || browser_window(exe_name, true))
 }
 
+fn open_side_menu(hwnd: isize) -> bool {
+    let items = uia::collect(hwnd, false, None);
+    let page = uia::page_rect(hwnd).map_or(0, |r| r.1);
+    let Some(menu) = items
+        .iter()
+        .filter(|e| e.role() == "button" && e.rect().1 >= page)
+        .find(|e| MENU_NAMES.contains(&e.name().to_lowercase().as_str()))
+    else {
+        return false;
+    };
+    menu.act(false);
+    thread::sleep(TOGGLE_SETTLE);
+    true
+}
+
+fn seen(hwnd: isize) -> String {
+    let names: Vec<String> = uia::collect(hwnd, true, None)
+        .iter()
+        .filter(|e| matches!(e.role(), "button" | "toggle" | "checkbox" | "link"))
+        .map(|e| format!("{}:{}", e.role(), e.name()))
+        .take(SEEN_MAX)
+        .collect();
+    names.join(" | ")
+}
+
 fn switched_on(el: &El) -> bool {
     el.describe().2.contains("[x]")
 }
@@ -171,8 +199,14 @@ fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail
             open_by_address_bar(&exe_name, page(name))
         })
         .ok_or_else(|| Fail::new(format!("the extensions page did not open in {name}")))?;
-    let dev = wait(FIND_WAIT, || dev_switch(hwnd))
-        .ok_or_else(|| Fail::new("developer mode switch not found on the extensions page"))?;
+    let dev = wait(MENU_WAIT, || dev_switch(hwnd))
+        .or_else(|| {
+            open_side_menu(hwnd);
+            wait(FIND_WAIT, || dev_switch(hwnd))
+        })
+        .ok_or_else(|| {
+            Fail::new(format!("developer mode switch not found on the extensions page (saw: {})", seen(hwnd)))
+        })?;
     if !switched_on(&dev) {
         dev.act(false);
         log.push("developer mode switched on".into());

@@ -16,9 +16,9 @@ mod statusline;
 mod testapp;
 mod update;
 mod v2;
-mod waitfor;
 #[cfg(windows)]
 mod voice;
+mod waitfor;
 
 use std::env;
 use std::process::ExitCode;

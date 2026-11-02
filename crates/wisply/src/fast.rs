@@ -47,7 +47,8 @@ fn main() -> ExitCode {
     let raw: Vec<String> = env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     let first = raw.first().map(String::as_str).unwrap_or("");
     let waits = first == "wait" && raw.get(1).is_some_and(|a| a == "ci" || a == "until");
-    let local = LOCAL.contains(&first) || waits || first.starts_with("chrome-extension://") || raw.iter().any(|a| a == "--env");
+    let local =
+        LOCAL.contains(&first) || waits || first.starts_with("chrome-extension://") || raw.iter().any(|a| a == "--env");
     if first == "hook" && raw.get(1).is_some_and(|a| a == "post") {
         hook::post();
         return ExitCode::SUCCESS;

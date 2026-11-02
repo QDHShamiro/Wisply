@@ -139,7 +139,8 @@ struct Target {
 
 fn target(f: &Flags) -> Result<Target, String> {
     if let Some(pr) = &f.pr {
-        let v = json(gh(&["pr", "view", pr, "--json", "headRefName,headRefOid"])).ok_or(format!("gh cannot read PR {pr}"))?;
+        let v = json(gh(&["pr", "view", pr, "--json", "headRefName,headRefOid"]))
+            .ok_or(format!("gh cannot read PR {pr}"))?;
         return Ok(Target {
             branch: Some(text(&v, "headRefName").to_string()),
             sha: Some(text(&v, "headRefOid").to_string()),
@@ -258,16 +259,30 @@ fn finish_red(bad: &[Failed], t: &Target) -> ExitCode {
 }
 
 fn shell(command: &str) -> Command {
-    let mut c = Command::new(if cfg!(windows) { "bash" } else { "sh" });
+    let mut c = Command::new("sh");
     c.arg("-c").arg(command);
+    c
+}
+
+fn fallback_shell(command: &str) -> Command {
+    let mut c = Command::new("cmd");
+    c.arg("/C").arg(command);
     c
 }
 
 fn run_once(command: &str) -> (bool, String) {
     let started = std::io::pipe().and_then(|(reader, writer)| {
         let mut c = shell(command);
-        c.stdin(Stdio::null()).stdout(writer.try_clone()?).stderr(writer);
-        let child = c.spawn()?;
+        c.stdin(Stdio::null()).stdout(writer.try_clone()?).stderr(writer.try_clone()?);
+        let child = match c.spawn() {
+            Ok(child) => child,
+            Err(_) if cfg!(windows) => {
+                let mut f = fallback_shell(command);
+                f.stdin(Stdio::null()).stdout(writer.try_clone()?).stderr(writer);
+                f.spawn()?
+            }
+            Err(e) => return Err(e),
+        };
         drop(c);
         Ok((reader, child))
     });

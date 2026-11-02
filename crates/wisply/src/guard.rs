@@ -29,17 +29,16 @@ fn is_sleep(token: &str) -> bool {
 }
 
 pub fn long_sleep(command: &str) -> Option<f64> {
-    let tokens: Vec<&str> =
-        command.split(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')' | '{' | '}' | '`')).filter(|t| !t.is_empty()).collect();
+    let tokens: Vec<&str> = command
+        .split(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')' | '{' | '}' | '`'))
+        .filter(|t| !t.is_empty())
+        .collect();
     let mut worst: Option<f64> = None;
     for (i, token) in tokens.iter().enumerate() {
         if !is_sleep(token) {
             continue;
         }
-        let total: f64 = tokens[i + 1..]
-            .iter()
-            .map_while(|t| seconds(t.trim_matches(|c| c == '"' || c == '\'')))
-            .sum();
+        let total: f64 = tokens[i + 1..].iter().map_while(|t| seconds(t.trim_matches(|c| c == '"' || c == '\''))).sum();
         if total >= LIMIT_SECONDS {
             worst = Some(worst.map_or(total, |w| w.max(total)));
         }
