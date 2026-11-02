@@ -1,5 +1,5 @@
 {
-  "description": "Closes the tabs and apps Wisply opened when Claude finishes a reply (wisply config cleanup off keeps them), names a learned routine that fits the user's request, and keeps the Wisply memory: a short start summary, notes that fit a request, sessions queued for local learning (wisply memory off turns it off), and shortens long Bash logs, JSON, grep results and web pages to their important lines with the full text kept in ~/.wisply/headroom/out (a file ~/.wisply/headroom/off turns that off), and after each edit names new weak spots wisply think finds in that file (~/.wisply/think/quick-off turns that off)",
+  "description": "Denies a Bash sleep of 60 seconds or more and points at wisply wait ci / wisply wait until (touch ~/.wisply/sleep-guard-off turns that off). Closes the tabs and apps Wisply opened when Claude finishes a reply (wisply config cleanup off keeps them), names a learned routine that fits the user's request, and keeps the Wisply memory: a short start summary, notes that fit a request, sessions queued for local learning (wisply memory off turns it off), and shortens long Bash logs, JSON, grep results and web pages to their important lines with the full text kept in ~/.wisply/headroom/out (a file ~/.wisply/headroom/off turns that off), and after each edit names new weak spots wisply think finds in that file (~/.wisply/think/quick-off turns that off)",
   "hooks": {
     "SessionStart": [
       {
@@ -58,6 +58,18 @@
           {
             "type": "command",
             "command": "L=\"${WISPLY_HOME:-$HOME/.wisply}/bin/${WISPLY_CLIENT:-wisply.exe}\"; [ -f \"$L\" ] || L=\"${CLAUDE_PLUGIN_ROOT}/bin/${WISPLY_CLIENT:-wisply.exe}\"; \"$L\" suggest",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "L=\"${WISPLY_HOME:-$HOME/.wisply}/bin/${WISPLY_CLIENT:-wisply.exe}\"; [ -f \"$L\" ] || L=\"${CLAUDE_PLUGIN_ROOT}/bin/${WISPLY_CLIENT:-wisply.exe}\"; \"$L\" hook pre",
             "timeout": 5
           }
         ]

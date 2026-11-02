@@ -1,5 +1,6 @@
 mod client;
 mod daemon;
+mod guard;
 mod headless;
 mod hook;
 mod host;
@@ -15,6 +16,7 @@ mod statusline;
 mod testapp;
 mod update;
 mod v2;
+mod waitfor;
 #[cfg(windows)]
 mod voice;
 
@@ -28,6 +30,7 @@ fn main() -> ExitCode {
         "mcp" => mcp::serve(),
         "host" => host::serve(args.get(1).map(String::as_str).unwrap_or("")),
         "hook" if args.get(1).is_some_and(|a| a == "post") => hook::post(),
+        "hook" if args.get(1).is_some_and(|a| a == "pre") => guard::pre(),
         origin if origin.starts_with("chrome-extension://") => host::serve(origin),
         "statusline" => return statusline::run(&args[1..]),
         "version" | "--version" => println!("{}", env!("CARGO_PKG_VERSION")),

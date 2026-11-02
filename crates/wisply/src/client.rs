@@ -25,6 +25,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     if first == "more" {
         return crate::more::run(&home, &args[1..]);
     }
+    if crate::waitfor::wanted(&args) {
+        return crate::waitfor::run(&args);
+    }
     if first == "update" {
         return crate::update::run(&home, &args[1..]);
     }

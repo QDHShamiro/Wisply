@@ -8,13 +8,12 @@ permissions:
 jobs:
   probe:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     steps:
       - name: Variants
         shell: bash
         run: |
           EDGE="/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
-          "$EDGE" --version || true
           titles() { tasklist //v //fo csv //fi "imagename eq msedge.exe" | grep -v "N/A" | cut -d, -f1,9 | head -5; }
           try() {
             taskkill //F //IM msedge.exe > /dev/null 2>&1 || true
