@@ -36,7 +36,7 @@ const ADDRESS_WORDS: &[&str] = &["address", "adresse", "url"];
 const VK_RETURN: u16 = 0x0D;
 const MENU_NAMES: &[&str] = &["main menu", "hauptmenü", "menu", "menü"];
 const MENU_WAIT: Duration = Duration::from_secs(4);
-const SEEN_MAX: usize = 12;
+const SEEN_MAX: usize = 30;
 
 fn wait<T>(limit: Duration, mut f: impl FnMut() -> Option<T>) -> Option<T> {
     let end = Instant::now() + limit;
@@ -135,13 +135,14 @@ fn open_side_menu(hwnd: isize) -> bool {
 }
 
 fn seen(hwnd: isize) -> String {
+    let page = uia::page_rect(hwnd).map_or(0, |r| r.1);
     let names: Vec<String> = uia::collect(hwnd, true, None)
         .iter()
-        .filter(|e| matches!(e.role(), "button" | "toggle" | "checkbox" | "link"))
+        .filter(|e| e.rect().1 >= page)
         .map(|e| format!("{}:{}", e.role(), e.name()))
         .take(SEEN_MAX)
         .collect();
-    names.join(" | ")
+    format!("page top {page}: {}", names.join(" | "))
 }
 
 fn switched_on(el: &El) -> bool {
