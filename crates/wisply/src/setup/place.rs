@@ -29,6 +29,12 @@ pub fn client_exe() -> io::Result<PathBuf> {
 }
 
 pub fn source_root() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("WISPLY_SOURCE")
+        .map(PathBuf::from)
+        .filter(|d| d.join("extension").join("manifest.json").is_file())
+    {
+        return Some(dir);
+    }
     let exe = std::env::current_exe().ok()?;
     exe.ancestors()
         .skip(1)

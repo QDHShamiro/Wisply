@@ -8,6 +8,7 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- Builds can live outside the repo: `WISPLY_SOURCE` points setup at the source folder (used by the setup test).
 - Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a
   `wisply more` ref; whole-file `Read` and `cat file` views of 150+ lines / ~3k+ tokens come back as head, outline
   and tail. Edit/Write and PreCompact clear the per-session table; `Write` on a known file adds an "use Edit" hint
