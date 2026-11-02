@@ -317,7 +317,7 @@ pc 72/100 · RAM 87 % (brave 6.1 GB) · C: 18 GB free · 6 autostarts · ping 1.
 
 - `wisply pc fix <n>` runs suggestion n, `fix all` runs every safe one. `pc clean [--dry]` cleans up, `pc startup`
   lists autostarts (`off <n>` / `on <n>`, the original is kept), `pc net [host]` shows ping and which program holds
-  the line, `pc disk` shows drive health, `pc updates` shows old graphics drivers and open system updates (it never
+  the line, `pc disk` shows the system drive, its biggest folders with GB, ideas to move them to another drive (junction or symlink commands, never run for you) and drive health, `pc updates` shows old graphics drivers and open system updates (it never
   installs anything), `pc game` shows the game mode, `pc afk|play|auto` switches it by hand, `pc log [n]` lists what
   it did, `pc config` shows the settings.
 - The daemon looks every 5 seconds in the background (about 0.3 % of one CPU core and 10 MB of RAM, measured). It warns, with a system
@@ -332,13 +332,19 @@ pc 72/100 · RAM 87 % (brave 6.1 GB) · C: 18 GB free · 6 autostarts · ping 1.
   with the high performance power plan. Builds are paused for a moment when RAM runs out. After 5 minutes without
   input it relaxes, the first input brings it back. Everything is restored exactly at the end, also after a crash of
   the daemon (the state is kept in `~/.wisply/pc/mode-state.json`).
-- Cleaning (below 25 GB free, once a week when idle, or `pc clean`): temp files, caches, crash dumps, build folders
-  (`target`, `build`, `node_modules`, `.gradle`) of projects untouched for 30 days and without uncommitted changes,
-  logs older than 14 days, npm/pip/cargo/gradle caches while their tool is not running. Never touched: open projects,
-  `build/libs`, Minecraft, game folders, `~/.claude`, `~/.wisply/memory`, the vault, Documents, Pictures, Downloads and
-  anything that looks like a secret. Deleted files skip the recycle bin; `pc log` says what, where and how big.
+- Disk guard (`pc on`): once an hour it looks at the system drive. Below 40 GB free it cleans by itself, only safe
+  things: temp files older than a day (never folders of open programs or Claude sessions), npm/pip/cargo/gradle caches
+  and Maven versions unused for 60 days (while their tool is not running), `target`/`build`/`node_modules`/`.gradle`
+  next to a project marker untouched for 30 days (not git-tracked, not in a worktree with unmerged commits, no
+  uncommitted changes), crash dumps, logs older than 14 days and browser caches (only while that browser is closed).
+  Nothing is deleted while a game runs. Below 25 GB free a system notification names the biggest folder (never takes
+  focus, once per 30 minutes). Never touched: open projects, `build/libs`, Minecraft, game folders, `~/.claude`,
+  `~/.wisply` (except old files in `out`), the vault, Documents, Pictures, Downloads, Desktop, anything with
+  hard links and anything that looks like a secret. Also once a week when idle, or by hand with `pc clean [--dry]`.
+  Deleted files skip the recycle bin; `pc log` says what, where and how big.
 - Settings live in `~/.wisply/pc/config.json` (`act`, `warn`, `notify`, `statusline`, `tick_secs`, thresholds,
-  `builders`, `background`, `protect`, `protect_paths`, `project_roots`, `ping_host`, `game_exes`).
+  `disk_clean_gb`, `disk_warn_gb`, `disk_check_secs`, `disk_scan_secs`, `maven_days`, `clean_kinds` (`temp`, `cache`,
+  `dump`, `build`, `log`, `package`, `browser`), `builders`, `background`, `protect`, `protect_paths`, `project_roots`, `ping_host`, `game_exes`).
 
 ## Agent board and phone
 
@@ -577,7 +583,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 |---|---|
 | Headroom | `more <hr-id> [--lines 400-440] [--grep "a\|b"]` · `~/.wisply/headroom/off` turns it off |
 | Search | `grep <pattern> [folder\|file ...] [-i] [-w] [-l] [-C 2] [--glob '*.py'] [--all]` |
-| Safety check | `secure [folder] [--history] [--no-deps]` (keys, vulnerable dependencies, risky code) |
+| Safety check | `secure [folder|site|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json]` (keys, vulnerable dependencies in Cargo/npm/pnpm/yarn/Maven/Gradle/pip/poetry, risky code, .gitignore, severity per line) · `secure allow <domain> [--remove]` (only these sites get the passive web check, 1 request/s) · `secure fix [folder] [--with claude|codex]` (FIX.md, branch `secure/fix-<date>`, AI fixes, re-check; never commits or pushes) · `config secure on|off` |
 | Numbers | `tokens` (used and saved, last 30 days) · `bench` · `selftest` · `log stats` |
 
 **Think** (critical thinking without AI, runs in `~/.wisply/think`)

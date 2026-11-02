@@ -32,7 +32,8 @@ keys    keys [site] [-f x]   keys add <site> \"ctrl+k=what\"   keys rm <site> <k
 cleanup done [--quiet]   keep [t]   config cleanup on|off
 system  status   channels   stop   abort   config [key value]   log [n] | log stats [n]   version
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
-        secure [folder] [--history] [--no-deps] (keys, vulnerable dependencies, risky code; not while a game runs)
+        secure [folder|domain|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json] (keys, vulnerable dependencies, risky code, headers of your own sites; not while a game runs)
+        secure allow <domain> [--remove]   secure fix [folder] [--with claude|codex] (FIX.md + branch secure/fix-date, re-checks, never commits)
         think <step> (finds, fixes and proves improvements without AI; wisply think help lists the steps)
         headless [start|stop|status|install] (a browser without a window for servers and CI; install fetches Chrome for Testing)
         update [--check|--rollback] (installs the newest release by itself in the background; config update auto|notify|off)

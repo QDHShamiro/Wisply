@@ -77,6 +77,7 @@ fn defaults() -> Map<String, Value> {
         ("phone_port", json!(47841)),
         ("phone_bind", json!("")),
         ("phone_tailscale", json!(true)),
+        ("secure", json!(true)),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
