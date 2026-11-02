@@ -1,6 +1,8 @@
 mod board;
+mod expand;
 mod learner;
 mod lessons;
+mod nindex;
 mod pages;
 mod project;
 mod rank;
@@ -12,6 +14,7 @@ mod vault;
 mod wiki;
 
 pub use board::{Card, Graph, Node, Run, links};
+pub use expand::{near, stem_word};
 pub use learner::{Due, Record, points, titled};
 pub use lessons::Lesson;
 pub use pages::{WIKI_KINDS, render as render_page, safe_name, template, write_draft, write_session};

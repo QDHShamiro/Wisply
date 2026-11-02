@@ -65,6 +65,11 @@ fn callee(node: Node, data: &[u8]) -> String {
     String::new()
 }
 
+fn callee_type(node: Node, data: &[u8]) -> String {
+    let Some(n) = node.child_by_field_name("type") else { return String::new() };
+    WORD.find_iter(text(Some(n), data)).next().map(|m| m.as_str().to_string()).unwrap_or_default()
+}
+
 pub fn extract(parser: &mut Parser, data: &[u8]) -> (Vec<Def>, Vec<Ref>) {
     let Some(tree) = parser.parse(data, None) else { return (Vec::new(), Vec::new()) };
     let (mut defs, mut refs) = (Vec::new(), Vec::new());
@@ -85,6 +90,11 @@ pub fn extract(parser: &mut Parser, data: &[u8]) -> (Vec<Def>, Vec<Ref>) {
                     sig: first.chars().take(SIG_CHARS).collect(),
                 });
                 here = name;
+            }
+        } else if kind == "impl_item" {
+            let owner_type = callee_type(node, data);
+            if !owner_type.is_empty() {
+                here = owner_type;
             }
         } else if CALLS.contains(&kind) {
             let name = callee(node, data);
