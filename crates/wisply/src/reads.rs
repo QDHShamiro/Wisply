@@ -318,7 +318,7 @@ mod tests {
         let state = dir.join("headroom");
         let (reply, entry) = run(&state, read_event("s4", &file, &body, false));
         let text = text_of(&reply.unwrap());
-        assert!(text.contains("--- outline") && text.contains("fn handler_20"), "{text}");
+        assert!(text.contains("--- outline") && text.contains("x, every 8 lines: pub fn handler_"), "{text}");
         assert!(text.len() < body.len() / 2);
         assert_eq!(entry["act"], "cut");
         assert!(run(&state, read_event("s4", &file, &body, false)).0.is_none());

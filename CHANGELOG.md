@@ -8,6 +8,7 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- Big-file view, checked live with Haiku: constants (`NAME = ...`) are in the outline, look-alike lines fold into one (`L36-L868 105x, every 8 lines: ...`), the hint names Read with offset/limit and Grep first. A 249-line test file comes back as 2.6k instead of 7.4k characters (full 14.7k), and Haiku found a mid-file value in one read.
 - Builds can live outside the repo: `WISPLY_SOURCE` points setup at the source folder (used by the setup test).
 - Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a
   `wisply more` ref; whole-file `Read` and `cat file` views of 150+ lines / ~3k+ tokens come back as head, outline
