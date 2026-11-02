@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Map, Value, json};
 
 const FILE: &str = "config.json";
+const KINDS: [&str; 7] = ["temp", "cache", "dump", "build", "log", "package", "browser"];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
@@ -22,7 +23,12 @@ pub struct Config {
     pub grow_secs: u64,
     pub notify_gap_secs: u64,
     pub afk_secs: u64,
-    pub clean_min_free_gb: u64,
+    pub disk_warn_gb: u64,
+    pub disk_clean_gb: u64,
+    pub disk_check_secs: u64,
+    pub maven_days: u64,
+    pub disk_scan_secs: u64,
+    pub clean_kinds: Vec<String>,
     pub clean_weekly_secs: u64,
     pub stale_days: u64,
     pub log_days: u64,
@@ -61,7 +67,12 @@ impl Default for Config {
             grow_secs: 120,
             notify_gap_secs: 1800,
             afk_secs: 300,
-            clean_min_free_gb: 25,
+            disk_warn_gb: 25,
+            disk_clean_gb: 40,
+            disk_check_secs: 3600,
+            maven_days: 60,
+            disk_scan_secs: 40,
+            clean_kinds: strings(&KINDS),
             clean_weekly_secs: 604_800,
             stale_days: 30,
             log_days: 14,
@@ -148,7 +159,12 @@ impl Config {
         num("grow_secs", &mut c.grow_secs);
         num("notify_gap_secs", &mut c.notify_gap_secs);
         num("afk_secs", &mut c.afk_secs);
-        num("clean_min_free_gb", &mut c.clean_min_free_gb);
+        num("clean_min_free_gb", &mut c.disk_warn_gb);
+        num("disk_warn_gb", &mut c.disk_warn_gb);
+        num("disk_clean_gb", &mut c.disk_clean_gb);
+        num("disk_check_secs", &mut c.disk_check_secs);
+        num("maven_days", &mut c.maven_days);
+        num("disk_scan_secs", &mut c.disk_scan_secs);
         num("clean_weekly_secs", &mut c.clean_weekly_secs);
         num("stale_days", &mut c.stale_days);
         num("log_days", &mut c.log_days);
@@ -165,6 +181,9 @@ impl Config {
         }
         if let Some(v) = list(&m, "builders") {
             c.builders = v;
+        }
+        if let Some(v) = list(&m, "clean_kinds") {
+            c.clean_kinds = v;
         }
         if let Some(v) = list(&m, "background") {
             c.background = v;
@@ -190,6 +209,7 @@ impl Config {
             }
         }
         c.tick_secs = c.tick_secs.max(1);
+        c.disk_check_secs = c.disk_check_secs.max(60);
         c
     }
 
@@ -210,6 +230,10 @@ impl Config {
             .map_err(|e| format!("cannot save {}: {e}", path.display()))
     }
 
+    pub fn kind_on(&self, key: &str) -> bool {
+        self.clean_kinds.iter().any(|k| k == key)
+    }
+
     pub fn game_procs(&self, game: &str) -> Vec<String> {
         let key = game.trim_start_matches("fullscreen ").to_lowercase();
         let key = key.trim_end_matches(".exe");
@@ -221,7 +245,7 @@ impl Config {
 
     pub fn summary(&self) -> String {
         format!(
-            "act {} | warn {} | notify {} | tick {} s | ram {}% | cpu {}% for {} s | afk {} s | clean below {} GB free | ping {}",
+            "act {} | warn {} | notify {} | tick {} s | ram {}% | cpu {}% for {} s | afk {} s | warn below {} GB free | clean below {} GB free every {} s | ping {}",
             on(self.act),
             on(self.warn),
             on(self.notify),
@@ -230,7 +254,9 @@ impl Config {
             self.cpu_warn_pct,
             self.busy_secs,
             self.afk_secs,
-            self.clean_min_free_gb,
+            self.disk_warn_gb,
+            self.disk_clean_gb,
+            self.disk_check_secs,
             self.ping_host
         )
     }

@@ -29,7 +29,7 @@ Entschieden mit QDHShamiro am 2026-11-01 (grill-me). Für alle Nutzer, Windows +
 - Beim Ende alles exakt wiederherstellen (Prioritäten, Energieplan, pausierte Prozesse). Auch nach Absturz des Daemons: Zustand in Datei, beim Start wiederherstellen.
 
 ## Aufräumen
-- Auto bei < 25 GB frei auf einem Laufwerk + 1x pro Woche wenn AFK/idle.
+- Auto stündlich geprüft; < 40 GB frei auf dem System-Laufwerk (`disk_clean_gb`) räumt selbst, < 25 GB (`disk_warn_gb`) Meldung mit größtem Ordner, `pc disk` zeigt Top-Ordner + Verschiebe-Ideen. Dazu 1x pro Woche wenn AFK/idle. Nie während eines Spiels. Kategorien in `clean_kinds`. Ausgenommen: Hardlink-Dateien, git-getrackte Build-Ordner, Worktrees mit ungemergten Commits, offene Browser.
 - Darf selbst: Temp + OS-Caches + Crash-Dumps; Build-Müll (target/, build/, node_modules, .gradle) in Projekten ohne Änderung seit 30 Tagen; Logs > 14 Tage (u.a. ~/agents-work/*.log|*.json, alte ~/.wisply/out); Paket-Caches (npm, pip, cargo registry, gradle caches).
 - NIE: laufende/geöffnete Projekte, Git-Repos mit ungespeicherten Änderungen, `build/libs` (Live-Mod-Jars), Minecraft/ModrinthApp/.minecraft, Spielordner, ~/.claude, ~/.wisply/memory, Vault, Dokumente/Bilder/Downloads, alles mit Secrets. Liste in Config erweiterbar.
 - Direkt löschen (kein Papierkorb), aber Protokoll: was, wo, wie groß (`pc log`). `--dry` zeigt nur.

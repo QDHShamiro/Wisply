@@ -8,6 +8,15 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply pc` disk guard: every hour the daemon checks the system drive. Below 40 GB free (`disk_clean_gb`, with `pc on`)
+  it cleans only safe things: temp files older than a day, package caches (npm, pip, cargo, gradle, Maven versions unused
+  for 60 days), build folders untouched for 30 days (skipped when git-tracked or in a worktree with unmerged commits)
+  and browser caches while the browser is closed. Below 25 GB free (`disk_warn_gb`) a system notification names the
+  biggest folder. Files with hard links, `~/.wisply` (except `out`), `~/.claude`, `.minecraft`, Documents and Desktop are
+  never touched, and nothing is deleted while a game runs. `pc disk` now lists the biggest folders with GB and ideas to
+  move them to another drive (junction on Windows, symlink on macOS/Linux; printed, never run). Categories switch off
+  with `clean_kinds` in `~/.wisply/pc/config.json`; the log shows every deletion and each guard run.
+
 - Big-file view, checked live with Haiku: constants (`NAME = ...`) are in the outline, look-alike lines fold into one (`L36-L868 105x, every 8 lines: ...`), the hint names Read with offset/limit and Grep first. A 249-line test file comes back as 2.6k instead of 7.4k characters (full 14.7k), and Haiku found a mid-file value in one read.
 - Builds can live outside the repo: `WISPLY_SOURCE` points setup at the source folder (used by the setup test).
 - Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a

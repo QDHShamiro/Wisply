@@ -1,6 +1,8 @@
 use crate::clean;
 use crate::config::{Config, dir, on};
+use crate::disk;
 use crate::engine::{Pc, run_clean};
+use crate::guard::Guard;
 use crate::health;
 use crate::mode::Manual;
 use crate::model::{MB, Sample, secs, short_name, size};
@@ -216,7 +218,18 @@ impl Pc {
 
     fn disk(&mut self) -> String {
         let sample = self.plat.sample();
-        health::render_disks(&health::disks(), &sample)
+        let budget = std::time::Duration::from_secs(self.cfg.disk_scan_secs);
+        let scan = disk::scan(&self.user, &self.scan_roots(), budget);
+        let env = self.clean_env();
+        let freeable = clean::plan(&env, &self.cfg, &sample.procs).iter().map(|i| i.bytes).sum();
+        let guard = Guard::new(&self.user, &self.home, &self.cfg);
+        let lim = disk::Limits { warn_gb: self.cfg.disk_warn_gb, clean_gb: self.cfg.disk_clean_gb, freeable };
+        let top = disk::render(&sample.disks, &scan, &self.user, &guard, &lim);
+        format!(
+            "{top}
+{}",
+            health::render_disks(&health::disks(), &sample)
+        )
     }
 
     fn act(&mut self, yes: bool) -> Result<String, Problem> {
@@ -271,6 +284,7 @@ mod tests {
         );
         p.probes = false;
         p.env_override = Some(clean::Env::default());
+        p.roots_override = Some(Vec::new());
         p
     }
 
@@ -351,6 +365,23 @@ mod tests {
         let err = p.command(&a(&["wat"])).unwrap_err();
         assert_eq!(err.0, "unknown pc command 'wat'");
         assert!(p.command(&a(&["log"])).unwrap().contains("warning | RAM at 90 %"));
+        fs::remove_dir_all(&h).ok();
+    }
+
+    #[test]
+    fn disk_shows_the_system_drive_the_biggest_folders_and_a_move_idea() {
+        let h = home("disk");
+        let mut p = pc(&h);
+        let big = h.join("user/stuff");
+        fs::create_dir_all(&big).unwrap();
+        fs::write(big.join("f.bin"), vec![1u8; 2048]).unwrap();
+        let text = p.command(&a(&["disk"])).unwrap();
+        let first = text.lines().next().unwrap();
+        assert!(
+            first.starts_with("pc disk | C: 10.0 GB free of 500.0 GB (warning below 25 GB, self-clean below 40 GB)"),
+            "{text}"
+        );
+        assert!(text.contains("biggest folders") && text.contains("1. 0.0 GB | ~"), "{text}");
         fs::remove_dir_all(&h).ok();
     }
 
