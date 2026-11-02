@@ -116,7 +116,7 @@ fn ram(s: &Sample, cfg: &Config) -> Vec<Brake> {
 }
 
 fn disks(s: &Sample, cfg: &Config) -> Vec<Brake> {
-    let min = cfg.clean_min_free_gb as f32;
+    let min = cfg.disk_warn_gb as f32;
     s.disks
         .iter()
         .filter(|d| d.total > 0 && (d.free as f32 / GB as f32) < min)

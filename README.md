@@ -214,6 +214,25 @@ wisply ui
 Projects, notes (editor with wikilinks and backlinks), to-dos, search, what each session is doing, a graph of notes
 and code, and the **Blind** page where you pick between two versions in `wisply think`.
 
+## Compact earlier, keep the thread
+
+Long sessions get expensive because every request re-reads the whole context. `wisply doctor ai claude` shows from
+your own transcripts how many requests ran above 200k and 400k tokens and what compacting at 250k would have saved.
+To try it:
+
+```
+wisply config compact 250k      # same as: wisply setup --compact 250k
+wisply config compact off       # back to Claude Code's own window
+```
+
+This writes `autoCompactWindow` into `~/.claude/settings.json` (100k to 1M, nothing else is touched) and says if an
+environment variable or a per-model setting would override it. It is off until you set it.
+
+Whatever the window, a hook runs before each compact (`PreCompact`): without any model it condenses the transcript
+into a short handoff (goal, latest request, decisions, open to-dos, last errors, changed files, under 300 ms) and puts
+it back right after the summary (`SessionStart` with `source: compact`). `wisply memory off` turns it off. How to
+compare 250k with 400k over two weeks: [docs/compact-ab.md](docs/compact-ab.md).
+
 ## Headroom: long logs in short
 
 A build, a test run or a server log can print thousands of lines, and the model pays for every one of them. Headroom
@@ -249,6 +268,15 @@ wisply more hr-3fa91c04de --lines 400-440
 - **Stays out of the way.** It runs without the daemon inside a 50 ms budget. File listings (`ls`, `find`,
   `git log` ...), Wisply's own output (already short) and the saved text itself are never shortened. A file
   `~/.wisply/headroom/off` turns it off.
+
+Reads get the same treatment. Within one session Wisply remembers each file Claude read (path, range, size, change
+time, hash). Reading the same unchanged range again returns one line (`unchanged since your read 3 min ago, lines 1-120;
+wisply more <ref> for the text`) instead of the file. Any Edit or Write on the file, and every compaction, forgets
+it, and changed content is never stubbed. A whole file of 150+ lines and ~3k+ tokens, read by the Read tool or
+`cat file`, arrives as its first 40 lines, an outline with line numbers and its last 15 lines; reading the whole file
+a second time returns all of it. Ranged reads, short files and files already edited in the session stay whole.
+`Write` onto a file that was read in the session adds a hint to use Edit (it never blocks). A file
+`~/.wisply/headroom/reads-off` turns the read handling off.
 
 `wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
 keeps the rest in a file.
@@ -289,7 +317,7 @@ pc 72/100 · RAM 87 % (brave 6.1 GB) · C: 18 GB free · 6 autostarts · ping 1.
 
 - `wisply pc fix <n>` runs suggestion n, `fix all` runs every safe one. `pc clean [--dry]` cleans up, `pc startup`
   lists autostarts (`off <n>` / `on <n>`, the original is kept), `pc net [host]` shows ping and which program holds
-  the line, `pc disk` shows drive health, `pc updates` shows old graphics drivers and open system updates (it never
+  the line, `pc disk` shows the system drive, its biggest folders with GB, ideas to move them to another drive (junction or symlink commands, never run for you) and drive health, `pc updates` shows old graphics drivers and open system updates (it never
   installs anything), `pc game` shows the game mode, `pc afk|play|auto` switches it by hand, `pc log [n]` lists what
   it did, `pc config` shows the settings.
 - The daemon looks every 5 seconds in the background (about 0.3 % of one CPU core and 10 MB of RAM, measured). It warns, with a system
@@ -304,13 +332,19 @@ pc 72/100 · RAM 87 % (brave 6.1 GB) · C: 18 GB free · 6 autostarts · ping 1.
   with the high performance power plan. Builds are paused for a moment when RAM runs out. After 5 minutes without
   input it relaxes, the first input brings it back. Everything is restored exactly at the end, also after a crash of
   the daemon (the state is kept in `~/.wisply/pc/mode-state.json`).
-- Cleaning (below 25 GB free, once a week when idle, or `pc clean`): temp files, caches, crash dumps, build folders
-  (`target`, `build`, `node_modules`, `.gradle`) of projects untouched for 30 days and without uncommitted changes,
-  logs older than 14 days, npm/pip/cargo/gradle caches while their tool is not running. Never touched: open projects,
-  `build/libs`, Minecraft, game folders, `~/.claude`, `~/.wisply/memory`, the vault, Documents, Pictures, Downloads and
-  anything that looks like a secret. Deleted files skip the recycle bin; `pc log` says what, where and how big.
+- Disk guard (`pc on`): once an hour it looks at the system drive. Below 40 GB free it cleans by itself, only safe
+  things: temp files older than a day (never folders of open programs or Claude sessions), npm/pip/cargo/gradle caches
+  and Maven versions unused for 60 days (while their tool is not running), `target`/`build`/`node_modules`/`.gradle`
+  next to a project marker untouched for 30 days (not git-tracked, not in a worktree with unmerged commits, no
+  uncommitted changes), crash dumps, logs older than 14 days and browser caches (only while that browser is closed).
+  Nothing is deleted while a game runs. Below 25 GB free a system notification names the biggest folder (never takes
+  focus, once per 30 minutes). Never touched: open projects, `build/libs`, Minecraft, game folders, `~/.claude`,
+  `~/.wisply` (except old files in `out`), the vault, Documents, Pictures, Downloads, Desktop, anything with
+  hard links and anything that looks like a secret. Also once a week when idle, or by hand with `pc clean [--dry]`.
+  Deleted files skip the recycle bin; `pc log` says what, where and how big.
 - Settings live in `~/.wisply/pc/config.json` (`act`, `warn`, `notify`, `statusline`, `tick_secs`, thresholds,
-  `builders`, `background`, `protect`, `protect_paths`, `project_roots`, `ping_host`, `game_exes`).
+  `disk_clean_gb`, `disk_warn_gb`, `disk_check_secs`, `disk_scan_secs`, `maven_days`, `clean_kinds` (`temp`, `cache`,
+  `dump`, `build`, `log`, `package`, `browser`), `builders`, `background`, `protect`, `protect_paths`, `project_roots`, `ping_host`, `game_exes`).
 
 ## The numbers
 
@@ -454,7 +488,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
-| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) |
+| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) · `config compact 250k` |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |

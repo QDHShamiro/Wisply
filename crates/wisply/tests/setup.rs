@@ -11,6 +11,7 @@ impl Home {
         let out = Command::new(EXE)
             .args(args)
             .env("WISPLY_HOME", &self.0)
+            .env("WISPLY_SOURCE", concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
             .env("CLAUDE_CODE_SESSION_ID", "it-setup")
             .env_remove("MSYSTEM")
             .stdin(Stdio::null())

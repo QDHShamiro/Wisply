@@ -9,6 +9,7 @@ mod tokens_files;
 mod tokens_scan;
 mod transcripts;
 mod usage;
+mod window;
 
 use std::env;
 use std::fs;
@@ -86,6 +87,7 @@ pub fn rows() -> (Vec<Row>, String) {
     rows.extend(tokens::rows(&env, &tokens_scan::scan(&env)));
     rows.extend(transcripts::rows(&scan));
     rows.extend(context::rows(&env));
+    rows.extend(window::rows(&env));
     rows.extend(mode::rows(&env));
     (rows, scan.window())
 }

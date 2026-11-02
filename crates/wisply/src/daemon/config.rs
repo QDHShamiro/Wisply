@@ -111,6 +111,10 @@ pub fn blocklist(home: &Path) -> Vec<String> {
 }
 
 pub fn command(home: &Path, pos: &[String]) -> Result<(String, bool), Fail> {
+    if pos.first().is_some_and(|k| k == "compact") {
+        let text = crate::setup::compact::command(&crate::setup::claude_env::settings_file(), &pos[1..]);
+        return text.map(|t| (t, false)).map_err(Fail::new);
+    }
     let mut cfg = load(home);
     let dumps = |v: &Value| serde_json::to_string(v).unwrap_or_default();
     let Some(key) = pos.first() else {

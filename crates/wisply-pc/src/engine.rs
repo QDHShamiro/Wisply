@@ -10,6 +10,7 @@ use serde_json::json;
 use crate::bg::Bg;
 use crate::clean;
 use crate::config::{Config, dir};
+use crate::disk::{self, Scan};
 use crate::lag::{Cooldown, Finder, Lag};
 use crate::log::Log;
 use crate::mode::{Engine, Manual, Mode, decide};
@@ -23,7 +24,6 @@ const RELOAD_EVERY: u64 = 12;
 const AUTOSTART_EVERY: u64 = 600;
 const PING_EVERY: u64 = 60;
 const STATUS_EVERY: u64 = 30;
-const CLEAN_RETRY: u64 = 3600;
 const MAX_SUGGESTIONS: usize = 8;
 const STATUS_FILE: &str = "status.json";
 const CLEAN_FILE: &str = "last-clean";
@@ -55,12 +55,14 @@ pub struct Pc {
     pub suggestions: Vec<Suggestion>,
     pub probes: bool,
     pub env_override: Option<clean::Env>,
+    pub roots_override: Option<Vec<PathBuf>>,
     pub ticks: u64,
     pub spent: Duration,
     finder: Finder,
     cool: Cooldown,
     autostarts: Bg<usize>,
     ping: Bg<(String, Option<u64>)>,
+    usage: Bg<Scan>,
     cleaning: Arc<AtomicBool>,
     clean_try: u64,
     status: (String, u64),
@@ -81,12 +83,14 @@ impl Pc {
             suggestions: Vec::new(),
             probes: true,
             env_override: None,
+            roots_override: None,
             ticks: 0,
             spent: Duration::ZERO,
             finder: Finder::default(),
             cool: Cooldown::default(),
             autostarts: Bg::new(),
             ping: Bg::new(),
+            usage: Bg::new(),
             cleaning: Arc::new(AtomicBool::new(false)),
             clean_try: 0,
             status: (String::new(), 0),
@@ -142,7 +146,8 @@ impl Pc {
         let report = evaluate(&sample, &facts, &self.cfg);
         self.write_status(&report);
         self.warn(&lags, &report);
-        self.auto_clean(&sample, mode);
+        self.auto_clean(&sample, !game.is_empty());
+        self.disk_alert(&sample);
         self.last = Some(View { sample, facts, report, game: game.into(), mode });
         self.ticks += 1;
         self.spent += started.elapsed();
@@ -208,15 +213,15 @@ impl Pc {
         fs::read_to_string(dir(&self.home).join(CLEAN_FILE)).ok().and_then(|t| t.trim().parse().ok()).unwrap_or(0)
     }
 
-    fn auto_clean(&mut self, s: &Sample, mode: Mode) {
-        if !self.cfg.act || mode == Mode::Play || self.cleaning.load(Ordering::Acquire) {
+    fn auto_clean(&mut self, s: &Sample, game: bool) {
+        if !self.cfg.act || game || self.cleaning.load(Ordering::Acquire) {
             return;
         }
         let now = secs();
-        let low = s.disks.iter().any(|d| d.total > 0 && d.free < self.cfg.clean_min_free_gb * GB);
+        let low = disk::system_disk(&s.disks, &self.user).is_some_and(|d| d.free < self.cfg.disk_clean_gb * GB);
         let idle = s.idle_secs.is_some_and(|i| i >= self.cfg.afk_secs);
         let weekly = idle && now.saturating_sub(self.last_clean()) >= self.cfg.clean_weekly_secs;
-        if !(low || weekly) || now.saturating_sub(self.clean_try) < CLEAN_RETRY {
+        if !(low || weekly) || now.saturating_sub(self.clean_try) < self.cfg.disk_check_secs {
             return;
         }
         self.clean_try = now;
@@ -224,12 +229,47 @@ impl Pc {
         let (home, env, cfg, procs) = (self.home.clone(), self.clean_env(), self.cfg.clone(), s.procs.clone());
         let flag = Arc::clone(&self.cleaning);
         let spawned = thread::Builder::new().name("pc-clean".into()).spawn(move || {
-            run_clean(&home, &env, &cfg, &procs);
+            let out = run_clean(&home, &env, &cfg, &procs);
+            if out.removed > 0 {
+                let why = if low { "disk guard" } else { "weekly clean" };
+                Log::new(&dir(&home)).add(
+                    "clean",
+                    &format!("{why} finished"),
+                    &format!("{} items", out.removed),
+                    out.freed,
+                );
+            }
             flag.store(false, Ordering::Release);
         });
         if spawned.is_err() {
             self.cleaning.store(false, Ordering::Release);
         }
+    }
+
+    fn disk_alert(&mut self, s: &Sample) {
+        if !self.cfg.warn {
+            return;
+        }
+        let Some(d) = disk::system_disk(&s.disks, &self.user).filter(|d| d.free < self.cfg.disk_warn_gb * GB) else {
+            return;
+        };
+        let now = secs();
+        let (user, budget) = (self.user.clone(), Duration::from_secs(self.cfg.disk_scan_secs));
+        let roots = self.scan_roots();
+        self.usage.refresh(now, self.cfg.disk_check_secs, move || disk::scan(&user, &roots, budget));
+        let Some(scan) = self.usage.get() else { return };
+        if !self.cool.allow("disk", now, self.cfg.notify_gap_secs) {
+            return;
+        }
+        let text = disk::alert(d, &scan, &self.user);
+        self.log.add("warning", &text, "wisply pc disk", 0);
+        if self.cfg.notify {
+            (self.notifier)("Wisply PC", &format!("{text} - wisply pc disk"));
+        }
+    }
+
+    pub fn scan_roots(&self) -> Vec<PathBuf> {
+        self.roots_override.clone().unwrap_or_else(|| disk::system_roots(&self.user))
     }
 
     pub fn clean_env(&self) -> clean::Env {
@@ -336,6 +376,95 @@ mod tests {
         assert_eq!(p.remember(Fix::Free, "a"), 1);
         assert_eq!(p.remember(Fix::Clean, "b"), 2);
         assert_eq!(p.remember(Fix::Free, "a"), 1);
+        fs::remove_dir_all(&h).ok();
+    }
+
+    fn roomy(free_gb: u64) -> Fake {
+        let mut f = Fake::with(vec![proc(1, 0, "tool.exe", GB)]);
+        f.sample.mem_total = 100 * GB;
+        f.sample.mem_used = 10 * GB;
+        f.sample.disks = vec![Disk { mount: "C:".into(), total: 500 * GB, free: free_gb * GB }];
+        f
+    }
+
+    fn acting(h: &Path, free_gb: u64, sink: Arc<Mutex<Vec<String>>>) -> (Pc, PathBuf) {
+        fs::create_dir_all(dir(h)).unwrap();
+        fs::write(dir(h).join("config.json"), r#"{"act":true,"disk_check_secs":60}"#).unwrap();
+        let junk = h.join("temp/old.tmp");
+        fs::create_dir_all(junk.parent().unwrap()).unwrap();
+        fs::write(&junk, vec![1u8; 100]).unwrap();
+        let mut p = pc(h, roomy(free_gb), sink);
+        p.roots_override = Some(Vec::new());
+        p.env_override = Some(clean::Env {
+            user: h.join("user"),
+            wisply: h.join("user/.wisply"),
+            temps: vec![h.join("temp")],
+            now: secs() + 3 * 86_400,
+            ..clean::Env::default()
+        });
+        (p, junk)
+    }
+
+    fn wait_gone(path: &Path) -> bool {
+        let end = Instant::now() + Duration::from_secs(10);
+        while path.exists() && Instant::now() < end {
+            thread::sleep(Duration::from_millis(20));
+        }
+        !path.exists()
+    }
+
+    #[test]
+    fn below_the_clean_limit_the_guard_deletes_by_itself_and_logs_it() {
+        let h = home("guard");
+        let (mut p, junk) = acting(&h, 30, Arc::new(Mutex::new(Vec::new())));
+        p.tick("");
+        assert!(wait_gone(&junk));
+        let end = Instant::now() + Duration::from_secs(10);
+        while !p.log.show(10).contains("disk guard finished") && Instant::now() < end {
+            thread::sleep(Duration::from_millis(20));
+        }
+        let shown = p.log.show(10);
+        assert!(shown.contains("deleted temp files") && shown.contains("disk guard finished"), "{shown}");
+        fs::remove_dir_all(&h).ok();
+    }
+
+    #[test]
+    fn nothing_is_deleted_while_a_game_runs_or_with_plenty_of_space() {
+        let h = home("game");
+        let (mut p, junk) = acting(&h, 30, Arc::new(Mutex::new(Vec::new())));
+        p.tick("minecraft");
+        thread::sleep(Duration::from_millis(300));
+        assert!(junk.exists());
+        let h2 = home("plenty");
+        let (mut q, junk2) = acting(&h2, 200, Arc::new(Mutex::new(Vec::new())));
+        q.tick("");
+        thread::sleep(Duration::from_millis(300));
+        assert!(junk2.exists());
+        fs::remove_dir_all(&h).ok();
+        fs::remove_dir_all(&h2).ok();
+    }
+
+    #[test]
+    fn below_the_warning_limit_one_notification_names_the_biggest_folder() {
+        let h = home("alert");
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let (mut p, _) = acting(&h, 10, Arc::clone(&sink));
+        fs::create_dir_all(h.join("user/bigstuff")).unwrap();
+        fs::write(h.join("user/bigstuff/f.bin"), vec![1u8; 4096]).unwrap();
+        let end = Instant::now() + Duration::from_secs(60);
+        while sink.lock().unwrap().is_empty() && Instant::now() < end {
+            p.tick("");
+            thread::sleep(Duration::from_millis(50));
+        }
+        for _ in 0..3 {
+            p.tick("");
+        }
+        let got = sink.lock().unwrap().clone();
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert!(
+            got[0].starts_with("Wisply PC|C: only 10.0 GB free - biggest: ") && got[0].ends_with("wisply pc disk"),
+            "{got:?}"
+        );
         fs::remove_dir_all(&h).ok();
     }
 }

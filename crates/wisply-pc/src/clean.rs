@@ -7,7 +7,8 @@ use crate::guard::{Guard, inside, norm, path_of};
 use crate::log::Log;
 use crate::model::{Proc, short_name, size};
 use crate::plat::shell;
-use crate::walk::{mtime, weigh};
+use crate::sources;
+use crate::walk::{mtime, weigh, weigh_with};
 
 const DAY: u64 = 86_400;
 const HOUR: u64 = 3600;
@@ -56,6 +57,7 @@ pub enum Kind {
     Build,
     Log,
     Package,
+    Browser,
 }
 
 impl Kind {
@@ -67,6 +69,19 @@ impl Kind {
             Kind::Build => "old build folders",
             Kind::Log => "old logs",
             Kind::Package => "package caches",
+            Kind::Browser => "browser caches",
+        }
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Kind::Temp => "temp",
+            Kind::Cache => "cache",
+            Kind::Dump => "dump",
+            Kind::Build => "build",
+            Kind::Log => "log",
+            Kind::Package => "package",
+            Kind::Browser => "browser",
         }
     }
 }
@@ -88,6 +103,8 @@ pub struct Env {
     pub roots: Vec<PathBuf>,
     pub logs: Vec<PathBuf>,
     pub packages: Vec<(PathBuf, &'static str)>,
+    pub browsers: Vec<(PathBuf, &'static str)>,
+    pub maven: Option<PathBuf>,
     pub now: u64,
 }
 
@@ -116,6 +133,7 @@ pub fn env_here(user: &Path, wisply: &Path, cfg: &Config, now: u64) -> Env {
         (path_of(user, &[".cargo", "registry", "src"]), "cargo"),
         (path_of(user, &[".gradle", "caches"]), "gradle"),
     ];
+    env.maven = Some(path_of(user, &[".m2", "repository"]));
     if cfg!(windows) {
         let local = var("LOCALAPPDATA").unwrap_or_else(|| path_of(user, &["AppData", "Local"]));
         env.caches.push((local.join("CrashDumps"), Kind::Dump));
@@ -123,14 +141,17 @@ pub fn env_here(user: &Path, wisply: &Path, cfg: &Config, now: u64) -> Env {
         env.caches.push((path_of(&local, &["Microsoft", "Windows", "INetCache"]), Kind::Cache));
         env.packages.push((local.join("npm-cache"), "npm"));
         env.packages.push((path_of(&local, &["pip", "Cache"]), "pip"));
+        env.browsers = sources::browsers(user, Some(&local));
     } else if cfg!(target_os = "macos") {
         env.caches.push((path_of(user, &["Library", "Logs", "DiagnosticReports"]), Kind::Dump));
         env.packages.push((path_of(user, &[".npm", "_cacache"]), "npm"));
         env.packages.push((path_of(user, &["Library", "Caches", "pip"]), "pip"));
+        env.browsers = sources::browsers(user, None);
     } else {
         env.caches.push((path_of(user, &[".cache", "thumbnails"]), Kind::Cache));
         env.packages.push((path_of(user, &[".npm", "_cacache"]), "npm"));
         env.packages.push((path_of(user, &[".cache", "pip"]), "pip"));
+        env.browsers = sources::browsers(user, None);
     }
     env
 }
@@ -141,6 +162,11 @@ fn tool_names(tool: &str) -> &'static [&'static str] {
         "gradle" => &["java", "javaw", "gradle", "gradlew", "kotlin-daemon"],
         "npm" => &["node", "npm", "npx", "yarn", "pnpm"],
         "pip" => &["python", "python3", "pip", "pip3", "pythonw"],
+        "maven" => &["java", "javaw", "mvn", "mvnw"],
+        "brave" => &["brave", "brave-browser"],
+        "chrome" => &["chrome", "google chrome", "google-chrome", "chromium", "chromium-browser"],
+        "edge" => &["msedge", "microsoft edge", "microsoft-edge"],
+        "firefox" => &["firefox"],
         _ => &[],
     }
 }
@@ -158,8 +184,8 @@ fn item(path: PathBuf, kind: Kind, tool: Option<&'static str>, g: &Guard) -> Opt
     if g.blocked(&path).is_some() {
         return None;
     }
-    let w = weigh(&path, &[]);
-    if !w.complete || (path.is_dir() && g.holds_secret(&path)) {
+    let w = weigh_with(&path, &[], true);
+    if !w.complete || w.linked || (path.is_dir() && g.holds_secret(&path)) {
         return None;
     }
     Some((Item { path, bytes: w.bytes, kind, tool }, w.newest))
@@ -169,10 +195,18 @@ fn aged(env: &Env, newest: u64, hours: u64) -> bool {
     env.now.saturating_sub(newest) >= hours * HOUR
 }
 
-fn from_dirs(env: &Env, dirs: &[(PathBuf, Kind)], cfg: &Config, g: &Guard) -> Vec<Item> {
+fn session_dir(path: &Path, procs: &[Proc]) -> bool {
+    let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    name.contains("claude") && procs.iter().any(|p| short_name(&p.name) == "claude")
+}
+
+fn from_dirs(env: &Env, dirs: &[(PathBuf, Kind)], cfg: &Config, g: &Guard, procs: &[Proc]) -> Vec<Item> {
     let mut out = Vec::new();
     for (dir, kind) in dirs {
         for child in children(dir) {
+            if session_dir(&child, procs) || running_in(&child, procs) {
+                continue;
+            }
             if let Some((it, newest)) = item(child, *kind, None, g)
                 && aged(env, newest, cfg.temp_hours)
             {
@@ -204,11 +238,24 @@ fn logs(env: &Env, cfg: &Config, g: &Guard) -> Vec<Item> {
     out
 }
 
-fn packages(env: &Env, procs: &[Proc], g: &Guard) -> Vec<Item> {
-    env.packages
+fn packages(env: &Env, cfg: &Config, procs: &[Proc], g: &Guard) -> Vec<Item> {
+    let mut out = Vec::new();
+    for (p, tool) in env.packages.iter().filter(|(p, tool)| p.is_dir() && !busy(tool, procs)) {
+        out.extend(item(p.clone(), Kind::Package, Some(tool), g).map(|(i, _)| i));
+    }
+    if let Some(repo) = env.maven.as_ref().filter(|r| r.is_dir() && !busy("maven", procs)) {
+        for v in sources::maven_old(repo, env.now, cfg.maven_days) {
+            out.extend(item(v, Kind::Package, Some("maven"), g).map(|(i, _)| i));
+        }
+    }
+    out
+}
+
+fn browsers(env: &Env, procs: &[Proc], g: &Guard) -> Vec<Item> {
+    env.browsers
         .iter()
         .filter(|(p, tool)| p.is_dir() && !busy(tool, procs))
-        .filter_map(|(p, tool)| item(p.clone(), Kind::Package, Some(tool), g).map(|(i, _)| i))
+        .filter_map(|(p, tool)| item(p.clone(), Kind::Browser, Some(tool), g).map(|(i, _)| i))
         .collect()
 }
 
@@ -222,6 +269,7 @@ fn clean_repo(dir: &Path) -> bool {
     }
     let path = dir.to_string_lossy();
     shell::run("git", &["-C", &path, "status", "--porcelain"], GIT_WAIT).is_some_and(|out| out.trim().is_empty())
+        && !sources::unmerged_worktree(dir)
 }
 
 fn running_in(dir: &Path, procs: &[Proc]) -> bool {
@@ -262,6 +310,10 @@ fn walk_projects(env: &Env, dir: &Path, depth: usize, cfg: &Config, procs: &[Pro
     }
     if is_project(dir) && stale(env, dir, cfg) && !running_in(dir, procs) && clean_repo(dir) {
         for path in junk_in(dir) {
+            let rel = path.strip_prefix(dir).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+            if sources::tracked(dir, &rel) {
+                continue;
+            }
             if let Some((it, _)) = item(path, Kind::Build, None, g) {
                 out.push(it);
             }
@@ -279,13 +331,17 @@ fn walk_projects(env: &Env, dir: &Path, depth: usize, cfg: &Config, procs: &[Pro
 pub fn plan(env: &Env, cfg: &Config, procs: &[Proc]) -> Vec<Item> {
     let g = Guard::new(&env.user, &env.wisply, cfg);
     let temps: Vec<(PathBuf, Kind)> = env.temps.iter().map(|t| (t.clone(), Kind::Temp)).collect();
-    let mut out = from_dirs(env, &temps, cfg, &g);
-    out.extend(from_dirs(env, &env.caches, cfg, &g));
+    let mut out = from_dirs(env, &temps, cfg, &g, procs);
+    out.extend(from_dirs(env, &env.caches, cfg, &g, procs));
     out.extend(logs(env, cfg, &g));
-    out.extend(packages(env, procs, &g));
-    for root in &env.roots {
-        walk_projects(env, root, 0, cfg, procs, &g, &mut out);
+    out.extend(packages(env, cfg, procs, &g));
+    out.extend(browsers(env, procs, &g));
+    if cfg.kind_on("build") {
+        for root in &env.roots {
+            walk_projects(env, root, 0, cfg, procs, &g, &mut out);
+        }
     }
+    out.retain(|i| cfg.kind_on(i.kind.key()));
     out.sort_by(|a, b| a.path.cmp(&b.path));
     out.dedup_by(|a, b| a.path == b.path);
     out
@@ -324,7 +380,7 @@ pub fn render(items: &[Item], dry: bool) -> String {
     if items.is_empty() {
         return "pc clean | nothing to clean up".into();
     }
-    let kinds = [Kind::Temp, Kind::Cache, Kind::Dump, Kind::Build, Kind::Log, Kind::Package];
+    let kinds = [Kind::Temp, Kind::Cache, Kind::Dump, Kind::Build, Kind::Log, Kind::Package, Kind::Browser];
     let total: u64 = items.iter().map(|i| i.bytes).sum();
     let head = if dry { "pc clean --dry | would free" } else { "pc clean | can free" };
     let mut lines = vec![format!("{head} {} in {} items", size(total), items.len())];
