@@ -59,6 +59,8 @@ impl Lab {
             roots: vec![self.root.join("user")],
             logs: vec![self.root.join("user/.wisply/out"), self.root.join("user/agents-work")],
             packages: vec![(self.root.join("user/.cargo/registry/cache"), "cargo")],
+            browsers: vec![(self.root.join("user/browser/Cache"), "brave")],
+            maven: Some(self.root.join("user/.m2/repository")),
             now: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
         }
     }
@@ -211,4 +213,100 @@ fn tool_folders_in_hidden_dirs_and_node_modules_without_a_lockfile_are_never_lis
     }
     let got = names(&plan(&lab.env(), &cfg(), &[]), &lab.root);
     assert_eq!(got, ["user/locked/node_modules"], "{got:?}");
+}
+
+#[test]
+fn temp_entries_with_hard_links_or_a_claude_session_are_left_alone() {
+    let lab = Lab::new("links");
+    lab.file("temp/plain.tmp", 10);
+    let shared = lab.file("temp/shared/a.bin", 10);
+    fs::hard_link(&shared, lab.root.join("user_copy.bin")).unwrap();
+    lab.file("temp/claude-abc/x", 10);
+    for f in ["temp/plain.tmp", "temp/shared", "temp/claude-abc"] {
+        lab.age(f, 3);
+    }
+    let claude = Proc { pid: 3, name: "claude.exe".into(), ..Proc::default() };
+    let got = names(&plan(&lab.env(), &cfg(), &[claude]), &lab.root);
+    assert_eq!(got, ["temp/plain.tmp"], "{got:?}");
+    let got = names(&plan(&lab.env(), &cfg(), &[]), &lab.root);
+    assert_eq!(got, ["temp/claude-abc", "temp/plain.tmp"], "{got:?}");
+}
+
+#[test]
+fn browser_caches_go_only_while_the_browser_is_closed() {
+    let lab = Lab::new("browser");
+    lab.file("user/browser/Cache/f_1", 500);
+    let open = Proc { pid: 4, name: "brave.exe".into(), ..Proc::default() };
+    assert!(plan(&lab.env(), &cfg(), &[open]).is_empty());
+    let items = plan(&lab.env(), &cfg(), &[]);
+    assert_eq!((items.len(), items[0].kind), (1, Kind::Browser));
+}
+
+#[test]
+fn switched_off_categories_are_not_planned() {
+    let lab = Lab::new("kinds");
+    lab.file("user/browser/Cache/f_1", 500);
+    lab.file("temp/old.tmp", 10);
+    lab.age("temp/old.tmp", 3);
+    let only_temp = Config { clean_kinds: vec!["temp".into()], ..cfg() };
+    assert_eq!(names(&plan(&lab.env(), &only_temp, &[]), &lab.root), ["temp/old.tmp"]);
+    let none = Config { clean_kinds: Vec::new(), ..cfg() };
+    assert!(plan(&lab.env(), &none, &[]).is_empty());
+}
+
+#[test]
+fn old_maven_versions_go_recent_ones_stay() {
+    let lab = Lab::new("maven");
+    lab.file("user/.m2/repository/org/a/lib/1.0/lib-1.0.jar", 100);
+    lab.file("user/.m2/repository/org/a/lib/2.0/lib-2.0.jar", 100);
+    lab.age("user/.m2/repository/org/a/lib/1.0", 90);
+    let mut env = lab.env();
+    env.now += 1;
+    let got = names(&plan(&env, &cfg(), &[]), &lab.root);
+    assert!(got.iter().all(|n| n.ends_with("lib/1.0")) && got.len() <= 1, "{got:?}");
+    let java = Proc { pid: 5, name: "java.exe".into(), ..Proc::default() };
+    assert!(plan(&env, &cfg(), &[java]).is_empty());
+}
+
+#[test]
+fn wisply_data_stays_untouched_except_the_old_output_logs() {
+    let lab = Lab::new("wisply");
+    lab.file("user/.wisply/config.json", 10);
+    lab.file("user/.wisply/out/o.txt", 10);
+    lab.age("user/.wisply", 40);
+    let g = Guard::new(&lab.root.join("user"), &lab.root.join("user/.wisply"), &cfg());
+    assert!(g.blocked(&lab.root.join("user/.wisply/config.json")).is_some());
+    assert!(g.blocked(&lab.root.join("user/.wisply/out/o.txt")).is_none());
+}
+
+#[test]
+fn the_ignored_files_inside_a_git_project_are_cleaned_but_tracked_ones_never() {
+    if !shell::exists("git") {
+        return;
+    }
+    let lab = Lab::new("tracked");
+    lab.file("user/proj/Cargo.toml", 5);
+    lab.file("user/proj/target/kept.bin", 100);
+    lab.file("user/other/Cargo.toml", 5);
+    lab.file("user/other/target/gone.bin", 100);
+    lab.file("user/other/.gitignore", 8);
+    fs::write(
+        lab.root.join("user/other/.gitignore"),
+        "target/
+",
+    )
+    .unwrap();
+    for dir in ["proj", "other"] {
+        let path = lab.root.join("user").join(dir).to_string_lossy().into_owned();
+        let git = |args: &[&str]| {
+            let mut all = vec!["-C", path.as_str(), "-c", "user.name=t", "-c", "user.email=t@t"];
+            all.extend_from_slice(args);
+            shell::run("git", &all, Duration::from_secs(20)).is_some()
+        };
+        assert!(git(&["init", "-q"]) && git(&["add", "-A"]) && git(&["commit", "-q", "-m", "x"]));
+    }
+    lab.age("user/proj", 60);
+    lab.age("user/other", 60);
+    let got = names(&plan(&lab.env(), &cfg(), &[]), &lab.root);
+    assert_eq!(got, ["user/other/target"], "{got:?}");
 }

@@ -95,8 +95,8 @@ impl Guard {
         if p.contains("/build/libs") || p.ends_with("/build/libs") {
             return Some("build/libs holds finished jars");
         }
-        if inside(&p, &format!("{}/memory", self.wisply)) {
-            return Some("wisply memory");
+        if inside(&p, &self.wisply) && !inside(&p, &format!("{}/out", self.wisply)) {
+            return Some("wisply data");
         }
         if let Some(rest) = p.strip_prefix(&format!("{}/", self.home))
             && let Some(first) = rest.split('/').next()

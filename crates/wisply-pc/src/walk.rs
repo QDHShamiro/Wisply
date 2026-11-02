@@ -9,6 +9,7 @@ pub struct Weight {
     pub bytes: u64,
     pub newest: u64,
     pub complete: bool,
+    pub linked: bool,
 }
 
 pub fn mtime(meta: &Metadata) -> u64 {
@@ -16,17 +17,24 @@ pub fn mtime(meta: &Metadata) -> u64 {
 }
 
 pub fn weigh(path: &Path, skip: &[&str]) -> Weight {
+    weigh_with(path, skip, false)
+}
+
+pub fn weigh_with(path: &Path, skip: &[&str], links: bool) -> Weight {
     let mut w = Weight { complete: true, ..Weight::default() };
     let mut seen = 0;
-    add(path, skip, &mut w, &mut seen);
+    add(path, skip, links, &mut w, &mut seen);
     w
 }
 
-fn add(path: &Path, skip: &[&str], w: &mut Weight, seen: &mut usize) {
+fn add(path: &Path, skip: &[&str], links: bool, w: &mut Weight, seen: &mut usize) {
     let Ok(meta) = fs::symlink_metadata(path) else { return };
     w.newest = w.newest.max(mtime(&meta));
     if !meta.is_dir() {
         w.bytes += meta.len();
+        if links && !w.linked && crate::links::shared(path, &meta) {
+            w.linked = true;
+        }
         return;
     }
     if meta.file_type().is_symlink() {
@@ -43,7 +51,7 @@ fn add(path: &Path, skip: &[&str], w: &mut Weight, seen: &mut usize) {
         if skip.contains(&name.as_str()) {
             continue;
         }
-        add(&e.path(), skip, w, seen);
+        add(&e.path(), skip, links, w, seen);
         if !w.complete {
             return;
         }

@@ -7,6 +7,16 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Added
+- `wisply pc` disk guard: every hour the daemon checks the system drive. Below 40 GB free (`disk_clean_gb`, with `pc on`)
+  it cleans only safe things: temp files older than a day, package caches (npm, pip, cargo, gradle, Maven versions unused
+  for 60 days), build folders untouched for 30 days (skipped when git-tracked or in a worktree with unmerged commits)
+  and browser caches while the browser is closed. Below 25 GB free (`disk_warn_gb`) a system notification names the
+  biggest folder. Files with hard links, `~/.wisply` (except `out`), `~/.claude`, `.minecraft`, Documents and Desktop are
+  never touched, and nothing is deleted while a game runs. `pc disk` now lists the biggest folders with GB and ideas to
+  move them to another drive (junction on Windows, symlink on macOS/Linux; printed, never run). Categories switch off
+  with `clean_kinds` in `~/.wisply/pc/config.json`; the log shows every deletion and each guard run.
+
 ### Changed
 - `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
 - Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
