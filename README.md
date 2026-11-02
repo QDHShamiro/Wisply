@@ -346,6 +346,31 @@ pc 72/100 · RAM 87 % (brave 6.1 GB) · C: 18 GB free · 6 autostarts · ping 1.
   `disk_clean_gb`, `disk_warn_gb`, `disk_check_secs`, `disk_scan_secs`, `maven_days`, `clean_kinds` (`temp`, `cache`,
   `dump`, `build`, `log`, `package`, `browser`), `builders`, `background`, `protect`, `protect_paths`, `project_roots`, `ping_host`, `game_exes`).
 
+## Agent board and phone
+
+`wisply agents` lists every Claude session in one short table: name, folder name, status (`running`, `waiting`,
+`done`, `limit`, `error`), time since the last change, tokens, estimated cost and the last line (keys, tokens, mail
+addresses and paths are masked). The window has an Agents page and the status line a field like
+`agents 2 run 1 wait` (`wisply statusline set agents off` hides it). Tokens and cost come from the numbers in the
+Claude transcripts; the cost is an estimate from public per-model prices.
+
+- Limit guard: when a session stops with "usage limit reached" or "hit your limit", Wisply reads the reset time,
+  waits two minutes past it and continues each of those background sessions exactly once with
+  `claude --bg --resume <session> "weiter"`. It never starts sessions that did not run, waits while the game mode is
+  on and writes every step to `~/.wisply/agents/guard.log`. `wisply config agents_resume off` turns the resuming off,
+  `wisply config agents off` the whole board.
+- Events: `done`, `waiting`, `limit`, `resumed` (and `ci_red`, `ci_green`, `disk` from other tools through
+  `wisply notify event <kind> "title" [text]`) become a Windows notification that never takes focus
+  (`wisply config agents_notify off`) and appear on the phone feed.
+- Agents on the phone: open the `web:` link `wisply mobile pair` prints (Tailscale address) in the phone browser; it pairs once and shows the same Agents page as `wisply ui`. Config: `agents_lock` (build lock folder) and `agents_work` (folder with `<agent>/RESULT.md`).
+- Phone API: `wisply mobile pair [--name handy]` shows a QR code (and a PNG) for the Wisply app; `mobile list`,
+  `mobile revoke <name>`, `mobile status`, `mobile off`. The server answers only on `127.0.0.1` and Tailscale
+  addresses (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`; `phone_bind` can add more of those, never `0.0.0.0`), port
+  `phone_port` (47841). Every call needs the device token (`Authorization: Bearer`), 20 requests per second per token;
+  without a valid token the answer is always `401`. The pairing code works once for 10 minutes; only a hash of
+  each token is stored. Endpoints: `GET /v1/agents`, `/v1/agents/{id}`, `/v1/status`, `/v1/events` (server-sent
+  events), `POST /v1/agents/{id}/reply`, `/v1/agents/{id}/stop`, `/v1/pair`.
+
 ## The numbers
 
 Every number comes from a run you can repeat: `wisply bench`, `wisply bench --real`, `wisply selftest`.
@@ -489,6 +514,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
 | **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) · `config compact 250k` |
+| **Agents** | `agents` · `mobile pair` · `notify event done "title"` |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |

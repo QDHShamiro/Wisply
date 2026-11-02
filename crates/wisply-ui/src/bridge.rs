@@ -12,7 +12,7 @@ use super::Ev;
 const START_WAIT: Duration = Duration::from_secs(15);
 const RETRY: Duration = Duration::from_millis(100);
 const ALLOWED: &[&str] =
-    &["board", "status", "abort", "tokens", "brain", "memory", "todo", "wiki", "config", "version"];
+    &["board", "status", "abort", "tokens", "brain", "memory", "todo", "wiki", "config", "version", "agents"];
 const PICK_FOLDER: &str = "pick-folder";
 const THEME: &str = "theme";
 const CLI: &str = if cfg!(windows) { "wisply.exe" } else { "wisply" };

@@ -1,5 +1,6 @@
 use std::env;
 use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::LazyLock;
@@ -87,25 +88,46 @@ fn quiet(cmd: &mut Command, extra: u32) {
     cmd.creation_flags(NO_WINDOW | extra);
 }
 
-fn claude_out(args: &[&str]) -> Result<String, Fail> {
+pub(super) fn claude_out(args: &[&str]) -> Result<String, Fail> {
+    claude_in(args, None)
+}
+
+pub(super) fn claude_in(args: &[&str], dir: Option<&Path>) -> Result<String, Fail> {
     let failed = |e: String| Fail::new(format!("claude {} failed: {e}", args[0]));
     let mut cmd = Command::new(claude_exe());
     clean(&mut cmd).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if let Some(dir) = dir.filter(|d| d.is_dir()) {
+        cmd.current_dir(dir);
+    }
     #[cfg(windows)]
     quiet(&mut cmd, 0);
     let mut child = cmd.spawn().map_err(|e| failed(e.to_string()))?;
+    let drain = |pipe: Option<Box<dyn Read + Send>>| {
+        thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut p) = pipe {
+                let _ = p.read_to_end(&mut buf);
+            }
+            buf
+        })
+    };
+    let outs = drain(child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+    let errs = drain(child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
     let t0 = Instant::now();
-    while child.try_wait().map_err(|e| failed(e.to_string()))?.is_none() {
+    let status = loop {
+        if let Some(s) = child.try_wait().map_err(|e| failed(e.to_string()))? {
+            break s;
+        }
         if t0.elapsed() > OUT_S {
             let _ = child.kill();
             return Err(failed(format!("timed out after {} s", OUT_S.as_secs())));
         }
         thread::sleep(Duration::from_millis(50));
-    }
-    let out = child.wait_with_output().map_err(|e| failed(e.to_string()))?;
-    let text = String::from_utf8_lossy(&out.stdout).to_string();
-    if !out.status.success() && text.trim().is_empty() {
-        let err = String::from_utf8_lossy(&out.stderr).split_whitespace().collect::<Vec<_>>().join(" ");
+    };
+    let text = String::from_utf8_lossy(&outs.join().unwrap_or_default()).to_string();
+    let stderr = errs.join().unwrap_or_default();
+    if !status.success() && text.trim().is_empty() {
+        let err = String::from_utf8_lossy(&stderr).split_whitespace().collect::<Vec<_>>().join(" ");
         let tail: String = err.chars().rev().take(ERR_TAIL).collect::<Vec<_>>().into_iter().rev().collect();
         return Err(Fail::hint(
             format!("claude {} failed: {tail}", args[0]),

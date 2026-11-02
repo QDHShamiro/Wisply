@@ -38,6 +38,9 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         headless [start|stop|status|install] (a browser without a window for servers and CI; install fetches Chrome for Testing)
         update [--check|--rollback] (installs the newest release by itself in the background; config update auto|notify|off)
         pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
+        agents [--all] [--json] (every Claude session: running, waiting, done, limit, tokens, cost estimate; resumes limit-stopped background sessions once after the reset)
+        mobile pair [--name handy] | list | revoke <name> | status | on | off (phone API for the Wisply app, localhost and Tailscale only)
+        notify event <done|waiting|ci_red|ci_green|limit|resumed|disk> <title> [text] (Windows toast that never takes focus, plus the phone feed)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
 Output is plain text, one line per action. Big results go to a file (path printed).
@@ -178,6 +181,7 @@ fn status(d: &Daemon, ctx: &Ctx) -> String {
     ));
     lines.extend(media::usage(&d.home));
     lines.extend(super::pc::status_line(d));
+    lines.extend(super::agents::status_line(d));
     lines.push(format!("home {}", posix(&d.home)));
     lines.join("\n")
 }

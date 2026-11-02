@@ -1,3 +1,4 @@
+mod agents;
 mod brain;
 mod channels;
 mod check;
@@ -227,6 +228,7 @@ pub fn serve() -> ExitCode {
     });
     memory::index::start(d.home.clone());
     pc::start(d.home.clone());
+    agents::start(d.home.clone());
     {
         let quiet = Arc::clone(&d);
         let gate = crate::update::Gate {

@@ -321,6 +321,7 @@ section + section { margin-top: 4px; }
 .pill { font-size: 12px; padding: 1px 8px; border-radius: 6px; background: var(--raise); }
 .pill.on { color: var(--good); }
 .pill.err { color: var(--bad); }
+.pill.warn { color: var(--accent); }
 .blind { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .blind-side { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; background: var(--panel); }
 .blind-label { font-weight: 600; margin-bottom: 8px; }
@@ -482,3 +483,81 @@ section + section { margin-top: 4px; }
 :root[data-theme="glass"] input::placeholder { color: var(--muted); }
 :root[data-theme="glass"] button.danger { background: rgba(255, 77, 109, 0.3); border-color: rgba(255, 140, 160, 0.5); color: #ffffff; }
 :root[data-theme="glass"] button.danger:hover { background: rgba(255, 77, 109, 0.42); }
+.ag-page { max-width: 1400px; }
+.ag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 16px; }
+.ag-chipbtn { display: inline-flex; gap: 8px; align-items: center; padding: 5px 12px; border-radius: 999px; font-size: 13px; }
+.ag-chipbtn .n { color: var(--faint); font-variant-numeric: tabular-nums; }
+.ag-chipbtn.on { border-color: var(--accent); background: var(--accent-soft); }
+.ag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.ag-tile { --c: var(--faint); display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: left; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: var(--radius); min-height: 118px; animation: ag-in 0.38s var(--ease) both; animation-delay: calc(var(--i, 0) * 28ms); transition: transform 0.16s var(--ease), border-color 0.16s var(--ease), background 0.16s var(--ease); }
+.ag-tile:hover { transform: translateY(-2px); border-color: var(--strong); border-left-color: var(--c); background: var(--raise); }
+.ag-tile.pop { animation-delay: 0s; }
+.ag-tile.s-running { --c: var(--good); }
+.ag-tile.s-waiting { --c: var(--accent); }
+.ag-tile.s-done { --c: var(--faint); }
+.ag-tile.s-limit, .ag-tile.s-error { --c: var(--bad); }
+.ag-top { display: flex; gap: 8px; align-items: center; }
+.ag-top b { flex: 1; min-width: 0; }
+.ag-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--faint)); flex: none; position: relative; }
+.ag-tile.s-running .ag-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--c); animation: ag-pulse 1.8s ease-out infinite; }
+.ag-tile.flip .ag-dot { animation: ag-flip 0.6s var(--ease); }
+.ag-tile .pill { color: var(--c); transition: color 0.3s var(--ease); }
+.ag-sub { color: var(--faint); font-size: 12.5px; }
+.ag-line1 { color: var(--muted); font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
+.ag-foot { display: flex; justify-content: space-between; color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.ag-tile.skel { min-height: 118px; border-left-color: var(--line); background: linear-gradient(100deg, var(--panel) 30%, var(--raise) 50%, var(--panel) 70%) 0 0 / 300% 100%; animation: ag-skel 1.4s linear infinite; }
+.ag-detail { display: flex; flex-direction: column; gap: 12px; animation: ag-in 0.3s var(--ease) both; }
+.ag-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ag-meta .ag-dot { --c: var(--faint); }
+.ag-meta .s-running { --c: var(--good); }
+.ag-meta .s-waiting { --c: var(--accent); }
+.ag-meta .s-limit, .ag-meta .s-error { --c: var(--bad); }
+.ag-chip { color: var(--muted); font-size: 12.5px; padding: 1px 8px; border-radius: 6px; background: var(--raise); font-variant-numeric: tabular-nums; }
+.ag-out { height: min(56vh, 560px); overflow: auto; padding: 12px 14px; background: var(--side); border: 1px solid var(--line); border-radius: var(--radius); font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
+.ag-line { white-space: pre-wrap; word-break: break-word; color: var(--muted); }
+.ag-line.fresh { animation: ag-slide 0.3s var(--ease) both; }
+.ag-send input { flex: 1; }
+.ag-note { color: var(--faint); min-height: 1.2em; font-size: 13px; }
+button.danger.armed { background: var(--bad); color: var(--on-accent); border-color: var(--bad); animation: ag-flip 0.4s var(--ease); }
+@keyframes ag-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes ag-slide { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+@keyframes ag-pulse { from { opacity: 0.7; transform: scale(1); } to { opacity: 0; transform: scale(2.8); } }
+@keyframes ag-flip { 0% { transform: scale(1); } 40% { transform: scale(1.5); } 100% { transform: scale(1); } }
+@keyframes ag-skel { to { background-position: -300% 0; } }
+@media (prefers-reduced-motion: reduce) { .ag-tile, .ag-detail, .ag-line.fresh, .ag-dot, .ag-dot::after { animation: none !important; } }
+@media (max-width: 520px) { .ag-page { padding: 18px 14px 48px; } .ag-grid { grid-template-columns: minmax(0, 1fr); } .ag-chipbtn, button { min-height: 44px; } }
+.ag-groups { display: flex; flex-direction: column; gap: 22px; }
+.ag-ghead { display: flex; gap: 8px; align-items: baseline; margin: 0 0 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--muted); }
+.ag-ghead .n { color: var(--faint); font-weight: 400; font-variant-numeric: tabular-nums; }
+.ag-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.ag-tools input { flex: 1 1 200px; min-width: 0; }
+.ag-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; margin: 4px 0 14px; }
+.ag-stat { --c: var(--faint); display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.ag-stat.s-running { --c: var(--good); }
+.ag-stat.s-waiting { --c: var(--accent); }
+.ag-stat.s-error { --c: var(--bad); }
+.ag-num { font-size: 18px; font-weight: 600; color: var(--c); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-lab { font-size: 12px; color: var(--faint); }
+.ag-prog { height: 3px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 2px; }
+.ag-prog i { display: block; height: 100%; width: 100%; background: var(--c); transform: scaleX(0); transform-origin: left; transition: transform 0.5s var(--ease); }
+.ag-prog.full i { transform: scaleX(1); background: var(--good); }
+.ag-result { margin: 0; padding: 12px 14px; max-height: min(56vh, 560px); overflow: auto; white-space: pre-wrap; word-break: break-word; background: var(--side); border: 1px solid var(--line); border-radius: var(--radius); font-family: var(--mono); font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.ag-pair { max-width: 520px; padding-top: 12vh; }
+body.phone #view { height: 100%; }
+.ag-tile, .ag-stat { min-width: 0; }
+.ag-detail .ag-meta { view-transition-name: ag-hero; }
+::view-transition-group(ag-hero) { animation-duration: 0.32s; animation-timing-function: var(--ease); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.22s; }
+.ag-stat { animation: ag-in 0.4s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.ag-num.tick { animation: ag-tick 0.4s var(--ease); }
+.ag-dot, .ag-tile .pill { transition: background-color 0.3s var(--ease), color 0.3s var(--ease); }
+.ag-tile.flip .pill { animation: ag-flip 0.5s var(--ease); }
+.ag-tile.s-running .ag-prog i { transform: scaleX(0.35); animation: ag-run 1.6s var(--ease) infinite alternate; }
+.ag-tile.seen, .ag-tile.seen.pop { animation: none; }
+@keyframes ag-tick { 0% { opacity: 0.2; transform: translateY(5px); } 100% { opacity: 1; transform: none; } }
+@keyframes ag-run { from { transform: translateX(-30%) scaleX(0.35); } to { transform: translateX(190%) scaleX(0.35); } }
+@media (prefers-reduced-motion: reduce) {
+  .ag-stat, .ag-num, .ag-group, .ag-tile, .ag-tile .pill, .ag-prog i, .ag-detail { animation: none !important; }
+  .ag-tile, .ag-dot, .ag-prog i { transition: none !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
