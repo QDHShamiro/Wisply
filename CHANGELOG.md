@@ -8,6 +8,15 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Changed
+- `wisply code "what it does"` works without any model: names are split (camelCase, snake_case), words are stemmed, a
+  built-in list of code synonyms (save, write, store, persist / strip, remove, scrub / secret, key, password, token /
+  changed, modified, dirty) widens the question, and the words of the function body, strings, signature and path count
+  with a lower weight (BM25 over the symbols, kept in memory). Questions that used to fall back to plain name matching
+  now land on the right function in the first three hits. The map no longer embeds symbols in the background.
+- `wisply code` does no file work per question: the file check runs every 3 seconds at most and `roots.json` is
+  written once a minute.
+- `wisply recall` copes with typos (fuzzy match against the note words), mixed German/English questions (small
+  built-in word list) and weights covered words per group instead of per word.
 - Session notes cost about 4 to 10 times fewer model tokens: the transcript is condensed harder before the local model
   sees it (no tool calls except edits and git/PR commands, no code blocks, no "let me ..." narration, repeats gone),
   the prompt is shorter with a fixed format, the model gets the titles of notes it already has so it does not write

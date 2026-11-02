@@ -1,13 +1,42 @@
 use std::collections::HashSet;
 
+use super::expand::variants;
 use super::store::{Hit, Note};
 use super::text::{oneline, similar, stop_word};
 
 const MIN_TERM: usize = 2;
 const BODY_WEIGHT: f64 = 0.6;
-const COVER_FLOOR: f64 = 0.55;
+const COVER_FLOOR: f64 = 0.3;
 const FOLD_SIM: f64 = 0.6;
 const SEMANTIC_SURE: f32 = 0.55;
+const EXTRA_STOP: &[&str] = &[
+    "fuer",
+    "sein",
+    "sind",
+    "haben",
+    "waren",
+    "denn",
+    "weil",
+    "ob",
+    "wieviel",
+    "wieviele",
+    "gibt",
+    "eigentlich",
+    "irgendwie",
+    "damals",
+    "nochmal",
+    "beim",
+    "ueber",
+    "ohne",
+    "kein",
+    "keine",
+    "nicht",
+    "sondern",
+    "unter",
+];
+const VARIANT_WEIGHT: f64 = 0.85;
+
+pub type Group = Vec<String>;
 
 pub fn terms(query: &str) -> Vec<String> {
     let lower = query.to_lowercase();
@@ -17,7 +46,8 @@ pub fn terms(query: &str) -> Vec<String> {
         .filter(|t| t.chars().count() >= MIN_TERM && seen.insert(t.to_string()))
         .map(String::from)
         .collect();
-    let kept: Vec<String> = all.iter().filter(|t| !stop_word(t)).cloned().collect();
+    let kept: Vec<String> =
+        all.iter().filter(|t| !stop_word(t) && !EXTRA_STOP.contains(&t.as_str())).cloned().collect();
     if kept.is_empty() { all } else { kept }
 }
 
@@ -25,32 +55,49 @@ fn has(hay: &str, term: &str) -> bool {
     hay.split(|c: char| !c.is_alphanumeric()).any(|w| w.starts_with(term))
 }
 
-pub fn coverage(note: &Note, terms: &[String], sim: Option<f32>) -> f64 {
+pub fn groups(terms: &[String]) -> Vec<Group> {
+    terms
+        .iter()
+        .map(|t| {
+            let mut group = vec![t.clone()];
+            group.extend(variants(t).into_iter().map(String::from));
+            group
+        })
+        .collect()
+}
+
+pub fn coverage(note: &Note, groups: &[Group], sim: Option<f32>) -> f64 {
     if sim.is_some_and(|s| s >= SEMANTIC_SURE) {
         return 1.0;
     }
-    if terms.is_empty() {
+    if groups.is_empty() {
         return 1.0;
     }
     let title = note.title.to_lowercase();
     let body = note.body.to_lowercase();
-    let got: f64 = terms
+    let got: f64 = groups
         .iter()
-        .map(|t| {
-            if has(&title, t) {
-                1.0
-            } else if has(&body, t) {
-                BODY_WEIGHT
-            } else {
-                0.0
-            }
+        .map(|g| {
+            g.iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let k = if i == 0 { 1.0 } else { VARIANT_WEIGHT };
+                    if has(&title, t) {
+                        k
+                    } else if has(&body, t) {
+                        k * BODY_WEIGHT
+                    } else {
+                        0.0
+                    }
+                })
+                .fold(0.0, f64::max)
         })
         .sum();
-    got / terms.len() as f64
+    got / groups.len() as f64
 }
 
 pub fn weight(cover: f64) -> f64 {
-    COVER_FLOOR + (1.0 - COVER_FLOOR) * cover
+    COVER_FLOOR + (1.0 - COVER_FLOOR) * cover * cover
 }
 
 fn sentences(body: &str) -> Vec<&str> {
@@ -140,12 +187,13 @@ mod tests {
     fn coverage_counts_title_more_than_body() {
         let t = terms("Sniper Worktree");
         assert_eq!(t, ["sniper", "worktree"]);
-        let both = coverage(&note(1, "Sniper worktree plan", ""), &t, None);
-        let one = coverage(&note(2, "Sniper plan", "worktrees"), &t, None);
-        let none = coverage(&note(3, "other", ""), &t, None);
+        let g = groups(&t);
+        let both = coverage(&note(1, "Sniper worktree plan", ""), &g, None);
+        let one = coverage(&note(2, "Sniper plan", "worktrees"), &g, None);
+        let none = coverage(&note(3, "other", ""), &g, None);
         assert!((both - 1.0).abs() < 1e-9 && one > none && one < both, "{both} {one} {none}");
         assert!(weight(both) > weight(one) && weight(one) > weight(none));
-        assert!((coverage(&note(4, "x", ""), &t, Some(0.9)) - 1.0).abs() < 1e-9);
+        assert!((coverage(&note(4, "x", ""), &g, Some(0.9)) - 1.0).abs() < 1e-9);
     }
 
     #[test]

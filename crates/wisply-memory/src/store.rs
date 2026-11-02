@@ -1,16 +1,20 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use half::f16;
 use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 use wisply_core::local_parts;
 
-use super::text::{oneline, scrub};
+use super::nindex::{Lexical, NoteIndex, shared};
+use super::text::{oneline, scrub, stop_word};
 
 pub const VEC_DIM: usize = 256;
 const RRF_K: f64 = 60.0;
 const POOL: usize = 60;
+const SEMANTIC_SURE: f32 = 0.55;
 const PROJECT_BOOST: f64 = 1.3;
 const USER_BOOST: f64 = 1.2;
 const FRESH_BOOST: f64 = 0.5;
@@ -27,6 +31,7 @@ create table if not exists notes(id integer primary key, project text, kind text
   origin text default '');
 create index if not exists notes_project on notes(project, updated);
 create index if not exists notes_origin on notes(origin);
+create index if not exists notes_updated on notes(updated);
 create index if not exists notes_source on notes(source, kind, project, updated);
 create virtual table if not exists notes_fts using fts5(title, body, content='notes', content_rowid='id',
   tokenize='unicode61 remove_diacritics 2', prefix='3');
@@ -87,6 +92,12 @@ pub struct Hit {
     pub sim: Option<f32>,
 }
 
+struct Cand {
+    score: f64,
+    sim: Option<f32>,
+    lex: Option<Lexical>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Todo {
     pub id: i64,
@@ -111,6 +122,8 @@ pub struct NewNote<'a> {
 pub struct Store {
     pub(crate) db: Connection,
     pub(crate) vecs: Option<(i64, Vec<i64>, Vec<f32>)>,
+    lex: Arc<RwLock<NoteIndex>>,
+    seen: Option<(i64, u64)>,
 }
 
 pub fn now() -> f64 {
@@ -185,7 +198,8 @@ impl Store {
         for sql in MIGRATE {
             let _ = db.execute(sql, []);
         }
-        Ok(Store { db, vecs: None })
+        let key = dir.join("memory.db");
+        Ok(Store { db, vecs: None, lex: shared(&key), seen: None })
     }
 
     pub fn note(&self, id: i64) -> rusqlite::Result<Option<Note>> {
@@ -227,10 +241,13 @@ impl Store {
         Ok(Ok(gone))
     }
 
-    pub fn touch(&self, ids: &[i64]) -> rusqlite::Result<()> {
+    pub fn touch(&mut self, ids: &[i64]) -> rusqlite::Result<()> {
         let mut stmt = self.db.prepare_cached("update notes set hits = hits + 1 where id = ?1")?;
         for id in ids {
             stmt.execute([id])?;
+        }
+        if let Some((version, _)) = self.seen {
+            self.seen = Some((version, self.db.total_changes()));
         }
         Ok(())
     }
@@ -265,6 +282,68 @@ impl Store {
         Ok(self.vecs.as_ref().map_or((&[][..], &[][..]), |(_, ids, mat)| (ids.as_slice(), mat.as_slice())))
     }
 
+    fn lexical(&mut self, want: &[String]) -> Option<Vec<Lexical>> {
+        let version: i64 = self.db.query_row("pragma data_version", [], |r| r.get(0)).ok()?;
+        let stamp = (version, self.db.total_changes());
+        if self.seen != Some(stamp) || !self.lex.read().ok()?.ready() {
+            let mut w = self.lex.write().ok()?;
+            w.sync(&self.db).ok()?;
+            w.prepare();
+            self.seen = Some(stamp);
+        }
+        let r = self.lex.read().ok()?;
+        if !r.ready() {
+            return None;
+        }
+        Some(r.search(&r.members(want), POOL))
+    }
+
+    pub fn warm(&mut self) {
+        let _ = self.lexical(&[]);
+    }
+
+    fn words_only(&self, query: &str) -> rusqlite::Result<Vec<i64>> {
+        let fq = super::text::fts_query(query);
+        if fq.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut stmt = self.db.prepare_cached(
+            "select rowid from notes_fts where notes_fts match ?1 order by bm25(notes_fts, 3.0, 1.0) limit 60",
+        )?;
+        let ids = stmt.query_map([&fq], |r| r.get::<_, i64>(0)).and_then(Iterator::collect::<Result<Vec<_>, _>>);
+        Ok(ids.unwrap_or_default())
+    }
+
+    fn notes_by_id(&self, ids: &[i64]) -> rusqlite::Result<HashMap<i64, Note>> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let marks = vec!["?"; ids.len()].join(",");
+        let mut stmt = self.db.prepare(&format!("select * from notes where id in ({marks})"))?;
+        let rows = stmt.query_map(params_from_iter(ids.iter()), note_of)?;
+        let mut out = HashMap::new();
+        for n in rows {
+            let n = n?;
+            out.insert(n.id, n);
+        }
+        Ok(out)
+    }
+
+    fn vector_hits(&mut self, q: &[f32], min_sim: f32) -> rusqlite::Result<Vec<(f32, i64)>> {
+        let (ids, mat) = self.matrix()?;
+        let mut all: Vec<(f32, i64)> = mat
+            .as_chunks::<VEC_DIM>()
+            .0
+            .iter()
+            .zip(ids)
+            .map(|(row, id)| (row.iter().zip(q).map(|(a, b)| a * b).sum(), *id))
+            .collect();
+        all.sort_unstable_by(|a, b| b.0.total_cmp(&a.0));
+        all.truncate(POOL);
+        all.retain(|(sim, _)| *sim >= min_sim);
+        Ok(all)
+    }
+
     pub fn search(
         &mut self,
         query: &str,
@@ -273,64 +352,70 @@ impl Store {
         vec: Option<&[f32]>,
         min_sim: f32,
     ) -> rusqlite::Result<Vec<Hit>> {
-        let mut score: Vec<(i64, f64)> = Vec::new();
-        let mut add = |id: i64, rank: usize| match score.iter_mut().find(|(i, _)| *i == id) {
-            Some((_, s)) => *s += 1.0 / (RRF_K + rank as f64 + 1.0),
-            None => score.push((id, 1.0 / (RRF_K + rank as f64 + 1.0))),
-        };
-        let fq = super::text::fts_query(query);
-        if !fq.is_empty()
-            && let Ok(mut stmt) = self.db.prepare(
-                "select rowid from notes_fts where notes_fts match ?1 order by bm25(notes_fts, 3.0, 1.0) limit 60",
-            )
-            && let Ok(ids) =
-                stmt.query_map([&fq], |r| r.get::<_, i64>(0)).and_then(Iterator::collect::<Result<Vec<_>, _>>)
-        {
-            for (rank, id) in ids.into_iter().enumerate() {
-                add(id, rank);
+        let want = super::rank::terms(query);
+        let surface = super::rank::groups(&want);
+        let mut cands: HashMap<i64, Cand> = HashMap::new();
+        let words = want.iter().any(|t| !stop_word(t));
+        let lexical = if words { self.lexical(&want) } else { None };
+        match lexical {
+            Some(hits) => {
+                for h in hits {
+                    let score = f64::from(h.score) / (RRF_K + 1.0);
+                    cands.insert(h.id, Cand { score, sim: None, lex: Some(h) });
+                }
+            }
+            None => {
+                for (rank, id) in self.words_only(query)?.into_iter().enumerate() {
+                    cands.insert(id, Cand { score: 1.0 / (RRF_K + rank as f64 + 1.0), sim: None, lex: None });
+                }
             }
         }
-        let mut sims: Vec<(i64, f32)> = Vec::new();
         if let Some(q) = vec.filter(|q| q.len() == VEC_DIM) {
-            let (ids, mat) = self.matrix()?;
-            let mut all: Vec<(f32, i64)> = mat
-                .as_chunks::<VEC_DIM>()
-                .0
-                .iter()
-                .zip(ids)
-                .map(|(row, id)| (row.iter().zip(q).map(|(a, b)| a * b).sum(), *id))
-                .collect();
-            all.sort_unstable_by(|a, b| b.0.total_cmp(&a.0));
-            for (rank, (sim, id)) in all.into_iter().take(POOL).take_while(|(sim, _)| *sim >= min_sim).enumerate() {
-                sims.push((id, sim));
-                add(id, rank);
+            for (rank, (sim, id)) in self.vector_hits(q, min_sim)?.into_iter().enumerate() {
+                let c = cands.entry(id).or_insert(Cand { score: 0.0, sim: None, lex: None });
+                c.score += 1.0 / (RRF_K + rank as f64 + 1.0);
+                c.sim = Some(sim);
             }
         }
-        if score.is_empty() {
+        if cands.is_empty() {
             return Ok(Vec::new());
         }
-        let marks = vec!["?"; score.len()].join(",");
-        let mut stmt = self.db.prepare(&format!("select * from notes where id in ({marks})"))?;
-        let notes = stmt.query_map(params_from_iter(score.iter().map(|(id, _)| id)), note_of)?;
         let t = now();
-        let want = super::rank::terms(query);
-        let mut out = Vec::new();
-        for note in notes {
-            let note = note?;
-            let sim = sims.iter().find(|(id, _)| *id == note.id).map(|(_, v)| *v);
-            let mut s = score.iter().find(|(id, _)| *id == note.id).map_or(0.0, |(_, s)| *s);
-            s *= super::rank::weight(super::rank::coverage(&note, &want, sim));
-            if !project.is_empty() && note.project == project {
+        let boost = |s: f64, cover: f64, proj: &str, user: bool, updated: f64| {
+            let mut s = s * super::rank::weight(cover);
+            if !project.is_empty() && proj == project {
                 s *= PROJECT_BOOST;
             }
-            if note.source == "user" {
+            if user {
                 s *= USER_BOOST;
             }
-            s *= 1.0 + FRESH_BOOST * 0.5f64.powf((t - note.updated).max(0.0) / HALF_LIFE_S);
-            out.push(Hit { note, score: s, sim });
+            s * (1.0 + FRESH_BOOST * 0.5f64.powf((t - updated).max(0.0) / HALF_LIFE_S))
+        };
+        let bare: Vec<i64> = cands.iter().filter(|(_, c)| c.lex.is_none()).map(|(id, _)| *id).collect();
+        let loaded = self.notes_by_id(&bare)?;
+        let mut ranked: Vec<(i64, f64, Option<f32>)> = Vec::with_capacity(cands.len());
+        for (id, c) in &cands {
+            let s = match (&c.lex, loaded.get(id)) {
+                (Some(h), _) => {
+                    let cover = if c.sim.is_some_and(|v| v >= SEMANTIC_SURE) { 1.0 } else { h.cover };
+                    boost(c.score, cover, &h.project, h.user, h.updated)
+                }
+                (None, Some(n)) => {
+                    let cover = super::rank::coverage(n, &surface, c.sim);
+                    boost(c.score, cover, &n.project, n.source == "user", n.updated)
+                }
+                (None, None) => continue,
+            };
+            ranked.push((*id, s, c.sim));
         }
-        out.sort_by(|a, b| b.score.total_cmp(&a.score));
-        out.truncate(limit * FOLD_POOL);
+        ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
+        ranked.truncate(limit * FOLD_POOL);
+        let ids: Vec<i64> = ranked.iter().map(|r| r.0).collect();
+        let mut notes = self.notes_by_id(&ids)?;
+        let out: Vec<Hit> = ranked
+            .into_iter()
+            .filter_map(|(id, score, sim)| notes.remove(&id).map(|note| Hit { note, score, sim }))
+            .collect();
         Ok(super::rank::fold(out, limit))
     }
 
