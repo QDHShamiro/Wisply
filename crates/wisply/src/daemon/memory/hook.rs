@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::LazyLock;
 use std::thread;
@@ -11,7 +12,7 @@ use wisply_memory::{DRAFTS_MAX, DbResult, Store, date, day, now, oneline, projec
 
 use super::super::ctx::Ctx;
 use super::super::{Daemon, config, routines};
-use super::{LINE, embed, keep, todo_list, with_store};
+use super::{LINE, embed, keep, todo_line, todo_list, with_store};
 
 const START_TODOS: usize = 12;
 const START_SESSIONS: usize = 3;
@@ -68,6 +69,12 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     let transcript = data_text(&data, "transcript_path");
     with_store(d, |s| s.session_seen(&sid, &here, &cwd, transcript, event == "end"))?;
     if event == "compact" {
+        if !transcript.is_empty() {
+            let todos: Vec<String> = with_store(d, |s| s.todos(Some(&here), true))
+                .map(|rows| rows.iter().map(|t| todo_line(t, true)).collect())
+                .unwrap_or_default();
+            super::handoff::save(&d.home, &sid, &super::handoff::from_transcript(Path::new(transcript), &todos));
+        }
         super::index::learn_now();
     }
     if event != "start" {
@@ -75,7 +82,14 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     }
     super::index::nudge();
     if data_text(&data, "source") == "compact" {
-        return with_store(d, |s| compact_text(s, &here));
+        let text = with_store(d, |s| compact_text(s, &here))?;
+        return Ok(match super::handoff::take(&d.home, &sid) {
+            Some(handoff) => format!(
+                "{handoff}
+{text}"
+            ),
+            None => text,
+        });
     }
     let commits = if here.is_empty() || cwd.is_empty() { Vec::new() } else { commits(&cwd) };
     let text = with_store(d, |s| start_text(s, &here, commits))?;

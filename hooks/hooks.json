@@ -1,5 +1,5 @@
 {
-  "description": "Closes the tabs and apps Wisply opened when Claude finishes a reply (wisply config cleanup off keeps them), names a learned routine that fits the user's request, and keeps the Wisply memory: a short start summary, notes that fit a request, sessions queued for local learning (wisply memory off turns it off), and shortens long Bash logs, JSON, grep results and web pages to their important lines with the full text kept in ~/.wisply/headroom/out (a file ~/.wisply/headroom/off turns that off), and after each edit names new weak spots wisply think finds in that file (~/.wisply/think/quick-off turns that off)",
+  "description": "Closes the tabs and apps Wisply opened when Claude finishes a reply (wisply config cleanup off keeps them), names a learned routine that fits the user's request, and keeps the Wisply memory: a short start summary, notes that fit a request, sessions queued for local learning (wisply memory off turns it off), and shortens long Bash logs, JSON, grep results and web pages to their important lines with the full text kept in ~/.wisply/headroom/out (a file ~/.wisply/headroom/off turns that off), and keeps a per-session table of files Claude read so an unchanged re-read comes back as a short stub and a huge whole-file view as its top, outline and end (a file ~/.wisply/headroom/reads-off turns that off), hints at Edit instead of Write on files already read, and after each edit names new weak spots wisply think finds in that file (~/.wisply/think/quick-off turns that off)",
   "hooks": {
     "SessionStart": [
       {
@@ -30,9 +30,26 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "L=\"${WISPLY_HOME:-$HOME/.wisply}/bin/${WISPLY_CLIENT:-wisply.exe}\"; [ -f \"$L\" ] || L=\"${CLAUDE_PLUGIN_ROOT}/bin/${WISPLY_CLIENT:-wisply.exe}\"; \"$L\" hook post",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PreCompact": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "L=\"${WISPLY_HOME:-$HOME/.wisply}/bin/${WISPLY_CLIENT:-wisply.exe}\"; [ -f \"$L\" ] || L=\"${CLAUDE_PLUGIN_ROOT}/bin/${WISPLY_CLIENT:-wisply.exe}\"; \"$L\" hook post",
+            "timeout": 5
+          },
           {
             "type": "command",
             "command": "L=\"${WISPLY_HOME:-$HOME/.wisply}/bin/${WISPLY_CLIENT:-wisply.exe}\"; [ -f \"$L\" ] || L=\"${CLAUDE_PLUGIN_ROOT}/bin/${WISPLY_CLIENT:-wisply.exe}\"; \"$L\" hook compact",
