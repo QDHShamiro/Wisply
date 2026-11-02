@@ -34,6 +34,7 @@ const CLOSE_WAIT: Duration = Duration::from_secs(5);
 const ROW_GAP: i32 = 60;
 const ADDRESS_WORDS: &[&str] = &["address", "adresse", "url"];
 const VK_RETURN: u16 = 0x0D;
+const VK_ESCAPE: u16 = 0x1B;
 const MENU_NAMES: &[&str] = &["menu", "menü", "menú"];
 const MENU_WAIT: Duration = Duration::from_secs(4);
 const SEEN_MAX: usize = 30;
@@ -200,9 +201,10 @@ fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail
             open_by_address_bar(&exe_name, page(name))
         })
         .ok_or_else(|| Fail::new(format!("the extensions page did not open in {name}")))?;
+    let mut menu = false;
     let dev = wait(MENU_WAIT, || dev_switch(hwnd))
         .or_else(|| {
-            open_side_menu(hwnd);
+            menu = open_side_menu(hwnd);
             wait(FIND_WAIT, || dev_switch(hwnd))
         })
         .ok_or_else(|| {
@@ -213,8 +215,14 @@ fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail
         log.push("developer mode switched on".into());
         thread::sleep(TOGGLE_SETTLE);
     }
+    if menu {
+        win::set_foreground(hwnd);
+        input::key(VK_ESCAPE, false, false);
+        input::key(VK_ESCAPE, true, false);
+        thread::sleep(TOGGLE_SETTLE);
+    }
     let button = wait(FIND_WAIT, || uia::collect(hwnd, false, None).into_iter().find(|e| matches(e, LOAD)))
-        .ok_or_else(|| Fail::new("'Load unpacked' button not found"))?;
+        .ok_or_else(|| Fail::new(format!("'Load unpacked' button not found (saw: {})", seen(hwnd))))?;
     let pid = win::pid_of(hwnd);
     let before = dialogs(pid);
     button.act(false);
