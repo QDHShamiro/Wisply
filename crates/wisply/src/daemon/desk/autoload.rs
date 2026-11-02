@@ -34,7 +34,7 @@ const CLOSE_WAIT: Duration = Duration::from_secs(5);
 const ROW_GAP: i32 = 60;
 const ADDRESS_WORDS: &[&str] = &["address", "adresse", "url"];
 const VK_RETURN: u16 = 0x0D;
-const MENU_NAMES: &[&str] = &["main menu", "hauptmenü", "menu", "menü"];
+const MENU_NAMES: &[&str] = &["menu", "menü", "menú"];
 const MENU_WAIT: Duration = Duration::from_secs(4);
 const SEEN_MAX: usize = 30;
 
@@ -125,7 +125,7 @@ fn open_side_menu(hwnd: isize) -> bool {
     let Some(menu) = items
         .iter()
         .filter(|e| e.role() == "button" && e.rect().1 >= page)
-        .find(|e| MENU_NAMES.contains(&e.name().to_lowercase().as_str()))
+        .find(|e| MENU_NAMES.iter().any(|n| e.name().to_lowercase().contains(n)))
     else {
         return false;
     };
