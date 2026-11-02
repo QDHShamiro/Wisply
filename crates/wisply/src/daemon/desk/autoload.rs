@@ -26,7 +26,7 @@ const DIALOG_CLASS: &str = "#32770";
 const HOST_WAIT: Duration = Duration::from_secs(8);
 const PAGE_WAIT: Duration = Duration::from_secs(15);
 const FIND_WAIT: Duration = Duration::from_secs(12);
-const DIALOG_WAIT: Duration = Duration::from_secs(6);
+const DIALOG_WAIT: Duration = Duration::from_secs(25);
 const CONNECT_WAIT: Duration = Duration::from_secs(20);
 const STEP: Duration = Duration::from_millis(300);
 const TOGGLE_SETTLE: Duration = Duration::from_millis(800);
@@ -150,10 +150,10 @@ fn switched_on(el: &El) -> bool {
     el.describe().2.contains("[x]")
 }
 
-fn dialogs(pid: u32) -> HashSet<isize> {
+fn dialogs(pid: Option<u32>) -> HashSet<isize> {
     win::all()
         .into_iter()
-        .filter(|h| win::visible(*h) && win::class_of(*h) == DIALOG_CLASS && win::pid_of(*h) == pid)
+        .filter(|h| win::visible(*h) && win::class_of(*h) == DIALOG_CLASS && pid.is_none_or(|p| win::pid_of(*h) == p))
         .collect()
 }
 
@@ -224,10 +224,14 @@ fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail
     let button = wait(FIND_WAIT, || uia::collect(hwnd, false, None).into_iter().find(|e| matches(e, LOAD)))
         .ok_or_else(|| Fail::new(format!("'Load unpacked' button not found (saw: {})", seen(hwnd))))?;
     let pid = win::pid_of(hwnd);
-    let before = dialogs(pid);
+    let before = dialogs(None);
     button.act(false);
-    let dlg = wait(DIALOG_WAIT, || dialogs(pid).into_iter().find(|h| !before.contains(h)))
-        .ok_or_else(|| Fail::new("the folder dialog did not open"))?;
+    let dlg = wait(DIALOG_WAIT, || {
+        let now = dialogs(None);
+        let fresh: Vec<isize> = now.into_iter().filter(|h| !before.contains(h)).collect();
+        fresh.iter().copied().find(|h| win::pid_of(*h) == pid).or_else(|| fresh.first().copied())
+    })
+    .ok_or_else(|| Fail::new("the folder dialog did not open"))?;
     let folder = d.home.join("extension");
     log.push(format!("folder dialog open, selecting {}", folder.display()));
     pick_folder(dlg, &folder)?;
