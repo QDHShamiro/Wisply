@@ -24,7 +24,11 @@ jobs:
             for i in 1 2 3 4; do sleep 5; echo "t=$((i*5))"; titles; done
           }
           tasklist //fi "imagename eq msedge.exe" | head -5
-          try A edge://extensions/
-          try B --no-first-run --new-window edge://extensions/
-          try C --no-first-run --user-data-dir="$RUNNER_TEMP/p1" edge://extensions/
-          try D --no-first-run --disable-features=msEdgeNewTabPageLoadingFirst "chrome://extensions/"
+          try H https://example.com/
+          try S edge://settings/
+          try P --user-data-dir="$RUNNER_TEMP/p2" --no-first-run --remote-debugging-port=9333 about:blank
+          curl -s http://127.0.0.1:9333/json/version | head -3 || true
+          curl -s -X PUT "http://127.0.0.1:9333/json/new?edge://extensions/" | head -8 || true
+          sleep 5
+          titles
+          curl -s http://127.0.0.1:9333/json/list | grep -E '"(title|url)"' | head
