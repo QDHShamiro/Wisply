@@ -565,7 +565,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |
-| **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` |
+| **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` · `progress 3/8 "what you are doing"` · `progress show` |
 
 <details>
 <summary><b>All commands</b></summary>

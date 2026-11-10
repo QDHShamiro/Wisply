@@ -28,6 +28,7 @@ extra runtime: it is a subcommand of the `wisply` binary.
 | tokens | stdin `context_window.current_usage` | `34.2k tokens` |
 | limit 5h | stdin `rate_limits.five_hour` | `12% used (88% left) resets in 3h10m` |
 | limit week | stdin `rate_limits.seven_day` | `week 40% used (60% left) resets in 2d4h` |
+| progress | `~/.wisply/progress/<session>.json` and `.now`, written by `hook post` from the plan tools (TodoWrite, TaskCreate, TaskUpdate, `update_plan`) and by `wisply progress` | 10-char bar + `40% 2/5 Running the tests › Bash cargo test`; amber below 34, blue below 67, green above; a plan older than 12 h, a finished one older than 10 min and a last tool older than 3 min are left out |
 
 Segments with no data are left out; the separator is `|` in dark grey. Missing fields never error.
 

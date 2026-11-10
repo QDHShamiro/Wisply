@@ -80,6 +80,11 @@ pub fn post() {
         }
         return;
     }
+    if let Ok(event) = &parsed
+        && crate::progress::note(&root, event)
+    {
+        return;
+    }
     let editing = parsed.as_ref().is_ok_and(|e| e["tool_name"].as_str().is_some_and(|t| EDIT_TOOLS.contains(&t)));
     if editing && let Ok(event) = &parsed {
         crate::reads::forget(&paths.state, event);

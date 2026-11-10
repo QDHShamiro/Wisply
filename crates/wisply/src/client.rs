@@ -28,6 +28,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     if first == "peek" {
         return crate::peek::run(&args[1..]);
     }
+    if first == "progress" {
+        return crate::progress::run(&home, &args[1..]);
+    }
     if first == "kit" {
         return crate::kit::run(&home, &args[1..]);
     }

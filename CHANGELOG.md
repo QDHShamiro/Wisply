@@ -29,6 +29,14 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   `skill new` explains what a good skill needs and builds one from a name, a description and a text file;
   `skill add <folder>` and `skill get <owner/repo/path>` take an existing one; `skill check <folder or name>` says what is
   wrong or could be better; `skill rm <name>` removes only what Wisply installed.
+- The status line shows how far the task is: a coloured bar with the percent, the steps done, the step in work and
+  the last tool, like `━━━━━━━━━━ 40% 2/5 Running the tests › Bash cargo test`. The plan comes by itself from the
+  plan tools of the AI (TodoWrite, TaskCreate and TaskUpdate, `update_plan`) through the post hook. Every AI can
+  also say it: `wisply progress 3/8 "what it is doing"` or `wisply progress 40`. `wisply progress show [--color]`
+  prints the field for a status line of your own, `progress clear` empties it and `statusline set progress off`
+  hides it. The note about the last tool keeps the tool name and a file name, a host or the first words of a
+  command: no arguments, no `NAME=value`, no folders. It lives per session in `~/.wisply/progress` and is removed
+  after three days.
 - The AI works alone and asks the user only where it matters: a tool or skill script that deletes or overwrites
   files, loosens what an AI may do, touches money, accounts, keys or uploads, or sets up autostart or runs code from
   the internet is refused with "ask them first" until the call is repeated with `--yes`. The same holds for a skill
@@ -36,6 +44,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   installed.
 
 ### Fixed
+- A `brain.json` with a wrong shape (a page without its element list, a list where a table belongs, a short entry)
+  made every command that learns from a page fail. The file is now mended when it is loaded: broken parts are
+  dropped, the rest is kept.
+- `wisply think` no longer stops with a panic when the `state.json` of a run is not a table; it names the run.
+- A learned routine with a very long step no longer builds the same pattern again on every compare, and a step too
+  long for a pattern counts as different instead of stopping the command.
 - State files are replaced in one step (write next to the file, then rename), so a crash or a second session can no
   longer leave half a `config.json`, `sessions.json`, routine, to-do list or MCP entry of another AI app behind.
 - Two hooks of one session finishing at the same moment no longer lose a remembered read, and a read is written to the

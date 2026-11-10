@@ -16,6 +16,8 @@ mod junk;
 mod more;
 #[path = "peek.rs"]
 mod peek;
+#[path = "progress.rs"]
+mod progress;
 #[path = "reads.rs"]
 mod reads;
 #[path = "readstate.rs"]
@@ -75,6 +77,9 @@ fn main() -> ExitCode {
     }
     if first == "peek" {
         return peek::run(&args[1..]);
+    }
+    if first == "progress" {
+        return progress::run(&home, &args[1..]);
     }
     if !home.join(MARKER).is_file() {
         return full(&raw, None, None);

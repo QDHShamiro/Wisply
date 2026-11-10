@@ -28,9 +28,9 @@ static SLOT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{[a-z][a-z0-9_]*\}
 static HEAD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^(?:[a-z]+://)?(?:www\.)?([^/.]+)").expect("head"));
 static BRACES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{[^}]*\}").expect("braces"));
 static STAMP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$").expect("stamp"));
-static TEMPLATES: LazyLock<Mutex<HashMap<String, Regex>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static TEMPLATES: LazyLock<Mutex<HashMap<String, Option<Regex>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn template_re(t: &str) -> Regex {
+fn template_re(t: &str) -> Option<Regex> {
     let mut cache = TEMPLATES.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(r) = cache.get(t) {
         return r.clone();
@@ -47,7 +47,7 @@ fn template_re(t: &str) -> Regex {
         rx.push('$');
         Regex::new(&rx)
     };
-    let r = build(true).or_else(|_| build(false)).expect("template");
+    let r = build(true).or_else(|_| build(false)).ok();
     if cache.len() >= CACHE {
         cache.clear();
     }
@@ -62,7 +62,7 @@ pub fn match_step(tpl: &Value, step: &Value) -> Option<BTreeMap<String, String>>
     }
     let mut got = BTreeMap::new();
     for (t, s) in ta.iter().zip(&sa) {
-        let re = template_re(t);
+        let re = template_re(t)?;
         let m = re.captures(s)?;
         for name in re.capture_names().flatten() {
             if let Some(v) = m.name(name) {
@@ -379,6 +379,8 @@ mod tests {
         assert!(match_step(&tpl, &json!({"cmd": "click", "args": ["Search", "x now"]})).is_none());
         let twice = json!({"cmd": "open", "args": ["{a}/{a}"]});
         assert!(match_step(&twice, &json!({"cmd": "open", "args": ["x/y"]})).unwrap().is_empty());
+        let long = json!({"cmd": "type", "args": ["Box", "word ".repeat(600_000)]});
+        assert!(match_step(&long, &long).is_none());
         let prompts = vec![(100.0, vec!["order".to_string(), "green".to_string(), "pizza".to_string()])];
         assert_eq!(tags_for(&prompts, 101.0, &json!({"q": "green"})), vec!["order", "pizza"]);
         assert!(tags_for(&prompts, 3000.0, &json!({})).is_empty());

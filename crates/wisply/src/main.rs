@@ -11,6 +11,7 @@ mod mcp;
 mod more;
 mod peek;
 mod pipe;
+mod progress;
 mod reads;
 mod readstate;
 mod readview;

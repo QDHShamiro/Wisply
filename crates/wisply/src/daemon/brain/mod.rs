@@ -1,4 +1,5 @@
 mod improve;
+mod shape;
 mod watch;
 
 use std::fs;
@@ -66,7 +67,10 @@ fn with<R>(home: &Path, f: impl FnOnce(&mut State) -> R) -> R {
     if guard.as_ref().is_none_or(|s| s.home != home) {
         let saved = fs::read_to_string(file(home)).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
         let (data, dirty) = match saved.filter(|d| d["v"] == 1 && d.is_object()) {
-            Some(d) => (d, false),
+            Some(mut d) => {
+                let mended = shape::mend(&mut d);
+                (d, mended)
+            }
             None => (boot(home), true),
         };
         *guard = Some(State { home: home.to_path_buf(), data, dirty, saved: 0.0 });
