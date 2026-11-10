@@ -228,6 +228,9 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - CI: a `v3` run now ends red when one of its steps failed, instead of green with the failure only in the result
   note. On Windows, Edge is closed after the setup step so its tabs no longer mix into the selftest.
 - Window web packages: TypeScript 7.0.2, marked 18.2.0, sigma 4.0.6.
+- Rust packages on their newest versions: base64 0.23, sha2 0.11 and 42 updates in `Cargo.lock` (among them
+  html5ever 0.40, selectors 0.41, tree-sitter-language-pack 1.25, ureq 3.5.1, wry 0.57.2). Workflow actions:
+  checkout v7 in the registry workflow, download-artifact v8 and setup-node v7 in the release workflow.
 - The user's home folder is looked up in one place (`wisply_proto::user_dir`) instead of six copies.
 - The timing test for reading a long transcript takes the best of three reads, so a busy computer no longer fails
   it (limit unchanged).

@@ -12,7 +12,7 @@ publish = false
 
 [workspace.dependencies]
 winresource = { version = "0.1", default-features = false }
-base64 = "0.22"
+base64 = "0.23"
 qrcode = { version = "0.14", default-features = false }
 encoding_rs = "0.8"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
@@ -33,7 +33,7 @@ roxmltree = "0.21"
 fancy-regex = { version = "0.20", default-features = false, features = ["std", "perf"] }
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-sha2 = "0.10"
+sha2 = "0.11"
 toml = "0.8"
 tree-sitter = "0.27"
 tao = { version = "0.37", default-features = false, features = ["rwh_06", "x11"] }
