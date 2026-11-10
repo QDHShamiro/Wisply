@@ -231,6 +231,11 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - Rust packages on their newest versions: base64 0.23, sha2 0.11 and 42 updates in `Cargo.lock` (among them
   html5ever 0.40, selectors 0.41, tree-sitter-language-pack 1.25, ureq 3.5.1, wry 0.57.2). Workflow actions:
   checkout v7 in the registry workflow, download-artifact v8 and setup-node v7 in the release workflow.
+- No code file is longer than 500 lines any more. The extension's `background.js`, `actions.js`, `page.js` and
+  `page-act.js` are split into eleven files (new: `pagecall.js`, `media.js`, `tools.js`, `read.js`,
+  `page-media.js`, `page-snap.js`, `page-read.js`), the window's `app.css` into `app.css`, `glass.css` and
+  `agents.css`, and three routine tests moved from `tests/daemon.rs` to `tests/routines.rs`. Same code, only
+  moved.
 - The user's home folder is looked up in one place (`wisply_proto::user_dir`) instead of six copies.
 - The timing test for reading a long transcript takes the best of three reads, so a busy computer no longer fails
   it (limit unchanged).
