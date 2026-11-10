@@ -133,11 +133,11 @@ jobs:
           c=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
           test "$p" = "$v" || { echo "tag $GITHUB_REF_NAME but plugin.json says $p"; exit 1; }
           test "$c" = "$v" || { echo "tag $GITHUB_REF_NAME but Cargo.toml says $c"; exit 1; }
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: Desktop extension (mcpb) and source
