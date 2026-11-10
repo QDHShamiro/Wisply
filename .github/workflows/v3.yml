@@ -23,7 +23,6 @@ jobs:
         os: [windows-latest, macos-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - name: Toolchain
@@ -131,6 +130,11 @@ jobs:
           name: setup-evidence
           path: ~/.wisply/out/
           retention-days: 7
+      - name: Close Edge before the selftest
+        if: runner.os == 'Windows' && steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: taskkill //F //IM msedge.exe || true
       - name: Selftest in Chrome for Testing (plus test app and chat on Windows)
         id: selftest
         if: steps.build.outcome == 'success'
@@ -142,3 +146,11 @@ jobs:
         if: always()
         shell: bash
         run: echo "::notice title=v3 ${{ matrix.os }}::fmt=${{ steps.fmt.outcome }} files=${{ steps.files.outcome }} lint=${{ steps.lint.outcome }} test=${{ steps.test.outcome }} web=${{ steps.web.outcome }} xdesk=${{ steps.xdesk.outcome }} deny=${{ steps.deny.outcome }} build=${{ steps.build.outcome }} setup=${{ steps.setup.outcome }} selftest=${{ steps.selftest.outcome }}"
+      - name: Fail when a step failed
+        if: always()
+        shell: bash
+        run: |
+          marks="fmt=${{ steps.fmt.outcome }} files=${{ steps.files.outcome }} lint=${{ steps.lint.outcome }} test=${{ steps.test.outcome }} web=${{ steps.web.outcome }} xdesk=${{ steps.xdesk.outcome }} deny=${{ steps.deny.outcome }} build=${{ steps.build.outcome }} setup=${{ steps.setup.outcome }} selftest=${{ steps.selftest.outcome }}"
+          case "$marks" in
+            *=failure*) echo "::error title=v3 ${{ matrix.os }}::$marks"; exit 1 ;;
+          esac

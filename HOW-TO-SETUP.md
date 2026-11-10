@@ -10,13 +10,14 @@ Runbook for Claude Code: building, verifying and changing Wisply without redisco
 .codex-plugin/plugin.json                      Codex plugin (skills only, MCP comes from `wisply install codex`)
 .agents/plugins/marketplace.json               Codex marketplace (source local "./")
 .mcp.json                                      MCP server: ${WISPLY_BIN:-${CLAUDE_PLUGIN_ROOT}/bin}/wisply.exe mcp (1 tool)
-hooks/hooks.json                               SessionStart/Stop/PreCompact/SessionEnd/UserPromptSubmit memory + cleanup, PostToolUse Headroom
+hooks/hooks.json                               SessionStart/Stop/PreCompact/SessionEnd/UserPromptSubmit memory + cleanup, PostToolUse Headroom + progress notes
 skills/wisply/                               SKILL.md + references/, loaded on description match
 commands/                                      /wisply:setup, :status, :bench, :doctor, :tokens
 crates/wisply/                               the one binary: client, daemon, MCP server, native host, setup, selftest
 crates/wisply/src/daemon/                    web/, desk/ (Windows UIA, macOS AX, Linux AT-SPI), memory/, routines/, brain/, check/ (selftest, bench)
 crates/wisply/src/setup/                     setup, install <ai>, uninstall, settings.json env, PATH and native host
 crates/wisply/src/hook.rs                    Headroom (`wisply hook post`), runs without the daemon in its 50 ms budget
+crates/wisply/src/progress.rs                `wisply progress` and the status line field: plan steps and last tool per session in ~/.wisply/progress
 crates/wisply/assets/fixture.html            selftest page (traps: hidden injection text, modal, confirm(), cookie banner, iframe, long lists, nameless button, video)
 crates/wisply-ui/                            the window (wry), web/ is TypeScript built into web/dist
 crates/wisply-core, wisply-proto, wisply-memory, wisply-code, wisply-squeeze   argument parsing, pipe protocol, memory DB, code map, Bash-output squeeze

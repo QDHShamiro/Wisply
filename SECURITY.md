@@ -35,8 +35,14 @@ Nothing, unless you ask for it:
 
 - The daemon, the extension and the client talk only over a local pipe (Windows) or a socket in `~/.wisply`
   that only your user can open, and every request carries a key from `~/.wisply/key`.
-- Logs, learned routines and the brain stay in `~/.wisply` and are never uploaded.
-- `wisply doctor` asks GitHub once for the newest release number (`--offline` skips it).
+- Logs, learned routines, the brain and the progress notes for the status line stay in `~/.wisply` and are never
+  uploaded.
+- Once a day the daemon asks GitHub for the newest release and downloads it when there is one
+  (`wisply config update off` stops that). `wisply doctor --fix` fetches yt-dlp and ffmpeg from their GitHub
+  releases when they are missing and checks their SHA-256.
+- Commands made for the internet go there when you run them: `research` sends your search words to search
+  engines, `secure` sends the names and versions from your lock files to osv.dev (`--no-deps` skips it), and
+  `skill find --web` and `skill get` ask GitHub.
 - `listen` uses YouTube captions or a local Whisper model; it sends audio to Groq or OpenAI only when you set
   `GROQ_API_KEY` or `OPENAI_API_KEY` yourself.
 

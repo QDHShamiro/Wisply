@@ -76,7 +76,7 @@ pub const WEB_ONLY: &[&str] = &[
     "frames",
 ];
 const MORE: &[&str] = &["read", "research", "listen", "watch", "voice", "phone", "claude", "desktop"];
-pub const CLIENT: &[&str] = &["more", "peek", "kit", "skill"];
+pub const CLIENT: &[&str] = &["more", "peek", "kit", "skill", "progress"];
 const HIDDEN: &[&str] = &["hook", "suggest", "board", "access-prompt", "autoload", "ping"];
 const GUESS: &[(&str, &str)] = &[
     ("find", "snap -f \"word\" (page), code <name> (code) or recall \"words\" (memory)"),
@@ -185,7 +185,7 @@ mod tests {
     fn the_known_names_are_the_2x_list_secure_and_the_window() {
         let want = "agents back bench brain call channels check claude click clip close code config console demo desktop dialog \
                     dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames grep headless help \
-                    hover improve inbox js keep keys kit launch listen log memory mobile more net notify open pc peek phone press read recall record \
+                    hover improve inbox js keep keys kit launch listen log memory mobile more net notify open pc peek phone press progress read recall record \
                     reload remember reply research routine routines run scroll search secure select selftest shot skill snap squeeze \
                     status stop tab table tabs text think todo tokens tools type ui unread update upload version viewport voice wait watch \
                     wiki windows";

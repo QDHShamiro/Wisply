@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 
-pub const SEGMENTS: [&str; 12] = [
+pub const SEGMENTS: [&str; 13] = [
     "branch",
     "sync",
     "github",
@@ -14,6 +14,7 @@ pub const SEGMENTS: [&str; 12] = [
     "tokens",
     "limit5h",
     "limitweek",
+    "progress",
     "pc",
     "agents",
 ];

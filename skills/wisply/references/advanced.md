@@ -48,6 +48,7 @@
 - `wisply log` shows the last actions (typed text and secrets are never logged). `wisply log stats` sums them up per command: runs, error rate, time, output tokens and how often a `snap` followed an action (the next thing to save).
 - Big outputs are cut and the full text is saved to `~/.wisply/out/` (path printed); `grep` that file instead of re-running.
 - `--stats` after any command prints its time and token estimate.
+- The status line shows how far the task is. With a plan tool (TodoWrite, TaskCreate/TaskUpdate, `update_plan`) that happens by itself; without one say it: `wisply progress 3/8 "what you are doing"` or `wisply progress 40`, and `wisply progress clear` when the task is over.
 - Before reading several files: `wisply peek a.rs b.rs src/ [--outline] [--head 10]` gives size, lines and advice (`whole`, `parts`, `grep`, `skip`) for all of them in one call. Read `parts` files with offset/limit, leave `skip` files (lock files, build output, binaries).
 - A step you keep repeating by hand becomes a tool: `wisply kit add <name> "what it does" [--file script] -- <program> [args]` (`{1}`..`{9}`, `{all}`, `{file}` stand for arguments and the script), then `wisply kit run <name> [args]` in every session. `wisply kit` lists them.
 - Need know-how: `wisply skill find <words>` (this computer first, `--web` for GitHub), `wisply skill get <owner/repo/path>` installs one for every AI here, `wisply skill new` explains and builds one.

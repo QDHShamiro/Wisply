@@ -37,8 +37,8 @@ fn status(d: &Daemon) -> Result<String, Fail> {
         c.queued
     )];
     lines.push(format!("model: {}", embed::status(&d.home)));
-    let teacher =
-        chat::provider(&d.home).map_or_else(|| "none (GEMINI_API_KEY or memory_api_model)".into(), |p| p.name());
+    let provider = chat::provider(&d.home);
+    let teacher = provider.as_ref().map_or_else(|| "none (GEMINI_API_KEY or memory_api_model)".into(), |p| p.name());
     lines.push(format!("learns with: {teacher}"));
     let st = learner::state();
     if !st.last.is_empty() {
@@ -47,8 +47,12 @@ fn status(d: &Daemon) -> Result<String, Fail> {
     if !st.error.is_empty() {
         lines.push(format!("learner problem: {}", st.error));
     }
-    let game = if c.vecs < c.notes { game::running() } else { String::new() };
-    if !game.is_empty() {
+    let learning = c.queued > 0 && provider.is_some_and(|p| p.local());
+    let game = if learning || c.vecs < c.notes { game::running() } else { String::new() };
+    if learning && !game.is_empty() {
+        lines.push(format!("learning waits: {game} runs"));
+    }
+    if c.vecs < c.notes && !game.is_empty() {
         lines.push(format!("vectors wait: {game} runs"));
     }
     if let Some(t) = indexed.and_then(|v| v.parse::<f64>().ok()) {
@@ -69,6 +73,13 @@ fn status(d: &Daemon) -> Result<String, Fail> {
 fn learn(d: &Daemon) -> Result<String, Fail> {
     with_store(d, |s| s.sessions_retry_all())?;
     let queued = with_store(d, |s| s.counts())?.queued;
+    let local = queued > 0 && chat::provider(&d.home).is_some_and(|p| p.local());
+    let game = if local { game::running() } else { String::new() };
+    if !game.is_empty() {
+        return Ok(format!(
+            "{queued} sessions wait: {game} runs and the model is on this computer (wisply memory shows the state)"
+        ));
+    }
     index::learn_now();
     Ok(format!("learning {queued} sessions in the background (wisply memory shows the state)"))
 }

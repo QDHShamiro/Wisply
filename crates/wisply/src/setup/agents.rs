@@ -21,10 +21,6 @@ pub const NAMES: &[&str] = &[
     "zed",
 ];
 
-pub(crate) fn user_home() -> PathBuf {
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).unwrap_or_default()
-}
-
 fn app_data(home: &Path) -> PathBuf {
     if cfg!(windows) {
         std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Roaming"))
@@ -36,7 +32,7 @@ fn app_data(home: &Path) -> PathBuf {
 }
 
 pub fn config_file(name: &str) -> Option<PathBuf> {
-    let home = user_home();
+    let home = wisply_proto::user_dir();
     let app = app_data(&home);
     let vsext = app.join("Code").join("User").join("globalStorage");
     let zed = if cfg!(windows) {
@@ -136,7 +132,7 @@ fn gemini_skills(home: &Path) -> [PathBuf; 4] {
 }
 
 pub fn refresh_skills(root: Option<&Path>) {
-    let home = user_home();
+    let home = wisply_proto::user_dir();
     let bionic = home.join(".lmstudio").join("skills").join("wisply");
     for dst in std::iter::once(bionic).chain(gemini_skills(&home)) {
         if dst.exists() {
@@ -146,7 +142,7 @@ pub fn refresh_skills(root: Option<&Path>) {
 }
 
 pub fn install(name: &str, exe: &Path, root: Option<&Path>) -> io::Result<()> {
-    let home = user_home();
+    let home = wisply_proto::user_dir();
     let path =
         config_file(name).ok_or_else(|| io::Error::other(format!("usage: wisply install <{}>", NAMES.join("|"))))?;
     let base = entry(exe);

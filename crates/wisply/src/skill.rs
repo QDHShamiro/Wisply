@@ -48,7 +48,7 @@ const NAMED_MAX: usize = 3;
 static NEXT: AtomicU32 = AtomicU32::new(0);
 
 pub fn run(home: &Path, args: &[String]) -> ExitCode {
-    match command(home, &crate::setup::user_home(), args) {
+    match command(home, &wisply_proto::user_dir(), args) {
         Ok(text) => {
             println!("{text}");
             ExitCode::SUCCESS

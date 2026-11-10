@@ -93,10 +93,20 @@ fn draw(home: &Path) -> String {
     }
     let input = read_input();
     let time = now();
-    let git = cwd_of(&input).and_then(|cwd| git_view(home, &cwd, time, &cfg));
+    let cwd = cwd_of(&input);
+    let git = cwd.as_deref().and_then(|cwd| git_view(home, cwd, time, &cfg));
     let line = render::line(&input, git.as_ref(), time, &cfg);
+    let line = render::with_extra(
+        line,
+        cfg.shown("progress").then(|| progress_field(home, &input, cwd.as_deref(), time, &cfg)).flatten(),
+    );
     let line = render::with_extra(line, cfg.shown("pc").then(|| pc::field(home, time)).flatten());
     render::with_extra(line, cfg.shown("agents").then(|| agents::field(home, time)).flatten())
+}
+
+fn progress_field(home: &Path, input: &Value, cwd: Option<&Path>, time: u64, cfg: &Config) -> Option<String> {
+    let folder = cwd.map(|c| c.to_string_lossy().into_owned());
+    crate::progress::field(home, input["session_id"].as_str(), folder.as_deref(), time, cfg.ascii)
 }
 
 fn wants_extras(cfg: &Config) -> bool {
@@ -298,7 +308,9 @@ fn preview(home: &Path) -> String {
         sync: Some(git::Sync { dirty: true, ahead: 2, behind: 1 }),
         pr: Some(github::Pr { number: 41, state: github::State::Open, checks: github::Checks::Pass }),
     };
-    render::line(&sample, Some(&view), time, &cfg)
+    let line = render::line(&sample, Some(&view), time, &cfg);
+    let step = crate::progress::paint::draw(Some(40), "2/5", "Running the tests", Some("Bash cargo test"), cfg.ascii);
+    render::with_extra(line, step.filter(|_| cfg.shown("progress")))
 }
 
 #[cfg(test)]

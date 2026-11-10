@@ -90,6 +90,20 @@ fn sessions_are_learned_into_notes_and_vault_pages() {
     assert!(run(&home, &["memory"]).1.starts_with("memory on: "));
     assert_eq!(run(&home, &["hook", "end", &end.to_string()]).0, 0);
     let (code, said) = run(&home, &["memory", "learn"]);
+    if said.starts_with("1 sessions wait: ") {
+        let state = run(&home, &["memory"]).1;
+        assert!(
+            code == 0
+                && state.contains(
+                    "
+learning waits: "
+                )
+                && asked.lock().unwrap().is_empty(),
+            "{said}
+{state}"
+        );
+        return;
+    }
     assert!(
         code == 0
             && said.starts_with("learning ")

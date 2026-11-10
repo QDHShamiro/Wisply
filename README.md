@@ -565,7 +565,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |
 | **Improve** | `think start "name" src/` · `think scan` · `think fix` · `think report` |
-| **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` |
+| **Status line** | `statusline on` · `statusline off` · `statusline set tokens off` · `statusline preview` · `progress 3/8 "what you are doing"` · `progress show` |
 
 <details>
 <summary><b>All commands</b></summary>
@@ -577,8 +577,8 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | Look | `open <url>` · `snap [-f "a\|b"] [-s e40] [--diff] [--all]` · `text` (Markdown via [Defuddle](https://github.com/kepano/defuddle)) · `read <url> [url2 ...]` (pages and PDFs, no browser) · `shot --marks` |
 | Act | `click` · `type` · `fill "Email=a@b.c" --submit` · `press` · `select` · `check` · `hover` · `drag` · `scroll --until "text"` · `upload` |
 | Wait | `wait "text" \| url:/x \| 1500 [--gone]` · `expect "text"` · `wait "Done" w3` (in an app) |
-| Data | `table e8` · `fetch /api/me --pick login` (with your cookies) · `js` |
-| Tabs | `tabs` · `tab t3` · `close` · `back` · `reload` · `dialog accept\|dismiss` · `dismiss` (cookie banners) · `viewport 390x844` |
+| Data | `table e8` · `fetch /api/me --pick login` (with your cookies) · `js` · `net [n] [-f word]` (the JSON the page loaded) · `console` (page errors) · `downloads` |
+| Tabs | `tabs` · `tab t3` · `close` · `back` · `forward` · `reload` · `dialog accept\|dismiss` · `dismiss` (cookie banners) · `viewport 390x844` |
 | Clean up | `done` · `keep [t3\|w2]` · `config cleanup off` · `config window off` (tabs in your window) · `config focus away` (may take the front when you are away) |
 | Video | `watch <link\|file\|e40>` · `watch ... --from 4:05 --to 6:00` · `--at 1:23,2:45` · `--text` · `--full` · `listen` · `frames e40 [--scenes] [--live]` |
 | Images | `snap --media` · `shot e57` · `read <image url>` |
@@ -634,7 +634,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | Own tools | `kit` · `kit add <name> "what it does" [--file script] [--replace] -- <program> [args]` · `kit run <name> [args]` · `kit show\|rm <name>` |
 | Skills | `skill` · `skill find <words> [--web]` · `skill new <name> "..." --file text.md` · `skill add <folder>` · `skill get <owner/repo/path>` · `skill check <folder or name>` · `skill rm <name>` |
 | Safety check | `secure [folder|site|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json]` (keys, vulnerable dependencies in Cargo/npm/pnpm/yarn/Maven/Gradle/pip/poetry, risky code, .gitignore, severity per line) · `secure allow <domain> [--remove]` (only these sites get the passive web check, 1 request/s) · `secure fix [folder] [--with claude|codex]` (FIX.md, branch `secure/fix-<date>`, AI fixes, re-check; never commits or pushes) · `config secure on|off` |
-| Numbers | `tokens` (used and saved, last 30 days) · `bench` · `selftest` · `log stats` |
+| Numbers | `tokens` (used and saved, last 30 days) · `bench` · `selftest` · `log stats` · `channels` (the ways Wisply reads GitHub, the web, video and audio right now) |
 
 **Think** (critical thinking without AI, runs in `~/.wisply/think`)
 

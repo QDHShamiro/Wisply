@@ -1,4 +1,3 @@
-use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
@@ -82,10 +81,6 @@ pub fn problem() -> String {
     PROBLEM.lock().map(|p| p.clone()).unwrap_or_default()
 }
 
-fn user_home() -> PathBuf {
-    env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).unwrap_or_default()
-}
-
 pub fn vault(home: &Path) -> PathBuf {
     let own = config::text(&config::load(home), "vault");
     if own.trim().is_empty() { home.join(VAULT_DIR) } else { PathBuf::from(own.trim()) }
@@ -107,7 +102,7 @@ fn pass(
     }
     let Some(store) = slot.as_mut() else { return Ok(()) };
     if force || due(last.claude, EVERY) {
-        store.index_claude(&claude_dirs(&user_home())).map_err(|e| format!("Claude memory index: {e}"))?;
+        store.index_claude(&claude_dirs(&wisply_proto::user_dir())).map_err(|e| format!("Claude memory index: {e}"))?;
         last.claude = Some(Instant::now());
     }
     if force || due(last.vault, vault_every) {

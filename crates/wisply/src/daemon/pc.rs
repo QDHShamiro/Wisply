@@ -1,4 +1,3 @@
-use std::env;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -16,12 +15,8 @@ const OFF_CHECK: Duration = Duration::from_secs(10);
 
 static PC: OnceLock<Mutex<Pc>> = OnceLock::new();
 
-fn user_home() -> PathBuf {
-    env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).unwrap_or_default()
-}
-
 fn make(home: &Path) -> Mutex<Pc> {
-    Mutex::new(Pc::new(home, &user_home(), plat::system(), Box::new(notify::send)))
+    Mutex::new(Pc::new(home, &wisply_proto::user_dir(), plat::system(), Box::new(notify::send)))
 }
 
 fn lock(home: &Path) -> MutexGuard<'static, Pc> {

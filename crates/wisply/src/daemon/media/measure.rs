@@ -58,7 +58,7 @@ fn measure() {
     let out = root.join("out").join(&tag);
     let _ = fs::remove_dir_all(&out);
     fs::create_dir_all(&out).unwrap();
-    let home = PathBuf::from(std::env::var("USERPROFILE").unwrap_or_default()).join(".wisply");
+    let home = wisply_proto::home();
     let mut clips: Vec<PathBuf> = fs::read_dir(root.join("clips")).unwrap().flatten().map(|e| e.path()).collect();
     clips.sort();
     for clip in clips {

@@ -160,6 +160,9 @@ impl Home {
         let raw = fs::read_to_string(dir.join("state.json"))
             .map_err(|_| format!("run {id} not found (wisply think runs)"))?;
         let s: Value = serde_json::from_str(&raw).map_err(|e| format!("run {id} is broken: {e}"))?;
+        if !s.is_object() {
+            return Err(format!("run {id} is broken: state.json is not an object (wisply think runs)"));
+        }
         Ok(Run { dir, s })
     }
 
@@ -383,6 +386,11 @@ mod tests {
         assert!(learn(&home, "Measure before you change", "plan").starts_with("lesson saved (1/40)"));
         assert!(learn(&home, "measure before changing", "").starts_with("lesson confirmed (2x)"));
         assert!(home.lessons()[0].contains("[plan] Measure before you change (2x)"));
+        let odd = home.runs().join("odd");
+        fs::create_dir_all(&odd).unwrap();
+        fs::write(odd.join("state.json"), "[1, 2]").unwrap();
+        assert!(home.load(Some("odd")).err().unwrap_or_default().contains("not an object"));
+        assert_eq!(home.all().len(), 1);
         let _ = fs::remove_dir_all(&base);
     }
 }
