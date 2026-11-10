@@ -50,6 +50,9 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - `wisply think` no longer stops with a panic when the `state.json` of a run is not a table; it names the run.
 - A learned routine with a very long step no longer builds the same pattern again on every compare, and a step too
   long for a pattern counts as different instead of stopping the command.
+- Setup in Edge: when the browser ignores `edge://extensions/` on its command line (Edge on the Windows runner does),
+  Wisply types the page into the address bar. On a narrow window it opens the side menu to reach the developer switch
+  and closes it again, and it takes the folder dialog from any process, waiting up to 25 s for it.
 - State files are replaced in one step (write next to the file, then rename), so a crash or a second session can no
   longer leave half a `config.json`, `sessions.json`, routine, to-do list or MCP entry of another AI app behind.
 - Two hooks of one session finishing at the same moment no longer lose a remembered read, and a read is written to the
