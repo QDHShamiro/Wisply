@@ -1,5 +1,6 @@
 mod home;
 mod l2;
+mod limits;
 mod link;
 mod listen;
 mod pipe;
@@ -10,6 +11,7 @@ pub use home::{
     user,
 };
 pub use l2::{Incoming, Reply, Request};
+pub use limits::hook_limit;
 pub use link::Link;
 pub use listen::Listener;
 pub use pipe::{Conn, exchange_once};

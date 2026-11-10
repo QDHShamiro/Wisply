@@ -115,7 +115,7 @@ fn write_board(home: &Path, rows: &[Row], guard: &Guard, at: i64) {
     });
     let dir = home.join("agents");
     let _ = std::fs::create_dir_all(&dir);
-    let _ = std::fs::write(dir.join("board.json"), body.to_string());
+    let _ = wisply_core::save(dir.join("board.json"), body.to_string());
 }
 
 pub fn status_line(home: &Path) -> Option<String> {

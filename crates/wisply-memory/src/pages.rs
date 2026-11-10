@@ -85,7 +85,7 @@ pub fn write_session(root: &Path, sid: &str, project: &str, r: &Record, started:
     lines.extend(link(project));
     let path = folder.join(format!("{day} {} {}.md", safe_name(&title, NAME_CHARS), sid8(sid)));
     fs::create_dir_all(&folder).ok()?;
-    fs::write(&path, lines.join("\n")).ok()?;
+    wisply_core::save(&path, lines.join("\n")).ok()?;
     if let Some(old) = old.filter(|o| *o != path) {
         let _ = fs::remove_file(old);
     }
@@ -127,7 +127,7 @@ pub fn write_draft(inbox: &Path, kind: &str, title: &str, page: &str) -> Option<
         return None;
     }
     fs::create_dir_all(inbox).ok()?;
-    fs::write(&path, page).ok()?;
+    wisply_core::save(&path, page).ok()?;
     Some(path)
 }
 

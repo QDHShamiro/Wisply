@@ -5,6 +5,7 @@ mod close;
 mod fail;
 mod log;
 mod names;
+mod save;
 
 pub use args::{Call, Flag, parse, wants_help};
 pub use cap::{OUT_CHARS, cap, out_file};
@@ -12,7 +13,8 @@ pub use clock::{ago, local_now, local_parts, local_to_utc, stamp_secs};
 pub use close::close_match;
 pub use fail::Fail;
 pub use log::{Log, Row, listing, stats};
-pub use names::{APP_ONLY, CHAT, Lane, QUIET, SHARED, WEB_ONLY, built_later, lane, unknown};
+pub use names::{APP_ONLY, CHAT, CLIENT, Lane, QUIET, SHARED, WEB_ONLY, built_later, lane, unknown};
+pub use save::save;
 
 pub fn ext_version(version: &str) -> &str {
     version.split(['-', '+']).next().unwrap_or(version)

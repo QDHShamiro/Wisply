@@ -199,7 +199,7 @@ pub fn learn(home: &Path, url: &str, value: &str) -> Option<String> {
         }
     }
     if let Ok(text) = serde_json::to_string_pretty(&Value::Object(data)) {
-        let _ = fs::create_dir_all(home).and_then(|()| fs::write(home.join("sites.json"), text));
+        let _ = fs::create_dir_all(home).and_then(|()| wisply_core::save(home.join("sites.json"), text));
     }
     Some(tpl)
 }

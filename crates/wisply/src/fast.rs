@@ -10,8 +10,12 @@ use wisply_proto::{Conn, Reply, Request};
 
 #[path = "hook.rs"]
 mod hook;
+#[path = "junk.rs"]
+mod junk;
 #[path = "more.rs"]
 mod more;
+#[path = "peek.rs"]
+mod peek;
 #[path = "reads.rs"]
 mod reads;
 #[path = "readstate.rs"]
@@ -25,6 +29,7 @@ const HOOK_INPUT_WAIT: Duration = Duration::from_millis(1000);
 const HOOK_INPUT_MAX: u64 = 64 * 1024;
 const BUSY_WAIT: Duration = Duration::from_millis(15);
 const BUSY_LIMIT: Duration = Duration::from_secs(12);
+const CHILD_POLL: Duration = Duration::from_millis(10);
 const LOCAL: &[&str] = &[
     "update",
     "setup",
@@ -45,6 +50,8 @@ const LOCAL: &[&str] = &[
     "voice-watch",
     "testapp",
     "claude-start",
+    "kit",
+    "skill",
 ];
 
 fn main() -> ExitCode {
@@ -57,7 +64,7 @@ fn main() -> ExitCode {
     }
     let home = wisply_proto::home();
     if local {
-        return full(&raw, None);
+        return full(&raw, None, None);
     }
     let args: Vec<String> = match msys_root() {
         Some(root) => raw.iter().map(|a| unmangle(a, &root)).collect(),
@@ -66,8 +73,11 @@ fn main() -> ExitCode {
     if first == "more" {
         return more::run(&home, &args[1..]);
     }
+    if first == "peek" {
+        return peek::run(&args[1..]);
+    }
     if !home.join(MARKER).is_file() {
-        return full(&raw, None);
+        return full(&raw, None, None);
     }
     let args = if matches!(first, "" | "-h" | "--help") {
         std::iter::once("help".to_string()).chain(args.into_iter().skip(1)).collect()
@@ -89,7 +99,10 @@ fn full_path() -> Result<PathBuf, String> {
     Ok(full)
 }
 
-fn full(raw: &[String], input: Option<&str>) -> ExitCode {
+fn full(raw: &[String], input: Option<&str>, limit: Option<Instant>) -> ExitCode {
+    if limit.is_some_and(|at| Instant::now() >= at) {
+        return ExitCode::SUCCESS;
+    }
     let exe = match full_path() {
         Ok(exe) => exe,
         Err(why) => {
@@ -109,65 +122,42 @@ fn full(raw: &[String], input: Option<&str>) -> ExitCode {
     if let (Some(text), Some(mut stdin)) = (input, child.stdin.take()) {
         let _ = stdin.write_all(text.as_bytes());
     }
-    match child.wait() {
-        Ok(s) => ExitCode::from(s.code().and_then(|c| u8::try_from(c).ok()).unwrap_or(1)),
-        Err(_) => ExitCode::from(1),
+    let status = match limit {
+        None => child.wait().ok(),
+        Some(at) => loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break Some(status),
+                Ok(None) if Instant::now() < at => thread::sleep(CHILD_POLL),
+                Ok(None) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return ExitCode::SUCCESS;
+                }
+                Err(_) => break None,
+            }
+        },
+    };
+    match status {
+        Some(s) => ExitCode::from(s.code().and_then(|c| u8::try_from(c).ok()).unwrap_or(1)),
+        None => ExitCode::from(1),
     }
 }
 
-fn send(home: &Path, raw: &[String], args: &[String]) -> ExitCode {
-    let first = args.first().map(String::as_str).unwrap_or("");
+fn idle_text(args: &[String]) -> Option<&'static str> {
     let quiet = args.iter().any(|a| a == "--quiet");
     let event = args.get(1).map(String::as_str).unwrap_or("");
-    let silent = matches!(first, "done" | "suggest" | "hook");
-    let idle = match first {
+    match args.first().map(String::as_str).unwrap_or("") {
         "stop" => Some("wisply daemon not running"),
         "done" if quiet => Some(""),
         "done" => Some("nothing to close"),
         "suggest" => Some(""),
         "hook" if event != "start" => Some(""),
         _ => None,
-    };
-    let hook = first == "hook" && args.len() == 2;
-    let wants_input = (first == "suggest" && args.len() == 1) || (first == "done" && quiet) || hook;
-    let hook_input = if wants_input && !io::stdin().is_terminal() { read_stdin(HOOK_INPUT_MAX) } else { String::new() };
-    let mut sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
-    if sid.is_empty() {
-        sid = json_str(&hook_input, "session_id");
     }
-    let started = Instant::now();
-    let mut stats = false;
-    let mut argv = Vec::with_capacity(args.len() + 1);
-    for a in args {
-        if a == "--stats" {
-            stats = true;
-        } else {
-            argv.push(a.clone());
-        }
-    }
-    if (first == "suggest" || hook) && !hook_input.is_empty() {
-        argv.push(hook_input.replace('\0', " "));
-    }
-    let pass = (!hook_input.is_empty()).then_some(hook_input.as_str());
-    let Some(token) = wisply_proto::key_token(home) else {
-        return if silent { ExitCode::SUCCESS } else { full(raw, pass) };
-    };
-    let cwd = env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
-    let req = Request { token: &token, cwd: &cwd, sid: &sid, secret: None, argv: &argv }.encode();
-    let deadline = Instant::now() + BUSY_LIMIT;
-    let buf = loop {
-        match wisply_proto::exchange_once(home, &req) {
-            Ok(buf) if !buf.is_empty() => break buf,
-            Ok(_) => return full(raw, pass),
-            Err(Conn::Busy) if Instant::now() < deadline => thread::sleep(BUSY_WAIT),
-            Err(Conn::Busy) => return full(raw, pass),
-            Err(Conn::Missing) => match idle {
-                Some(text) => break format!("0\0\0{text}").into_bytes(),
-                None => return full(raw, pass),
-            },
-        }
-    };
-    let mut out = Reply::decode(&buf);
+}
+
+fn show(buf: &[u8], stats: bool, started: Instant) -> ExitCode {
+    let mut out = Reply::decode(buf);
     if stats {
         out.out.push_str(&format!("\n[{} ms, ~{} tokens]", started.elapsed().as_millis(), out.out.len() / 4 + 1));
     }
@@ -178,6 +168,73 @@ fn send(home: &Path, raw: &[String], args: &[String]) -> ExitCode {
         let _ = so.flush();
     }
     ExitCode::from(u8::try_from(out.code).unwrap_or(1))
+}
+
+fn send(home: &Path, raw: &[String], args: &[String]) -> ExitCode {
+    let first = args.first().map(String::as_str).unwrap_or("");
+    let quiet = args.iter().any(|a| a == "--quiet");
+    let silent = matches!(first, "done" | "suggest" | "hook");
+    let idle = idle_text(args);
+    let hook = first == "hook" && args.len() == 2;
+    let wants_input = (first == "suggest" && args.len() == 1) || (first == "done" && quiet) || hook;
+    let started = Instant::now();
+    let limit = wisply_proto::hook_limit(args).map(|d| started + d);
+    let hook_input = if wants_input && !io::stdin().is_terminal() { read_stdin(HOOK_INPUT_MAX) } else { String::new() };
+    let mut sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
+    if sid.is_empty() {
+        sid = json_str(&hook_input, "session_id");
+    }
+    let stats = args.iter().any(|a| a == "--stats");
+    let mut argv: Vec<String> = args.iter().filter(|a| *a != "--stats").cloned().collect();
+    if (first == "suggest" || hook) && !hook_input.is_empty() {
+        argv.push(hook_input.replace('\0', " "));
+    }
+    let pass = (!hook_input.is_empty()).then_some(hook_input.as_str());
+    let Some(token) = wisply_proto::key_token(home) else {
+        return if silent { ExitCode::SUCCESS } else { full(raw, pass, limit) };
+    };
+    let cwd = env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
+    let req = Request { token: &token, cwd: &cwd, sid: &sid, secret: None, argv: &argv }.encode();
+    let home_owned = home.to_path_buf();
+    let idle_owned = idle.map(str::to_string);
+    let busy_until = limit.map_or(started + BUSY_LIMIT, |at| at.min(started + BUSY_LIMIT));
+    let work = move || ask_daemon(&home_owned, &req, idle_owned.as_deref(), busy_until);
+    let got = match limit {
+        Some(at) => within(work, at).unwrap_or_else(|| Got::Reply(format!("0\0\0{}", idle.unwrap_or("")).into_bytes())),
+        None => work(),
+    };
+    let buf = match got {
+        Got::Reply(buf) => buf,
+        Got::Full => return full(raw, pass, limit),
+    };
+    show(&buf, stats, started)
+}
+
+enum Got {
+    Reply(Vec<u8>),
+    Full,
+}
+
+fn ask_daemon(home: &Path, req: &[u8], idle: Option<&str>, deadline: Instant) -> Got {
+    loop {
+        match wisply_proto::exchange_once(home, req) {
+            Ok(buf) if !buf.is_empty() => return Got::Reply(buf),
+            Ok(_) => return Got::Full,
+            Err(Conn::Busy) if Instant::now() < deadline => thread::sleep(BUSY_WAIT),
+            Err(Conn::Busy) => return Got::Full,
+            Err(Conn::Missing) => {
+                return idle.map_or(Got::Full, |text| Got::Reply(format!("0\0\0{text}").into_bytes()));
+            }
+        }
+    }
+}
+
+fn within<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static, at: Instant) -> Option<T> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(work());
+    });
+    rx.recv_timeout(at.saturating_duration_since(Instant::now())).ok()
 }
 
 fn msys_root() -> Option<String> {
@@ -240,6 +297,40 @@ mod tests {
         assert_eq!(unmangle("C:/Program Files/Git/QDHShamiro", root), "/QDHShamiro");
         assert_eq!(unmangle("a=C:/Program Files/Git/b", root), "a=/b");
         assert_eq!(unmangle("C:/Users/x", root), "C:/Users/x");
+    }
+
+    #[test]
+    fn a_slow_daemon_is_given_up_on_in_time() {
+        let at = Instant::now() + Duration::from_millis(100);
+        assert_eq!(within(|| thread::sleep(Duration::from_secs(5)), at), None);
+        assert!(Instant::now() < at + Duration::from_secs(1));
+        assert_eq!(within(|| 7, Instant::now() + Duration::from_secs(1)), Some(7));
+    }
+
+    #[test]
+    fn a_fallback_past_its_deadline_ends_quietly_without_starting_anything() {
+        let gone = Instant::now() - Duration::from_millis(1);
+        let at = Instant::now();
+        let code = full(&["hook".into(), "end".into()], None, Some(gone));
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+        assert!(at.elapsed() < Duration::from_millis(200));
+    }
+
+    #[test]
+    fn hook_deadlines_stay_under_the_limits_in_hooks_json() {
+        let hooks: serde_json::Value = serde_json::from_str(include_str!("../../../hooks/hooks.json")).unwrap();
+        let mut seen = 0;
+        for entry in hooks["hooks"].as_object().unwrap().values().flat_map(|e| e.as_array().unwrap()) {
+            for hook in entry["hooks"].as_array().unwrap() {
+                let command = hook["command"].as_str().unwrap();
+                let argv: Vec<&str> = command.rsplit("\"$L\" ").next().unwrap().split_whitespace().collect();
+                let limit = wisply_proto::hook_limit(&argv).unwrap_or_else(|| panic!("no deadline for {argv:?}"));
+                let allowed = Duration::from_secs(hook["timeout"].as_u64().unwrap());
+                assert!(limit + Duration::from_secs(2) <= allowed, "{argv:?}: {limit:?} against {allowed:?}");
+                seen += 1;
+            }
+        }
+        assert!(seen >= 8, "{seen}");
     }
 
     #[test]

@@ -180,7 +180,7 @@ fn save(home: &Path, name: &str, version: &str, files: &[&str]) {
         files.iter().map(|f| ((*f).to_string(), json!(sha256_file(&bin.join(exe(f))).unwrap_or_default()))).collect();
     let at = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
     all.insert(name.into(), json!({"version": version, "sha256": sums, "at": at}));
-    let _ = fs::write(bin.join(RECORD), Value::Object(all).to_string());
+    let _ = wisply_core::save(bin.join(RECORD), Value::Object(all).to_string());
 }
 
 fn installed(home: &Path, name: &str) -> Option<String> {

@@ -5,7 +5,7 @@ use wisply_core::Call;
 
 use crate::flow::{IMPORTANT, counted};
 use crate::run::{self, Home, Run, STATUSES, cut, int, points, table, text};
-use crate::{Env, measure};
+use crate::{Env, measure, safety};
 
 const REPORT_ROWS: usize = 10;
 const RUNS_KEEP: usize = 10;
@@ -185,6 +185,13 @@ pub fn status(home: &Home, c: &Call) -> Result<String, String> {
     } else {
         "step 8/9: review (wisply think diff), then wisply think round"
     };
+    let gone = safety::lost(&r);
+    if !gone.is_empty() {
+        out.push(format!(
+            "WARNING the start backup of {} is gone -> diff uses the last git commit for those, restore refuses",
+            gone.join(", ")
+        ));
+    }
     out.push(format!("next: {next}"));
     Ok(out.join("\n"))
 }

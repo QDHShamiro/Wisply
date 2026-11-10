@@ -25,6 +25,15 @@ pub fn run(raw: &[String]) -> ExitCode {
     if first == "more" {
         return crate::more::run(&home, &args[1..]);
     }
+    if first == "peek" {
+        return crate::peek::run(&args[1..]);
+    }
+    if first == "kit" {
+        return crate::kit::run(&home, &args[1..]);
+    }
+    if first == "skill" {
+        return crate::skill::run(&home, &args[1..]);
+    }
     if first == "update" {
         return crate::update::run(&home, &args[1..]);
     }
@@ -85,13 +94,13 @@ pub fn send(home: &Path, args: &[String]) -> ExitCode {
     };
     let hook = first == "hook" && args.len() == 2;
     let wants_input = (first == "suggest" && args.len() == 1) || (first == "done" && quiet) || hook;
+    let started = Instant::now();
     let hook_input =
         if wants_input && !io::stdin().is_terminal() { read_stdin(HOOK_INPUT_MAX).0 } else { String::new() };
     let mut sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
     if sid.is_empty() {
         sid = json_str(&hook_input, "session_id");
     }
-    let started = Instant::now();
     let (mut stats, mut secret, mut argv) = (false, None, Vec::with_capacity(args.len() + 1));
     let mut i = 0;
     while i < args.len() {
@@ -141,7 +150,9 @@ pub fn send(home: &Path, args: &[String]) -> ExitCode {
     };
     let cwd = env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
     let req = Request { token: &token, cwd: &cwd, sid: &sid, secret: secret.as_deref(), argv: &argv }.encode();
-    let reply = match exchange(home, &req, idle) {
+    let limit = wisply_proto::hook_limit(args).map(|d| started + d);
+    let home_owned = home.to_path_buf();
+    let reply = match bounded(move || exchange(&home_owned, &req, idle), idle, limit) {
         Ok(reply) => Reply::decode(&reply),
         Err(why) => {
             eprintln!("wisply: {why}, see {}", home.join("daemon.log").display());
@@ -223,6 +234,21 @@ fn exchange(home: &Path, req: &[u8], idle: Option<&str>) -> Result<Vec<u8>, Stri
                 thread::sleep(Duration::from_millis(if busy { 15 } else { 40 }));
             }
         }
+    }
+}
+
+fn bounded<F>(work: F, idle: Option<&str>, limit: Option<Instant>) -> Result<Vec<u8>, String>
+where
+    F: FnOnce() -> Result<Vec<u8>, String> + Send + 'static,
+{
+    let Some(at) = limit else { return work() };
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(work());
+    });
+    match rx.recv_timeout(at.saturating_duration_since(Instant::now())) {
+        Ok(reply) => reply,
+        Err(_) => Ok(format!("0\0\0{}", idle.unwrap_or("")).into_bytes()),
     }
 }
 
@@ -310,5 +336,28 @@ mod tests {
         assert_eq!(json_str(r#"{"session_id":"abc"}"#, "session_id"), "abc");
         assert_eq!(json_str("{}", "session_id"), "");
         assert_eq!(json_str("", "session_id"), "");
+    }
+
+    #[test]
+    fn a_busy_daemon_gives_an_empty_reply_in_time() {
+        let at = Instant::now();
+        let reply = bounded(
+            || {
+                thread::sleep(Duration::from_secs(5));
+                Ok(b"1\0\0late".to_vec())
+            },
+            Some(""),
+            Some(Instant::now() + Duration::from_millis(200)),
+        );
+        assert!(at.elapsed() < Duration::from_secs(2));
+        let reply = Reply::decode(&reply.unwrap());
+        assert_eq!((reply.code, reply.out.as_str()), (0, ""));
+    }
+
+    #[test]
+    fn a_quick_reply_passes_through() {
+        let reply = bounded(|| Ok(b"0\0\0hi".to_vec()), Some(""), Some(Instant::now() + Duration::from_secs(3)));
+        assert_eq!(Reply::decode(&reply.unwrap()).out, "hi");
+        assert_eq!(bounded(|| Err("x".into()), None, None), Err("x".to_string()));
     }
 }

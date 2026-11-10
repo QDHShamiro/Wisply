@@ -76,6 +76,7 @@ pub const WEB_ONLY: &[&str] = &[
     "frames",
 ];
 const MORE: &[&str] = &["read", "research", "listen", "watch", "voice", "phone", "claude", "desktop"];
+pub const CLIENT: &[&str] = &["more", "peek", "kit", "skill"];
 const HIDDEN: &[&str] = &["hook", "suggest", "board", "access-prompt", "autoload", "ping"];
 const GUESS: &[(&str, &str)] = &[
     ("find", "snap -f \"word\" (page), code <name> (code) or recall \"words\" (memory)"),
@@ -123,7 +124,7 @@ pub fn lane(name: &str) -> Lane {
 }
 
 fn all() -> impl Iterator<Item = &'static str> {
-    [SYSTEM, MEMORY, SHARED, APP_ONLY, CHAT, WEB_ONLY, MORE].into_iter().flatten().copied()
+    [SYSTEM, MEMORY, SHARED, APP_ONLY, CHAT, WEB_ONLY, MORE, CLIENT].into_iter().flatten().copied()
 }
 
 fn known() -> Vec<&'static str> {
@@ -177,14 +178,15 @@ mod tests {
             assert_eq!(unknown(word).text(), format!("err: unknown command '{word}' -> try: wisply {hint}"));
         }
         assert!(built_later("snap") && built_later("recall") && built_later("ping") && !built_later("snapp"));
+        assert!(CLIENT.iter().all(|name| built_later(name)));
     }
 
     #[test]
     fn the_known_names_are_the_2x_list_secure_and_the_window() {
         let want = "agents back bench brain call channels check claude click clip close code config console demo desktop dialog \
                     dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames grep headless help \
-                    hover improve inbox js keep keys launch listen log memory mobile net notify open pc phone press read recall record \
-                    reload remember reply research routine routines run scroll search secure select selftest shot snap squeeze \
+                    hover improve inbox js keep keys kit launch listen log memory mobile more net notify open pc peek phone press read recall record \
+                    reload remember reply research routine routines run scroll search secure select selftest shot skill snap squeeze \
                     status stop tab table tabs text think todo tokens tools type ui unread update upload version viewport voice wait watch \
                     wiki windows";
         assert_eq!(known(), want.split(' ').collect::<Vec<_>>());

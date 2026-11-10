@@ -144,8 +144,8 @@ impl Home {
 
     pub fn set_current(&self, id: &str) {
         let _ = fs::create_dir_all(self.runs());
-        let _ = fs::write(self.pointer(), id);
-        let _ = fs::write(self.runs().join("current"), id);
+        let _ = wisply_core::save(self.pointer(), id);
+        let _ = wisply_core::save(self.runs().join("current"), id);
     }
 
     pub fn load(&self, id: Option<&str>) -> Result<Run, String> {
@@ -191,7 +191,7 @@ impl Home {
         let _ = fs::create_dir_all(&self.dir);
         let head = format!("# Lessons from runs (newest first, max {LESSONS_MAX})\n\n");
         let body: Vec<&str> = items.iter().take(LESSONS_MAX).map(String::as_str).collect();
-        let _ = fs::write(
+        let _ = wisply_core::save(
             self.lessons_file(),
             format!("{head}{}{}", body.join("\n"), if body.is_empty() { "" } else { "\n" }),
         );
@@ -267,11 +267,8 @@ impl Run {
     }
 
     pub fn save(&self) -> Result<(), String> {
-        fs::create_dir_all(&self.dir).map_err(|e| format!("cannot write the run: {e}"))?;
-        let tmp = self.dir.join("state.json.tmp");
         let body = serde_json::to_string_pretty(&self.s).map_err(|e| e.to_string())?;
-        fs::write(&tmp, body).map_err(|e| format!("cannot write the run: {e}"))?;
-        fs::rename(&tmp, self.dir.join("state.json")).map_err(|e| format!("cannot write the run: {e}"))
+        wisply_core::save(self.dir.join("state.json"), body).map_err(|e| format!("cannot write the run: {e}"))
     }
 
     pub fn map(&mut self) -> &mut Map<String, Value> {

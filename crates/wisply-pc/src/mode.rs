@@ -142,7 +142,7 @@ impl Engine {
         if let Some(parent) = self.file.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        let _ = fs::write(&self.file, self.state.to_json().to_string());
+        let _ = wisply_core::save(&self.file, self.state.to_json().to_string());
     }
 
     pub fn restore_all(&mut self, p: &mut dyn Platform) {

@@ -36,7 +36,8 @@ pub fn load(home: &Path) -> Map<String, Value> {
 fn store_all(home: &Path, data: &Map<String, Value>) -> Result<(), Fail> {
     let _ = fs::create_dir_all(home);
     let pretty = serde_json::to_string_pretty(data).unwrap_or_default();
-    fs::write(file(home), indent_one(&pretty)).map_err(|e| Fail::new(format!("cannot save the schedules ({e})")))
+    wisply_core::save(file(home), indent_one(&pretty))
+        .map_err(|e| Fail::new(format!("cannot save the schedules ({e})")))
 }
 
 fn clock(part: Option<&String>) -> Result<String, Fail> {

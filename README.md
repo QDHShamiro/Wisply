@@ -278,8 +278,54 @@ a second time returns all of it. Ranged reads, short files and files already edi
 `Write` onto a file that was read in the session adds a hint to use Edit (it never blocks). A file
 `~/.wisply/headroom/reads-off` turns the read handling off.
 
+Some files are rarely worth their tokens. A whole read of a lock file (`Cargo.lock`, `package-lock.json`, ...), a
+minified file or source map, or a file under `node_modules`, `.gradle`, `__pycache__` or a project's `target`/`build`
+folder arrives as one line with its line and token count; reading it again returns all of it, and ranged reads stay
+whole. That also holds when the file is so long that the read tool itself cut it. A jar, class, exe or archive dumped
+as text becomes one line with its size.
+`~/.wisply/headroom/junk-off` turns this off.
+
+`wisply peek` looks before reading: one call returns size, line count and one word of advice (`whole`, `parts`,
+`grep`, `skip`) for every file you name, and lists a folder with its build output marked.
+
+```
+wisply peek src/main.rs src/reads.rs Cargo.lock
+wisply peek src/reads.rs --outline
+wisply peek crates/wisply/src --head 3
+```
+
 `wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
 keeps the rest in a file.
+
+## Tools and skills of your own
+
+An AI that keeps doing the same thing by hand can turn it into a tool. `wisply kit add` keeps a command, with an
+optional script, in `~/.wisply/kit` for this user, and every later session of every AI runs it by name.
+
+```
+wisply kit add count-lines "Counts the lines of a file" --file count.py -- python {file} {1}
+wisply kit run count-lines src/main.rs
+wisply kit
+```
+
+`wisply skill` does the same for know-how. It looks for a skill on this computer first (the skill folders of
+Claude, Codex, Cursor, Gemini, Antigravity, LM Studio and `~/.agents`), then on GitHub, builds a new one that passes
+the checks, and installs it for every AI that is here.
+
+```
+wisply skill find "pdf forms"
+wisply skill find "pdf forms" --web
+wisply skill get anthropics/skills/skills/pdf
+wisply skill new
+wisply skill new pdf-forms "Fills PDF forms from a list of values. Use when a PDF form has to be filled." --file text.md
+wisply skill check ./pdf-forms
+```
+
+The AI does this alone. It has to ask you first, and repeat the call with `--yes`, in four cases: a tool or script
+that deletes or overwrites files, one that loosens what an AI may do, one that touches money, accounts, keys or
+uploads, and one that sets up autostart or runs code from the internet. A skill from the internet that brings
+scripts or hidden text, or that would overwrite a skill another tool installed, waits for you as well. What you
+agreed to is written into the tool or skill. `skill rm` removes only skills Wisply installed.
 
 ## Headless
 
@@ -512,7 +558,8 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Routines** | `routines` · `run <name> k=v` · `record start` … `record stop` |
 | **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
-| **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `secure` |
+| **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `peek <file|folder> ...` · `secure` |
+| **Own tools** | `kit add <name> "what it does" -- <program> [args]` · `kit run <name>` · `skill find <words>` · `skill new` |
 | **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) · `config compact 250k` |
 | **Agents** | `agents` · `mobile pair` · `notify event done "title"` |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
@@ -582,7 +629,10 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | | |
 |---|---|
 | Headroom | `more <hr-id> [--lines 400-440] [--grep "a\|b"]` · `~/.wisply/headroom/off` turns it off |
+| Look before reading | `peek <file\|folder> ... [--head 10] [--outline]` · `~/.wisply/headroom/junk-off` |
 | Search | `grep <pattern> [folder\|file ...] [-i] [-w] [-l] [-C 2] [--glob '*.py'] [--all]` |
+| Own tools | `kit` · `kit add <name> "what it does" [--file script] [--replace] -- <program> [args]` · `kit run <name> [args]` · `kit show\|rm <name>` |
+| Skills | `skill` · `skill find <words> [--web]` · `skill new <name> "..." --file text.md` · `skill add <folder>` · `skill get <owner/repo/path>` · `skill check <folder or name>` · `skill rm <name>` |
 | Safety check | `secure [folder|site|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json]` (keys, vulnerable dependencies in Cargo/npm/pnpm/yarn/Maven/Gradle/pip/poetry, risky code, .gitignore, severity per line) · `secure allow <domain> [--remove]` (only these sites get the passive web check, 1 request/s) · `secure fix [folder] [--with claude|codex]` (FIX.md, branch `secure/fix-<date>`, AI fixes, re-check; never commits or pushes) · `config secure on|off` |
 | Numbers | `tokens` (used and saved, last 30 days) · `bench` · `selftest` · `log stats` |
 

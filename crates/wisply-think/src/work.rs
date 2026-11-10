@@ -316,11 +316,21 @@ pub fn restore(home: &Home, c: &Call) -> Result<String, String> {
 pub fn diff(home: &Home, c: &Call) -> Result<String, String> {
     let r = home.load(c.val("run"))?;
     let label = c.pos.get(1).cloned().unwrap_or_else(|| format!("r{}", r.round()));
-    let (file, n, plus, minus) = safety::diff(&r, &label)?;
-    Ok(format!(
-        "diff: {} ({n} files, +{plus} -{minus}) - read it line by line against the checklist",
-        files::slashed(&file)
-    ))
+    let d = safety::diff(&r, &label)?;
+    let mut out = format!(
+        "diff: {} ({} files, +{} -{}) - read it line by line against the checklist",
+        files::slashed(&d.file),
+        d.files,
+        d.plus,
+        d.minus
+    );
+    if !d.lost.is_empty() {
+        out.push_str(&format!(
+            "\nWARNING the start backup of {} is gone: those files are compared with the last git commit, so check them with git diff as well",
+            d.lost.join(", ")
+        ));
+    }
+    Ok(out)
 }
 
 pub fn profile(env: &Env, c: &Call) -> Result<String, String> {
@@ -346,7 +356,7 @@ pub fn profile(env: &Env, c: &Call) -> Result<String, String> {
     p["counts"] =
         json!(counts.iter().map(|(k, v)| (k.name().to_string(), json!(v))).collect::<serde_json::Map<_, _>>());
     let _ = fs::create_dir_all(file.parent().unwrap_or(&env.home));
-    fs::write(&file, serde_json::to_string_pretty(&p).unwrap_or_default()).map_err(|e| e.to_string())?;
+    wisply_core::save(&file, serde_json::to_string_pretty(&p).unwrap_or_default()).map_err(|e| e.to_string())?;
     let total: usize = counts.values().sum::<usize>().max(1);
     let mut rows: Vec<(&Pack, &usize)> = counts.iter().collect();
     rows.sort_by(|a, b| b.1.cmp(a.1));

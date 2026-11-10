@@ -45,10 +45,7 @@ pub(crate) fn load(file: &Path) -> Result<Map<String, Value>, String> {
 
 pub(crate) fn save(file: &Path, map: Map<String, Value>) -> Result<(), String> {
     let text = serde_json::to_string_pretty(&Value::Object(map)).map_err(|e| e.to_string())? + "\n";
-    let tmp = file.with_extension("json.wisply-tmp");
-    fs::write(&tmp, text)
-        .and_then(|()| fs::rename(&tmp, file))
-        .map_err(|e| format!("cannot write {}: {e}", file.display()))
+    wisply_core::save(file, text).map_err(|e| format!("cannot write {}: {e}", file.display()))
 }
 
 pub fn point(file: &Path, exe: &Path) -> Result<bool, String> {

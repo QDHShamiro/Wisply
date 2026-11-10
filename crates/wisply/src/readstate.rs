@@ -1,11 +1,16 @@
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const STATE_MAX_LINES: usize = 400;
+pub const STATE_MAX_LINES: usize = 400;
 const STATE_KEEP: Duration = Duration::from_secs(7 * 86_400);
+const STATE_KEEP_ROWS: usize = 300;
+const SHRINK_MIN_BYTES: u64 = STATE_MAX_LINES as u64 * 16;
+const LOCK_TRIES: u32 = 25;
+const LOCK_PAUSE: Duration = Duration::from_millis(2);
 
 #[derive(Clone)]
 pub struct Seen {
@@ -55,6 +60,21 @@ impl Table {
         }
     }
 
+    fn trim(&mut self) {
+        if self.seen.len() <= STATE_KEEP_ROWS {
+            return;
+        }
+        let mut ages: Vec<u64> = self.seen.values().map(|s| s.at).collect();
+        ages.sort_unstable_by(|a, b| b.cmp(a));
+        let oldest = ages[STATE_KEEP_ROWS - 1];
+        let mut room = STATE_KEEP_ROWS - ages.iter().filter(|at| **at > oldest).count();
+        self.seen.retain(|_, s| {
+            let tied = s.at == oldest && room > 0;
+            room -= usize::from(tied);
+            s.at > oldest || tied
+        });
+    }
+
     fn lines(&self) -> Vec<String> {
         let mut out: Vec<String> = self.edited.iter().map(|p| format!("E\t{p}")).collect();
         for ((path, start, count), s) in &self.seen {
@@ -72,19 +92,14 @@ pub fn state_file(state: &Path, sid: &str) -> PathBuf {
     state.join("reads").join(format!("{:016x}.tsv", crate::hook::fnv(&[sid])))
 }
 
-pub fn load(file: &Path) -> (Table, usize) {
+pub fn load(file: &Path) -> Table {
     let mut table = Table::default();
-    let text = fs::read_to_string(file).unwrap_or_default();
-    let mut n = 0;
-    for line in text.lines() {
-        table.apply(line);
-        n += 1;
-    }
-    (table, n)
+    fs::read_to_string(file).unwrap_or_default().lines().for_each(|line| table.apply(line));
+    table
 }
 
-pub fn append(file: &Path, lines: &[String]) {
-    let open = || OpenOptions::new().create(true).append(true).open(file);
+fn open_state(file: &Path) -> Option<File> {
+    let open = || OpenOptions::new().create(true).truncate(false).read(true).write(true).open(file);
     let handle = match open() {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             if let Some(dir) = file.parent() {
@@ -95,10 +110,38 @@ pub fn append(file: &Path, lines: &[String]) {
         }
         other => other,
     };
-    if let Ok(mut f) = handle {
-        let mut text = lines.join("\n");
-        text.push('\n');
-        let _ = f.write_all(text.as_bytes());
+    let handle = handle.ok()?;
+    for _ in 0..LOCK_TRIES {
+        if handle.try_lock().is_ok() {
+            return Some(handle);
+        }
+        thread::sleep(LOCK_PAUSE);
+    }
+    None
+}
+
+pub fn append(file: &Path, lines: &[String]) {
+    let Some(mut f) = open_state(file) else { return };
+    let mut text = lines.join("\n");
+    text.push('\n');
+    let Ok(size) = f.seek(SeekFrom::End(0)) else { return };
+    if f.write_all(text.as_bytes()).is_err() || size + (text.len() as u64) < SHRINK_MIN_BYTES {
+        return;
+    }
+    let mut all = String::new();
+    if f.seek(SeekFrom::Start(0)).is_err() || f.read_to_string(&mut all).is_err() {
+        return;
+    }
+    if all.lines().count() <= STATE_MAX_LINES {
+        return;
+    }
+    let mut table = Table::default();
+    all.lines().for_each(|line| table.apply(line));
+    table.trim();
+    let mut small = table.lines().join("\n");
+    small.push('\n');
+    if f.seek(SeekFrom::Start(0)).is_ok() && f.write_all(small.as_bytes()).is_ok() {
+        let _ = f.set_len(small.len() as u64);
     }
 }
 
@@ -109,14 +152,6 @@ pub fn sweep(dir: &Path) {
         if old.is_some_and(|age| age > STATE_KEEP) {
             let _ = fs::remove_file(e.path());
         }
-    }
-}
-
-pub fn shrink(file: &Path, table: &Table, lines: usize) {
-    if lines > STATE_MAX_LINES {
-        let mut text = table.lines().join("\n");
-        text.push('\n');
-        let _ = fs::write(file, text);
     }
 }
 

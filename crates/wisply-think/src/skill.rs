@@ -60,6 +60,18 @@ fn front(text: &str) -> Option<(Vec<(String, String)>, &str)> {
     Some((keys, body))
 }
 
+pub struct Head {
+    pub name: String,
+    pub description: String,
+    pub body: String,
+}
+
+pub fn head(text: &str) -> Option<Head> {
+    let (keys, body) = front(text)?;
+    let get = |k: &str| keys.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone()).unwrap_or_default();
+    Some(Head { name: get("name"), description: get("description"), body: body.to_string() })
+}
+
 pub fn lint(root: &Path) -> (Vec<String>, Vec<String>) {
     let (mut errs, mut warns) = (Vec::new(), Vec::new());
     let Ok(text) = fs::read_to_string(root.join("SKILL.md")) else {

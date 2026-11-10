@@ -66,7 +66,7 @@ impl Config {
         let text = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())? + "\n";
         let path = file(home);
         fs::create_dir_all(dir(home))
-            .and_then(|()| fs::write(&path, text))
+            .and_then(|()| wisply_core::save(&path, text))
             .map_err(|e| format!("cannot save {}: {e}", path.display()))
     }
 

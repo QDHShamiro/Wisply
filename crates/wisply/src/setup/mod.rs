@@ -10,6 +10,8 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitCode, Stdio};
 
+pub(crate) use agents::user_home;
+
 use crate::client::ask;
 use crate::daemon::MARKER;
 

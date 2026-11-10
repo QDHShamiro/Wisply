@@ -274,7 +274,7 @@ fn quick_from(wisply_home: &Path, user: &Path, file: &Path, was: Option<&str>) -
         m.insert(key, json!(found.iter().map(rules::Finding::exact).collect::<Vec<_>>()));
     }
     let _ = fs::create_dir_all(&dir);
-    let _ = fs::write(&told_file, told.to_string());
+    let _ = wisply_core::save(&told_file, told.to_string());
     if fresh.is_empty() {
         return None;
     }

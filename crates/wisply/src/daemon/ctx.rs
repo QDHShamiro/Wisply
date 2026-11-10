@@ -242,7 +242,7 @@ impl Contexts {
             return;
         }
         self.saved = sig;
-        let _ = fs::write(home.join("sessions.json"), json!({"epochs": epochs, "sessions": rows}).to_string());
+        let _ = wisply_core::save(home.join("sessions.json"), json!({"epochs": epochs, "sessions": rows}).to_string());
     }
 
     pub fn load(&mut self, home: &Path) -> Map<String, Value> {

@@ -19,7 +19,7 @@ fn write_json(f: &Path, v: &Value) -> Result<(), String> {
     if let Some(d) = f.parent() {
         fs::create_dir_all(d).map_err(|e| e.to_string())?;
     }
-    fs::write(f, serde_json::to_string_pretty(v).unwrap_or_default()).map_err(|e| e.to_string())
+    wisply_core::save(f, serde_json::to_string_pretty(v).unwrap_or_default()).map_err(|e| e.to_string())
 }
 
 fn secs() -> f64 {
@@ -50,16 +50,28 @@ pub fn backup(run: &Run, list: &[PathBuf]) -> Value {
         }
     }
     let dest = run.dir.join("backup");
-    let mut manifest = Vec::new();
+    let (mut manifest, mut failed) = (Vec::new(), Vec::new());
     for (i, f) in list.iter().enumerate() {
         let bak = format!("{i}.bak");
         if fs::create_dir_all(&dest).and_then(|()| fs::copy(f, dest.join(&bak))).is_ok() {
             manifest.push(json!({"abs": f.to_string_lossy(), "bak": bak}));
+        } else {
+            failed.push(short(&f.to_string_lossy()));
         }
     }
     let n = manifest.len();
-    let _ = write_json(&dest.join("manifest.json"), &Value::Array(manifest));
-    json!({"ok": true, "mb": total / 1024 / 1024, "files": n})
+    if write_json(&dest.join("manifest.json"), &Value::Array(manifest)).is_err() {
+        return json!({"ok": false, "mb": total / 1024 / 1024, "files": 0, "failed": list.len()});
+    }
+    json!({"ok": true, "mb": total / 1024 / 1024, "files": n, "failed": failed})
+}
+
+fn short(abs: &str) -> String {
+    Path::new(abs).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+pub fn lost(run: &Run) -> Vec<String> {
+    originals(run).0.iter().filter(|(_, bak)| !bak.is_file()).map(|(abs, _)| short(abs)).collect()
 }
 
 fn cp_dir(run: &Run, id: i64) -> PathBuf {
@@ -195,6 +207,17 @@ pub fn revert(run: &Run, id: i64, force: bool) -> Result<(Vec<String>, Vec<Strin
             later.join(", ")
         ));
     }
+    let gone: Vec<String> = entries(&cp)
+        .iter()
+        .filter(|e| e.get("existed").and_then(Value::as_bool) == Some(true) && !dir.join(text(e, "bak")).is_file())
+        .map(|e| short(text(e, "abs")))
+        .collect();
+    if !gone.is_empty() {
+        return Err(format!(
+            "#{id} not reverted, nothing touched: the saved copy of {} is gone -> take those files from git",
+            gone.join(", ")
+        ));
+    }
     let mut done = Vec::new();
     for e in entries(&cp) {
         let f = PathBuf::from(text(&e, "abs"));
@@ -248,6 +271,13 @@ pub fn restore_all(run: &Run) -> Result<(usize, usize), String> {
     if orig.is_empty() && created.is_empty() {
         return Err("no start backup in this run".into());
     }
+    let gone = lost(run);
+    if !gone.is_empty() {
+        return Err(format!(
+            "nothing restored: the start backup of {} is gone -> take those files from git, the rest with wisply think revert",
+            gone.join(", ")
+        ));
+    }
     for (abs, bak) in &orig {
         if let Some(d) = Path::new(abs).parent() {
             let _ = fs::create_dir_all(d);
@@ -270,21 +300,59 @@ fn git_diff(old: Option<&Path>, new: &Path, empty: &Path) -> String {
         .unwrap_or_default()
 }
 
-pub fn diff(run: &Run, label: &str) -> Result<(PathBuf, usize, usize, usize), String> {
+fn since_commit(abs: &str) -> Option<String> {
+    let file = Path::new(abs);
+    let (dir, name) = (file.parent()?, file.file_name()?);
+    let git = |args: &[&str]| {
+        crate::measure::quiet(&mut Command::new("git"))
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .arg("--")
+            .arg(name)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+    };
+    git(&["ls-files", "--error-unmatch"])?;
+    let out = git(&["diff", "--no-color", "-U3", "HEAD"])?;
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+fn without_backup(abs: &str) -> String {
+    let name = short(abs);
+    match since_commit(abs) {
+        Some(d) => format!("# start backup of {name} is gone - compared with the last commit instead\n{d}"),
+        None => format!("# start backup of {name} is gone and git does not track it - no diff for this file\n"),
+    }
+}
+
+pub struct Diff {
+    pub file: PathBuf,
+    pub files: usize,
+    pub plus: usize,
+    pub minus: usize,
+    pub lost: Vec<String>,
+}
+
+pub fn diff(run: &Run, label: &str) -> Result<Diff, String> {
     let (orig, created) = originals(run);
     let mut chunks = Vec::new();
+    let mut lost = Vec::new();
     if !orig.is_empty() || !created.is_empty() {
         let empty = run.dir.join("empty.txt");
         let _ = fs::write(&empty, "");
         for (abs, bak) in &orig {
+            if !bak.is_file() {
+                chunks.push(without_backup(abs));
+                lost.push(short(abs));
+                continue;
+            }
             if fs::read(abs).ok() == fs::read(bak).ok() {
                 continue;
             }
             let d = git_diff(Some(bak), Path::new(abs), &empty);
-            chunks.push(d.replace(
-                &files::slashed(bak),
-                &format!("before/{}", Path::new(abs).file_name().map(|n| n.to_string_lossy()).unwrap_or_default()),
-            ));
+            chunks.push(d.replace(&files::slashed(bak), &format!("before/{}", short(abs))));
         }
         for abs in &created {
             chunks.push(git_diff(None, Path::new(abs), &empty));
@@ -304,10 +372,10 @@ pub fn diff(run: &Run, label: &str) -> Result<(PathBuf, usize, usize, usize), St
     let lines: Vec<&str> = body.lines().collect();
     let plus = lines.iter().filter(|l| l.starts_with('+') && !l.starts_with("+++")).count();
     let minus = lines.iter().filter(|l| l.starts_with('-') && !l.starts_with("---")).count();
-    let n = lines.iter().filter(|l| l.starts_with("diff --git")).count();
-    let out = run.dir.join(format!("diff-{label}.txt"));
-    fs::write(&out, body).map_err(|e| e.to_string())?;
-    Ok((out, n, plus, minus))
+    let files = lines.iter().filter(|l| l.starts_with("diff --git")).count();
+    let file = run.dir.join(format!("diff-{label}.txt"));
+    fs::write(&file, body).map_err(|e| e.to_string())?;
+    Ok(Diff { file, files, plus, minus, lost })
 }
 
 pub fn blind(run: &mut Run, before: &Path, after: &Path) -> Result<Value, String> {
@@ -348,66 +416,4 @@ pub fn blind_result(run: &mut Run, n: i64, verdict: &str) -> Result<String, Stri
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::run::Home;
-
-    #[test]
-    fn checkpoints_revert_and_guard_later_changes() {
-        let base = std::env::temp_dir().join(format!("wisply-think-safety-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&base);
-        let work = base.join("work");
-        fs::create_dir_all(&work).unwrap();
-        let a = work.join("a.txt");
-        fs::write(&a, "one").unwrap();
-        let home = Home::new(&base, "s");
-        let mut run = Run::create(&home, "safety");
-        run.map().insert("paths".into(), json!([work.to_string_lossy()]));
-        assert_eq!(backup(&run, &files::walk(&run.paths()))["files"], 1);
-        let fresh = work.join("new.txt");
-        checkpoint(&run, 1, &[a.clone(), fresh.clone()]).unwrap();
-        fs::write(&a, "two").unwrap();
-        fs::write(&fresh, "x").unwrap();
-        mark_after(&run, 1);
-        checkpoint(&run, 2, std::slice::from_ref(&a)).unwrap();
-        fs::write(&a, "three").unwrap();
-        assert!(revert(&run, 1, false).unwrap_err().contains("a.txt"));
-        revert(&run, 2, false).unwrap();
-        assert_eq!(fs::read_to_string(&a).unwrap(), "two");
-        let (done, _) = revert(&run, 1, false).unwrap();
-        assert_eq!(done, ["a.txt back", "new.txt deleted (was new)"]);
-        assert_eq!(fs::read_to_string(&a).unwrap(), "one");
-        fs::write(&a, "four").unwrap();
-        assert_eq!(restore_all(&run).unwrap(), (1, 0));
-        assert_eq!(fs::read_to_string(&a).unwrap(), "one");
-        let b = work.join("b.txt");
-        fs::write(&b, "two").unwrap();
-        let e = blind(&mut run, &a, &b).unwrap();
-        let after_slot = if e["map"]["1"] == "after" { "1" } else { "2" };
-        assert_eq!(blind_result(&mut run, 1, after_slot).unwrap(), "after");
-        let _ = fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn one_file_counts_once_however_its_path_is_written() {
-        let base = std::env::temp_dir().join(format!("wisply-think-spelling-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&base);
-        let work = base.join("work");
-        fs::create_dir_all(&work).unwrap();
-        let a = work.join("a.txt");
-        fs::write(&a, "one").unwrap();
-        let mut run = Run::create(&Home::new(&base, "s"), "spelling");
-        run.map().insert("paths".into(), json!([files::slashed(&work)]));
-        backup(&run, &files::walk(&run.paths()));
-        fs::write(&a, "two").unwrap();
-        checkpoint(&run, 1, std::slice::from_ref(&a)).unwrap();
-        fs::write(&a, "three").unwrap();
-        checkpoint(&run, 2, &[PathBuf::from(files::slashed(&a))]).unwrap();
-        fs::write(&a, "four").unwrap();
-        assert!(revert(&run, 1, false).unwrap_err().contains("a.txt (#2)"));
-        assert_eq!(diff(&run, "t").unwrap().1, 1);
-        assert_eq!(restore_all(&run).unwrap(), (1, 0));
-        assert_eq!(fs::read_to_string(&a).unwrap(), "one");
-        let _ = fs::remove_dir_all(&base);
-    }
-}
+mod tests;

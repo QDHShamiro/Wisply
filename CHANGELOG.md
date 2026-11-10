@@ -8,6 +8,45 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply peek <file|folder> ... [--head 10] [--outline]`: size, line count and one word of advice per file (`whole`,
+  `parts`, `grep`, `skip`) for many files in one call, before any of them is read. Folders list their files and mark
+  build output and dependency folders; `--outline` adds the functions and types with line numbers. Runs in the
+  program itself, so it answers while the daemon is busy, and works through MCP for every AI.
+- Reads skip files that are rarely worth their tokens: a whole read (Read tool or `cat file`) of a lock file, a
+  minified file or source map, or a file under `node_modules`, `.gradle`, `__pycache__` or the `target`/`build` folder
+  of a project comes back as one line with the line and token count. Reading it again returns all of it, ranged reads
+  and files edited in the session stay whole, and `wisply more <ref>` has the text. A file so long that the AI's own
+  read tool already cut it counts as a whole read too, and the line names both counts. A jar, class, exe, archive or
+  other binary file dumped as text becomes one line with its size. `~/.wisply/headroom/junk-off` turns this off.
+- `more` works through MCP as well (it used to answer "unknown command" there).
+- `wisply kit`: tools the AI builds for itself. `kit add <name> "what it does" [--file script] -- <program> [args]`
+  keeps a command, with an optional script, in `~/.wisply/kit/<name>` for this user; `kit run <name> [args]` runs it
+  from every session and every AI (CLI and MCP), `kit`, `kit show` and `kit rm` list, show and remove. `{1}`..`{9}`,
+  `{all}` and `{file}` stand for the arguments and the saved script. Two sessions saving at once cannot break a tool.
+- `wisply skill`: finds, builds, checks and installs skills for every AI on the computer. `skill find <words>` looks
+  through the skill folders of Claude, Codex, Cursor, Gemini, Antigravity, LM Studio and `~/.agents` first and on
+  GitHub with `--web` or when nothing is there (repositories in `~/.wisply/skills/sources.txt` are searched too);
+  `skill new` explains what a good skill needs and builds one from a name, a description and a text file;
+  `skill add <folder>` and `skill get <owner/repo/path>` take an existing one; `skill check <folder or name>` says what is
+  wrong or could be better; `skill rm <name>` removes only what Wisply installed.
+- The AI works alone and asks the user only where it matters: a tool or skill script that deletes or overwrites
+  files, loosens what an AI may do, touches money, accounts, keys or uploads, or sets up autostart or runs code from
+  the internet is refused with "ask them first" until the call is repeated with `--yes`. The same holds for a skill
+  from the internet that brings scripts or hidden text, and for one that would overwrite a skill another tool
+  installed.
+
+### Fixed
+- State files are replaced in one step (write next to the file, then rename), so a crash or a second session can no
+  longer leave half a `config.json`, `sessions.json`, routine, to-do list or MCP entry of another AI app behind.
+- Two hooks of one session finishing at the same moment no longer lose a remembered read, and a read is written to the
+  session table once instead of twice.
+- `wisply hook` and `wisply suggest` give up after their own short deadline when the daemon is busy instead of
+  holding the AI's tool call for up to 12 s; `hook post` stops reading its input after 64 MB or 2.5 s.
+- The MCP server starts the 3.x daemon itself and only hands a command to an old 2.x install when there is one; on a
+  computer without Wisply set up it says so instead of failing without a reason.
+- `wisply think diff` no longer shows a changed file as unchanged when its start backup is gone: it names the file,
+  compares it with the last git commit and warns; `think revert` and `think restore` refuse before touching anything
+  when a saved copy is missing, and `think start` says which files it could not save.
 - Agents page as a web page: tile grid grouped by project, filter chips, search, sort, header with running / waiting /
   done / failed counts, limit, free RAM, build queue owner (`agents_lock`) and game mode; detail view with live output,
   the agent's `RESULT.md` (`agents_work`, masked), reply and a two-click stop. The phone server serves the same page

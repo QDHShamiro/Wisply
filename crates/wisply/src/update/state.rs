@@ -23,7 +23,7 @@ pub fn load(home: &Path) -> Value {
 }
 
 pub fn save(home: &Path, state: &Value) {
-    let _ = fs::write(home.join(FILE), state.to_string());
+    let _ = wisply_core::save(home.join(FILE), state.to_string());
 }
 
 pub fn set(home: &Path, key: &str, value: Value) {

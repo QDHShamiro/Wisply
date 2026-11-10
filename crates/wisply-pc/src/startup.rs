@@ -173,7 +173,7 @@ fn save_backup(home: &Path, entry: &Entry, before: Option<String>) {
     rows.retain(|r| r.get("name").and_then(Value::as_str) != Some(&entry.name));
     rows.push(json!({"name": entry.name, "source": entry.source, "command": entry.command, "approved": before}));
     let _ = fs::create_dir_all(dir(home));
-    let _ = fs::write(file, Value::Array(rows).to_string());
+    let _ = wisply_core::save(file, Value::Array(rows).to_string());
 }
 
 fn approved_value(name: &str) -> Option<String> {

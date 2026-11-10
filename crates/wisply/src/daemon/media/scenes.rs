@@ -43,10 +43,7 @@ fn load(path: &Path) -> Option<Value> {
 }
 
 fn save(path: &Path, data: &Value) {
-    let tmp = path.with_extension("tmp");
-    if fs::write(&tmp, data.to_string()).is_ok() {
-        let _ = fs::rename(&tmp, path);
-    }
+    let _ = wisply_core::save(path, data.to_string());
 }
 
 fn board_of(info: &Value) -> Value {
