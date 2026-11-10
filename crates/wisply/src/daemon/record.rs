@@ -159,7 +159,7 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         "stop" => stop(d, ctx, rest, true)?,
         "cancel" => stop(d, ctx, rest, false)?,
         "status" => status(),
-        _ => return Err(Fail::hint(format!("unknown record command {sub}"), USAGE)),
+        _ => return Err(Fail::hint(format!("unknown record command '{sub}'"), USAGE)),
     };
     Ok(Out::Text(text))
 }

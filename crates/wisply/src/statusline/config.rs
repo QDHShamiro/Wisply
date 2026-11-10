@@ -81,7 +81,7 @@ impl Config {
         } else if SEGMENTS.contains(&name) {
             self.segments.insert(name.to_string(), json!(on));
         } else {
-            return Err(format!("unknown segment '{name}', one of: {}, {ASCII}", SEGMENTS.join(", ")));
+            return Err(format!("unknown segment '{name}' -> try: one of: {}, {ASCII}", SEGMENTS.join(", ")));
         }
         Ok(())
     }
@@ -118,7 +118,7 @@ mod tests {
         let back = Config::load(&h);
         assert_eq!(back, cfg);
         assert!(back.shown("repo") && !back.shown("tokens") && back.ascii && !back.enabled);
-        assert!(cfg.set("nope", true).unwrap_err().starts_with("unknown segment 'nope'"));
+        assert!(cfg.set("nope", true).unwrap_err().starts_with("unknown segment 'nope' -> try: one of: branch, "));
         fs::write(file(&h), "not json").unwrap();
         assert_eq!(Config::load(&h), Config::defaults());
         fs::remove_dir_all(&h).unwrap();

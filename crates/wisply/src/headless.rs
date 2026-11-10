@@ -35,6 +35,12 @@ fn flags(args: &[String]) -> Flags {
     out
 }
 
+fn unknown(sub: &str) -> String {
+    format!(
+        "unknown headless command '{sub}' -> try: wisply headless [start|stop|status|install] [--browser PATH] [--no-sandbox]"
+    )
+}
+
 pub fn run(home: &Path, args: &[String]) -> ExitCode {
     let sub = args.first().map_or("status", String::as_str);
     let rest = args.get(1..).unwrap_or_default();
@@ -43,7 +49,7 @@ pub fn run(home: &Path, args: &[String]) -> ExitCode {
         "stop" => stop(home),
         "status" => Ok(status(home)),
         "install" => install(home),
-        _ => Err("usage: wisply headless [start|stop|status|install] [--browser PATH] [--no-sandbox]".into()),
+        _ => Err(unknown(sub)),
     };
     match result {
         Ok(line) => {
@@ -280,6 +286,11 @@ mod tests {
         let f = flags(&["--browser".into(), "x".into(), "--no-sandbox".into()]);
         assert_eq!(f.browser.as_deref(), Some("x"));
         assert!(f.no_sandbox);
+    }
+
+    #[test]
+    fn an_unknown_command_names_itself_and_the_real_ones() {
+        assert!(unknown("bogus").starts_with("unknown headless command 'bogus' -> try: wisply headless [start|stop|"));
     }
 
     #[test]

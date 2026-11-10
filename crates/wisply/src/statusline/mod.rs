@@ -26,7 +26,8 @@ use render::Git;
 const INPUT_MAX: u64 = 256 * 1024;
 const VERSION_WAIT: Duration = Duration::from_secs(5);
 const COMMAND_SHOWN: usize = 90;
-const USAGE: &str = "usage: wisply statusline [on [--force] | off | status | set <segment> on|off | preview]";
+const USAGE: &str = "wisply statusline [on [--force] | off | status | set <segment> on|off | preview]";
+const SET_USAGE: &str = "set needs a segment and on or off -> try: wisply statusline set <segment> on|off";
 const GH_OK: &str = "ok";
 const GH_MISSING: &str = "missing";
 const GH_FAILED: &str = "failed";
@@ -56,7 +57,7 @@ pub fn run(args: &[String]) -> ExitCode {
         "status" => report(Ok(status(&root))),
         "set" => report(set(&root, rest)),
         "preview" => report(Ok(preview(&root))),
-        _ => report(Err(USAGE.to_string())),
+        other => report(Err(format!("unknown statusline command '{other}' -> try: {USAGE}"))),
     }
 }
 
@@ -244,11 +245,11 @@ fn switch_off(home: &Path) -> Result<String, String> {
 }
 
 fn set(home: &Path, args: &[String]) -> Result<String, String> {
-    let (Some(name), Some(word)) = (args.first(), args.get(1)) else { return Err(USAGE.into()) };
+    let (Some(name), Some(word)) = (args.first(), args.get(1)) else { return Err(SET_USAGE.into()) };
     let on = match word.as_str() {
         "on" | "true" | "1" => true,
         "off" | "false" | "0" => false,
-        _ => return Err(USAGE.into()),
+        _ => return Err(SET_USAGE.into()),
     };
     let mut cfg = Config::load(home);
     cfg.set(name, on)?;
@@ -346,9 +347,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&home);
         assert_eq!(set(&home, &["tokens".into(), "off".into()]).unwrap(), "tokens off");
         assert!(!Config::load(&home).shown("tokens"));
-        assert!(set(&home, &["nope".into(), "on".into()]).is_err());
-        assert!(set(&home, &["tokens".into()]).is_err());
-        assert!(set(&home, &["tokens".into(), "maybe".into()]).is_err());
+        let nope = set(&home, &["nope".into(), "on".into()]).unwrap_err();
+        assert!(nope.starts_with("unknown segment 'nope' -> try: one of: branch, "), "{nope}");
+        assert_eq!(set(&home, &["tokens".into()]).unwrap_err(), SET_USAGE);
+        assert_eq!(set(&home, &["tokens".into(), "maybe".into()]).unwrap_err(), SET_USAGE);
+        assert!(SET_USAGE.contains(" -> try: wisply statusline set <segment> on|off"));
         std::fs::remove_dir_all(&home).unwrap();
     }
 

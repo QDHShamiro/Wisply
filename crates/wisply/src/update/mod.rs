@@ -33,7 +33,7 @@ pub fn run(home: &Path, args: &[String]) -> ExitCode {
             Err(why) => err(why),
         },
         "--check" | "" => now(home, flag.is_empty()),
-        _ => err(format!("usage: {USAGE}")),
+        other => err(format!("unknown update option '{other}' -> try: {USAGE}")),
     }
 }
 

@@ -175,8 +175,21 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   requests could reach the site less than a second apart. The gap now starts when the answer is in.
 - The hand-run media measurement (`cargo test measure -- --ignored`) looked for the Wisply folder through
   `USERPROFILE` only, which macOS and Linux do not set. It now uses the same lookup as everything else.
+- `wisply config <switch> maybe` (any word that is not on, off, yes, no, true, false, 1 or 0) switched the setting
+  off and said so with exit 0. It now changes nothing and answers `err: <switch> is on or off -> try: wisply config
+  <switch> on`.
+- `wisply log abc` printed the whole log; it now says that `log` takes a number of lines.
+- `wisply keys rm` without an app showed the example for `keys add`, and the to-do help named a `todo` word that
+  does not exist (it is `open`).
+- The window showed an empty page for a link with a broken percent sign (a note link like `#/t/50%`). Such a part
+  is now taken as it is written.
 
 ### Changed
+- Every error for a wrong command or value says what to try: `headless`, `statusline`, `statusline set`, `update`,
+  `progress`, `dialog`, `install` and the MCP answers for a blocked command, a missing setup and a busy daemon now
+  end in `-> try: ...` like the rest, without the word `usage:`, and an unknown word is shown in quotes everywhere.
+  Through MCP an unknown tool name is answered with the name of the only tool.
+- The extension describes itself as a tool for any AI agent, not for one product.
 - `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
 - Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
   WebFetch tools (`hooks/hooks.json` matcher). The limit is a character budget (1,200; 2,000 for logs) instead of a line

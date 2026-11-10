@@ -1,5 +1,6 @@
 import { board, call, type Pulse } from "./api";
 import { enc, go, h, icon, mount } from "./dom";
+import { hashParts } from "./hash";
 import { T } from "./text";
 import { agents } from "./views/agents";
 import { blind } from "./views/blind";
@@ -101,7 +102,7 @@ async function route(): Promise<void> {
   cleanup = () => {};
   mark(hash);
   view.scrollTop = 0;
-  const parts = hash.slice(2).split("?")[0].split("/").map(decodeURIComponent);
+  const parts = hashParts(hash);
   try {
     let done: void | (() => void);
     if (parts[0] === "p" && parts[1]) done = await project(view, parts[1], ((parts[2] as Tab) || "notes") as Tab);

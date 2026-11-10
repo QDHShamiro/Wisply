@@ -174,11 +174,11 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace                 # unit + integration tests (fake browser, setup in a temp home)
 claude plugin validate .
 wisply doctor                        # 0 problems (memory/errors warnings depend on the PC and the log)
-wisply selftest                      # 159/159 on Windows (a SKIP line when other Wisply tabs are open or you used the mouse)
+wisply selftest                      # 162/162 on Windows, 133/133 on macOS and Linux (a SKIP line when other Wisply tabs are open or you used the mouse)
 wisply bench
 wisply bench --real                  # compare tokens with the last run
 ```
-CI (`v3.yml`) runs fmt, clippy, tests, cargo-deny, the window build check, the extension/plugin file check and the
+CI (`v3.yml`) runs fmt, clippy, tests, cargo-deny, the window type check, test and build, the extension/plugin file check and the
 selftest in Chrome for Testing on Windows, macOS and Linux. Lint for the other systems locally:
 `cargo clippy -p wisply --all-targets --target x86_64-unknown-linux-gnu` (needs a C compiler stub for bundled SQLite).
 Then one real page by hand (`open`, `snap`, `click`, `text`) and one real app (`windows`, `snap w<N>`, `click d<N>`).

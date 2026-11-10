@@ -176,7 +176,7 @@ pub fn command(env: &Env, c: &Call) -> Result<String, String> {
         "rules" => Ok(work::rules_cmd(env)),
         "lint-skill" => work::lint_skill(env, c),
         "" | "help" => Ok(USAGE.into()),
-        other => Err(format!("no step called {other}\n{USAGE}")),
+        other => Err(format!("no step called '{other}'\n{USAGE}")),
     }?;
     let notes = env.notes.borrow();
     if notes.is_empty() {

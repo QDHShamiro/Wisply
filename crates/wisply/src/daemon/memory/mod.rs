@@ -37,7 +37,7 @@ const TASK_SHORT: usize = 80;
 const QUERY_BUDGET: Duration = Duration::from_secs(4);
 const EMBED_BUDGET: Duration = Duration::from_secs(10);
 const TODO_HELP: &str =
-    "wisply todo | todo add \"task\" [--list name] | todo done|doing|drop|todo <id> | todo note <id> \"text\"";
+    "wisply todo | todo add \"task\" [--list name] | todo done|doing|drop|open <id> | todo note <id> \"text\"";
 
 thread_local! {
     static STORE: RefCell<Option<Store>> = const { RefCell::new(None) };
