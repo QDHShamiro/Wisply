@@ -67,11 +67,11 @@ impl Table {
         let mut ages: Vec<u64> = self.seen.values().map(|s| s.at).collect();
         ages.sort_unstable_by(|a, b| b.cmp(a));
         let oldest = ages[STATE_KEEP_ROWS - 1];
-        let mut room = STATE_KEEP_ROWS;
+        let mut room = STATE_KEEP_ROWS - ages.iter().filter(|at| **at > oldest).count();
         self.seen.retain(|_, s| {
-            let keep = s.at >= oldest && room > 0;
-            room -= usize::from(keep);
-            keep
+            let tied = s.at == oldest && room > 0;
+            room -= usize::from(tied);
+            s.at > oldest || tied
         });
     }
 

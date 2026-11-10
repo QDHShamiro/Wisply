@@ -33,12 +33,11 @@ fn fill(tmp: &Path, path: &Path, data: &[u8]) -> io::Result<()> {
 
 fn swap(tmp: &Path, path: &Path) -> io::Result<()> {
     let mut last = fs::rename(tmp, path);
-    for _ in 1..SWAP_TRIES {
-        if last.is_ok() {
-            break;
-        }
+    let mut tries = 1;
+    while last.is_err() && tries < SWAP_TRIES {
         thread::sleep(SWAP_PAUSE);
         last = fs::rename(tmp, path);
+        tries += 1;
     }
     last
 }
