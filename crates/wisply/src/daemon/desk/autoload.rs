@@ -12,7 +12,7 @@ use super::super::config;
 use super::super::hosts::Host;
 use super::super::web::{browser_exe, installed_browsers};
 use super::uia::{self, El};
-use super::win;
+use super::{input, win};
 
 const PAGES: &[(&str, &str)] =
     &[("brave", "brave://extensions/"), ("chrome", "chrome://extensions/"), ("edge", "edge://extensions/")];
@@ -26,12 +26,18 @@ const DIALOG_CLASS: &str = "#32770";
 const HOST_WAIT: Duration = Duration::from_secs(8);
 const PAGE_WAIT: Duration = Duration::from_secs(15);
 const FIND_WAIT: Duration = Duration::from_secs(12);
-const DIALOG_WAIT: Duration = Duration::from_secs(6);
+const DIALOG_WAIT: Duration = Duration::from_secs(25);
 const CONNECT_WAIT: Duration = Duration::from_secs(20);
 const STEP: Duration = Duration::from_millis(300);
 const TOGGLE_SETTLE: Duration = Duration::from_millis(800);
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
 const ROW_GAP: i32 = 60;
+const ADDRESS_WORDS: &[&str] = &["address", "adresse", "url"];
+const VK_RETURN: u16 = 0x0D;
+const VK_ESCAPE: u16 = 0x1B;
+const MENU_NAMES: &[&str] = &["menu", "menü", "menú"];
+const MENU_WAIT: Duration = Duration::from_secs(4);
+const SEEN_MAX: usize = 30;
 
 fn wait<T>(limit: Duration, mut f: impl FnMut() -> Option<T>) -> Option<T> {
     let end = Instant::now() + limit;
@@ -90,14 +96,64 @@ fn dev_switch(hwnd: isize) -> Option<El> {
         .map(|(t, _, _)| (*t).clone())
 }
 
+fn address_bar(hwnd: isize) -> Option<El> {
+    let items = uia::collect(hwnd, false, None);
+    let edits: Vec<&El> = items.iter().filter(|e| e.role() == "edit").collect();
+    edits
+        .iter()
+        .find(|e| ADDRESS_WORDS.iter().any(|w| e.name().to_lowercase().contains(w)))
+        .or_else(|| edits.iter().min_by_key(|e| e.rect().1))
+        .map(|e| (*e).clone())
+}
+
+fn open_by_address_bar(exe_name: &str, url: &str) -> Option<isize> {
+    let hwnd = browser_window(exe_name, false)?;
+    let bar = wait(FIND_WAIT, || address_bar(hwnd))?;
+    win::set_foreground(hwnd);
+    bar.focus();
+    if !bar.set_value(url) {
+        return None;
+    }
+    thread::sleep(STEP);
+    input::key(VK_RETURN, false, false);
+    input::key(VK_RETURN, true, false);
+    wait(PAGE_WAIT, || browser_window(exe_name, true))
+}
+
+fn open_side_menu(hwnd: isize) -> bool {
+    let items = uia::collect(hwnd, false, None);
+    let page = uia::page_rect(hwnd).map_or(0, |r| r.1);
+    let Some(menu) = items
+        .iter()
+        .filter(|e| e.role() == "button" && e.rect().1 >= page)
+        .find(|e| MENU_NAMES.iter().any(|n| e.name().to_lowercase().contains(n)))
+    else {
+        return false;
+    };
+    menu.act(false);
+    thread::sleep(TOGGLE_SETTLE);
+    true
+}
+
+fn seen(hwnd: isize) -> String {
+    let page = uia::page_rect(hwnd).map_or(0, |r| r.1);
+    let names: Vec<String> = uia::collect(hwnd, true, None)
+        .iter()
+        .filter(|e| e.rect().1 >= page)
+        .map(|e| format!("{}:{}", e.role(), e.name()))
+        .take(SEEN_MAX)
+        .collect();
+    format!("page top {page}: {}", names.join(" | "))
+}
+
 fn switched_on(el: &El) -> bool {
     el.describe().2.contains("[x]")
 }
 
-fn dialogs(pid: u32) -> HashSet<isize> {
+fn dialogs(pid: Option<u32>) -> HashSet<isize> {
     win::all()
         .into_iter()
-        .filter(|h| win::visible(*h) && win::class_of(*h) == DIALOG_CLASS && win::pid_of(*h) == pid)
+        .filter(|h| win::visible(*h) && win::class_of(*h) == DIALOG_CLASS && pid.is_none_or(|p| win::pid_of(*h) == p))
         .collect()
 }
 
@@ -140,21 +196,42 @@ fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail
             log.push(format!("{name} opened a start page first, asked again for the extensions page"));
             wait(PAGE_WAIT, || browser_window(&exe_name, true))
         })
+        .or_else(|| {
+            log.push(format!("{name} ignored the page on its command line, typed it into the address bar"));
+            open_by_address_bar(&exe_name, page(name))
+        })
         .ok_or_else(|| Fail::new(format!("the extensions page did not open in {name}")))?;
-    let dev = wait(FIND_WAIT, || dev_switch(hwnd))
-        .ok_or_else(|| Fail::new("developer mode switch not found on the extensions page"))?;
+    let mut menu = false;
+    let dev = wait(MENU_WAIT, || dev_switch(hwnd))
+        .or_else(|| {
+            menu = open_side_menu(hwnd);
+            wait(FIND_WAIT, || dev_switch(hwnd))
+        })
+        .ok_or_else(|| {
+            Fail::new(format!("developer mode switch not found on the extensions page (saw: {})", seen(hwnd)))
+        })?;
     if !switched_on(&dev) {
         dev.act(false);
         log.push("developer mode switched on".into());
         thread::sleep(TOGGLE_SETTLE);
     }
+    if menu {
+        win::set_foreground(hwnd);
+        input::key(VK_ESCAPE, false, false);
+        input::key(VK_ESCAPE, true, false);
+        thread::sleep(TOGGLE_SETTLE);
+    }
     let button = wait(FIND_WAIT, || uia::collect(hwnd, false, None).into_iter().find(|e| matches(e, LOAD)))
-        .ok_or_else(|| Fail::new("'Load unpacked' button not found"))?;
+        .ok_or_else(|| Fail::new(format!("'Load unpacked' button not found (saw: {})", seen(hwnd))))?;
     let pid = win::pid_of(hwnd);
-    let before = dialogs(pid);
+    let before = dialogs(None);
     button.act(false);
-    let dlg = wait(DIALOG_WAIT, || dialogs(pid).into_iter().find(|h| !before.contains(h)))
-        .ok_or_else(|| Fail::new("the folder dialog did not open"))?;
+    let dlg = wait(DIALOG_WAIT, || {
+        let now = dialogs(None);
+        let fresh: Vec<isize> = now.into_iter().filter(|h| !before.contains(h)).collect();
+        fresh.iter().copied().find(|h| win::pid_of(*h) == pid).or_else(|| fresh.first().copied())
+    })
+    .ok_or_else(|| Fail::new("the folder dialog did not open"))?;
     let folder = d.home.join("extension");
     log.push(format!("folder dialog open, selecting {}", folder.display()));
     pick_folder(dlg, &folder)?;
