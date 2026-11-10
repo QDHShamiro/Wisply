@@ -81,7 +81,7 @@ pub fn turn_on(file: &Path, home: &Path, exe: &Path, force: bool) -> Result<On, 
                 return Ok(On::Refused(current.clone().unwrap_or_else(|| old.to_string())));
             }
             fs::create_dir_all(dir(home))
-                .and_then(|()| fs::write(previous(home), serde_json::to_string_pretty(old).unwrap_or_default()))
+                .and_then(|()| wisply_core::save(previous(home), serde_json::to_string_pretty(old).unwrap_or_default()))
                 .map_err(|e| format!("cannot save the old status line: {e}"))?;
             outcome = On::Replaced;
         }

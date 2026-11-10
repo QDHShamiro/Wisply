@@ -21,7 +21,7 @@ pub const NAMES: &[&str] = &[
     "zed",
 ];
 
-fn user_home() -> PathBuf {
+pub(crate) fn user_home() -> PathBuf {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).unwrap_or_default()
 }
 
@@ -91,7 +91,7 @@ pub fn merge_json(path: &Path, key: &str, value: Map<String, Value>) -> io::Resu
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
-    fs::write(path, text)
+    wisply_core::save(path, text)
 }
 
 pub fn merge_toml(path: &Path, exe: &Path) -> io::Result<()> {
@@ -122,7 +122,7 @@ pub fn merge_toml(path: &Path, exe: &Path) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
-    fs::write(path, out.replace('\n', eol))
+    wisply_core::save(path, out.replace('\n', eol))
 }
 
 fn gemini_skills(home: &Path) -> [PathBuf; 4] {

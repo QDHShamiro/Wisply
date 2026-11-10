@@ -133,7 +133,7 @@ fn load(home: &Path) -> Map<String, Value> {
 
 fn save(home: &Path, data: Map<String, Value>) {
     if let Ok(text) = serde_json::to_string_pretty(&Value::Object(data)) {
-        let _ = fs::create_dir_all(home).and_then(|()| fs::write(home.join("keys.json"), text));
+        let _ = fs::create_dir_all(home).and_then(|()| wisply_core::save(home.join("keys.json"), text));
     }
 }
 

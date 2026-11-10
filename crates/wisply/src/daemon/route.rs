@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use regex::Regex;
-use wisply_core::{APP_ONLY, CHAT, Call, Fail, Flag, SHARED, WEB_ONLY, built_later, unknown};
+use wisply_core::{APP_ONLY, CHAT, CLIENT, Call, Fail, Flag, SHARED, WEB_ONLY, built_later, unknown};
 
 use super::ctx::Ctx;
 use super::{
@@ -55,6 +55,13 @@ static AI_TALK: LazyLock<Regex> = LazyLock::new(|| {
 
 pub fn later(name: &str) -> Fail {
     Fail::hint(format!("{name} is not built into Wisply 3.0 yet"), "run it with Lighting 2.x (without WISPLY_HOME)")
+}
+
+pub fn in_client(name: &str) -> Fail {
+    Fail::hint(
+        format!("{name} runs in the wisply program itself and this one is older than its daemon"),
+        "wisply update",
+    )
 }
 
 pub fn foreign(name: &str) -> bool {
@@ -182,6 +189,7 @@ pub fn route(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         _ if APP_ONLY.contains(&name) => desk::run(d, ctx, c, None),
         _ if SHARED.contains(&name) && !on_web(d, ctx, c) => desk::run(d, ctx, c, None),
         _ if SHARED.contains(&name) || WEB_ONLY.contains(&name) => web::run(d, ctx, c),
+        _ if CLIENT.contains(&name) => Err(in_client(name)),
         _ if built_later(name) => Err(later(name)),
         _ => Err(unknown(name)),
     }

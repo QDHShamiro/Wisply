@@ -3,15 +3,20 @@ mod daemon;
 mod headless;
 mod hook;
 mod host;
+mod junk;
+mod kit;
 #[cfg(windows)]
 mod launch;
 mod mcp;
 mod more;
+mod peek;
 mod pipe;
 mod reads;
 mod readstate;
 mod readview;
+mod risk;
 mod setup;
+mod skill;
 mod spawn;
 mod statusline;
 #[cfg(windows)]

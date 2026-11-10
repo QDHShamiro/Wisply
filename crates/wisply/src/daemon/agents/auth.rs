@@ -126,7 +126,7 @@ impl Auth {
         let rows: Vec<Value> =
             list.iter().map(|d| json!({"name": d.name, "hash": d.hash, "created": d.created})).collect();
         let Some(dir) = self.file.parent() else { return false };
-        fs::create_dir_all(dir).and_then(|()| fs::write(&self.file, Value::Array(rows).to_string())).is_ok()
+        fs::create_dir_all(dir).and_then(|()| wisply_core::save(&self.file, Value::Array(rows).to_string())).is_ok()
     }
 
     pub fn check(&self, header: Option<&str>, now: Instant) -> Verdict {

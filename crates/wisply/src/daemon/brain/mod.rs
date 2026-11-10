@@ -303,9 +303,7 @@ fn write(s: &mut State) {
         return;
     }
     trim(&mut s.data);
-    let _ = fs::create_dir_all(&s.home);
-    let tmp = file(&s.home).with_extension("tmp");
-    if fs::write(&tmp, s.data.to_string()).and_then(|_| fs::rename(&tmp, file(&s.home))).is_ok() {
+    if wisply_core::save(file(&s.home), s.data.to_string()).is_ok() {
         (s.dirty, s.saved) = (false, now());
     }
 }

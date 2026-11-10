@@ -32,6 +32,9 @@ keys    keys [site] [-f x]   keys add <site> \"ctrl+k=what\"   keys rm <site> <k
 cleanup done [--quiet]   keep [t]   config cleanup on|off
 system  status   channels   stop   abort   config [key value]   log [n] | log stats [n]   version
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
+        peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
+        kit | kit add <name> \"what it does\" [--file script] [--replace] -- <program> [args with {1} {all} {file}] | kit run <name> [args] | kit show|rm <name> (tools of your own, kept for this user: every session and every AI runs them)
+        skill | skill find <words> [--web] | skill new <name> \"what it does, use when ...\" --file text.md | skill add <folder> | skill get <owner/repo/path> | skill check <folder or name> | skill rm <name> (finds, builds, checks and installs skills for every AI on this PC)
         secure [folder|domain|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json] (keys, vulnerable dependencies, risky code, headers of your own sites; not while a game runs)
         secure allow <domain> [--remove]   secure fix [folder] [--with claude|codex] (FIX.md + branch secure/fix-date, re-checks, never commits)
         think <step> (finds, fixes and proves improvements without AI; wisply think help lists the steps)
@@ -216,6 +219,8 @@ mod tests {
         assert!(about("todo").is_some_and(|row| row.starts_with("todo [--all]")));
         assert!(about("memory").is_some_and(|row| row.starts_with("memory [learn|on|off]")));
         assert!(about("wiki").is_some_and(|row| row.starts_with("wiki | wiki accept")));
+        assert!(about("kit").is_some_and(|row| row.starts_with("kit | kit add <name>")));
+        assert!(about("skill").is_some_and(|row| row.starts_with("skill | skill find <words>")));
         assert_eq!(help(Some("voice")).ok().as_deref(), Some(HELP));
         assert_eq!(help(None).ok().as_deref(), Some(HELP));
         assert!(help(Some("zzz")).is_err());

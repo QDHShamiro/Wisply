@@ -4425,6 +4425,7 @@ version = "3.0.1"
 dependencies = [
  "libc",
  "serde_json",
+ "wisply-core",
 ]
 
 [[package]]

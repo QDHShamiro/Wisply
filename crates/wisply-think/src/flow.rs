@@ -139,8 +139,19 @@ pub fn start(env: &Env, home: &Home, c: &Call) -> Result<String, String> {
         "git: none".into()
     });
     if !paths.is_empty() {
-        out.push(if bk["ok"] == true {
+        let failed: Vec<&str> =
+            bk["failed"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+        out.push(if bk["ok"] == true && failed.is_empty() {
             format!("backup: {} files, {} MB", bk["files"], bk["mb"])
+        } else if bk["ok"] == true {
+            format!(
+                "backup: {} files, {} MB | WARNING not saved: {} -> checkpoint those before changing them",
+                bk["files"],
+                bk["mb"],
+                failed.join(", ")
+            )
+        } else if bk["failed"].is_number() {
+            "backup: FAILED (cannot write the run folder) -> checkpoints per idea only".into()
         } else {
             format!("backup: TOO BIG (over {} MB) -> checkpoints per idea only", safety::BACKUP_MAX_MB)
         });

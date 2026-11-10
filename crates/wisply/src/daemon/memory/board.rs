@@ -135,9 +135,7 @@ fn save(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<Value, Fail> {
     if now != want {
         return Ok(json!({"conflict": true, "mtime": now}));
     }
-    let tmp = path.with_extension("md.wisply-tmp");
-    fs::write(&tmp, body.as_bytes())
-        .and_then(|()| fs::rename(&tmp, &path))
+    wisply_core::save(&path, body.as_bytes())
         .map_err(|e| Fail::new(format!("cannot save {} ({e})", path.display())))?;
     index::nudge();
     Ok(json!({"ok": true, "mtime": mtime(&path)}))

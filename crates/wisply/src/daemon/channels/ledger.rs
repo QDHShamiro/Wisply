@@ -25,10 +25,7 @@ fn load(home: &Path) -> Map<String, Value> {
 }
 
 fn save(home: &Path, all: &Map<String, Value>) {
-    let tmp = home.join(format!("{FILE}.tmp"));
-    if fs::write(&tmp, Value::Object(all.clone()).to_string()).is_ok() {
-        let _ = fs::rename(&tmp, home.join(FILE));
-    }
+    let _ = wisply_core::save(home.join(FILE), Value::Object(all.clone()).to_string());
 }
 
 pub fn note(home: &Path, key: &str, way: &str, ok: bool, why: &str) {

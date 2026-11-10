@@ -166,7 +166,7 @@ pub fn command(home: &Path, pos: &[String]) -> Result<(String, bool), Fail> {
     let pretty = serde_json::to_string_pretty(&Value::Object(cfg)).unwrap_or_default();
     let path = home.join("config.json");
     fs::create_dir_all(home)
-        .and_then(|()| fs::write(&path, pretty))
+        .and_then(|()| wisply_core::save(&path, pretty))
         .map_err(|e| Fail::new(format!("cannot save {}: {e}", path.display())))?;
     Ok((line, true))
 }

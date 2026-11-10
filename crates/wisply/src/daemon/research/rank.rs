@@ -30,19 +30,22 @@ const WEAK: &[&str] = &["pinterest.com", "quora.com", "facebook.com", "instagram
 const TRACKING: &[&str] = &["utm_", "fbclid", "gclid", "ref", "ref_src", "si", "mc_cid", "mc_eid"];
 
 static WORD: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[\p{L}\p{N}][\p{L}\p{N}._+#-]*[\p{L}\p{N}+#]|[\p{L}\p{N}]").unwrap());
-static VERSION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d+(?:\.\d+){1,3}\b").unwrap());
-static AMOUNT: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\b\d+(?:[.,]\d+)?\s?(?:ms|s|MB|GB|KB|TB|%|fps|tps|GHz|MHz|k|M)\b").unwrap());
-static CAMEL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+\b").unwrap());
-static QUOTED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"`([^`\n]{3,40})`|"([^"\n]{3,40})""#).unwrap());
-static YEAR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(19|20)\d{2}\b").unwrap());
+    LazyLock::new(|| Regex::new(r"[\p{L}\p{N}][\p{L}\p{N}._+#-]*[\p{L}\p{N}+#]|[\p{L}\p{N}]").expect("fixed pattern"));
+static VERSION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d+(?:\.\d+){1,3}\b").expect("fixed pattern"));
+static AMOUNT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b\d+(?:[.,]\d+)?\s?(?:ms|s|MB|GB|KB|TB|%|fps|tps|GHz|MHz|k|M)\b").expect("fixed pattern")
+});
+static CAMEL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+\b").expect("fixed pattern"));
+static QUOTED: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"`([^`\n]{3,40})`|"([^"\n]{3,40})""#).expect("fixed pattern"));
+static YEAR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(19|20)\d{2}\b").expect("fixed pattern"));
 static DATES: LazyLock<[Regex; 4]> = LazyLock::new(|| {
     [
-        Regex::new(r#"(?i)(?:article:published_time|datePublished|dateModified|article:modified_time)["']?\s*(?:content=|:)\s*["'](\d{4}-\d{2}-\d{2})"#).unwrap(),
-        Regex::new(r#"(?i)<time[^>]*datetime=["'](\d{4}-\d{2}-\d{2})"#).unwrap(),
-        Regex::new(r#"(?i)"(?:created_at|updated_at|pushed_at)"\s*:\s*"(\d{4}-\d{2}-\d{2})"#).unwrap(),
-        Regex::new(r"/((?:19|20)\d{2})/(\d{2})/").unwrap(),
+        Regex::new(r#"(?i)(?:article:published_time|datePublished|dateModified|article:modified_time)["']?\s*(?:content=|:)\s*["'](\d{4}-\d{2}-\d{2})"#).expect("fixed pattern"),
+        Regex::new(r#"(?i)<time[^>]*datetime=["'](\d{4}-\d{2}-\d{2})"#).expect("fixed pattern"),
+        Regex::new(r#"(?i)"(?:created_at|updated_at|pushed_at)"\s*:\s*"(\d{4}-\d{2}-\d{2})"#).expect("fixed pattern"),
+        Regex::new(r"/((?:19|20)\d{2})/(\d{2})/").expect("fixed pattern"),
     ]
 });
 

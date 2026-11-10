@@ -127,7 +127,7 @@ impl Guard {
             self.last.iter().map(|(k, s)| (k.clone(), json!(s.word()))).collect();
         let body = json!({"reset_at": self.reset_at, "waiting": waiting, "last": last});
         let _ = fs::create_dir_all(&dir);
-        let _ = fs::write(dir.join(FILE), body.to_string());
+        let _ = wisply_core::save(dir.join(FILE), body.to_string());
     }
 
     pub fn observe(&mut self, rows: &[Row], now: i64) -> Vec<Change> {

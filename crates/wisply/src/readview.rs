@@ -38,11 +38,16 @@ fn shape(line: &str) -> String {
     out
 }
 
-fn outline(lines: &[&str], total: usize) -> Vec<String> {
+pub fn whole_outline(content: &str) -> Vec<String> {
+    let lines: Vec<&str> = content.lines().collect();
+    outline(&lines, 0, 0)
+}
+
+fn outline(lines: &[&str], head: usize, tail: usize) -> Vec<String> {
     let hits: Vec<(usize, &str)> = lines
         .iter()
         .enumerate()
-        .filter(|(i, l)| *i >= HEAD && *i + TAIL < total && OUTLINE.is_match(l))
+        .filter(|(i, l)| *i >= head && *i + tail < lines.len() && OUTLINE.is_match(l))
         .map(|(i, l)| (i + 1, l.trim()))
         .collect();
     let mut out = Vec::new();
@@ -74,7 +79,7 @@ pub fn cut_view(content: &str, name: &str) -> Option<String> {
     if total < BIG_LINES {
         return None;
     }
-    let outline = outline(&lines, total);
+    let outline = outline(&lines, HEAD, TAIL);
     if outline.len() < OUTLINE_MIN && !outline.iter().any(|o| o.split(':').next().is_some_and(|h| h.contains('-'))) {
         return None;
     }

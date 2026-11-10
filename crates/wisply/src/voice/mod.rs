@@ -105,8 +105,11 @@ impl Paths {
         let keep: Map<String, Value> =
             cfg.iter().filter(|(k, v)| base.get(*k) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect();
         let _ = fs::create_dir_all(&self.dir);
-        fs::write(self.file("config.json"), serde_json::to_string_pretty(&Value::Object(keep)).unwrap_or_default())
-            .map_err(|e| Fail::new(format!("could not save the voice settings: {e}")))
+        wisply_core::save(
+            self.file("config.json"),
+            serde_json::to_string_pretty(&Value::Object(keep)).unwrap_or_default(),
+        )
+        .map_err(|e| Fail::new(format!("could not save the voice settings: {e}")))
     }
 
     pub fn log(&self, line: &str) {
@@ -133,7 +136,7 @@ impl Paths {
             cur.extend(obj.clone());
         }
         let _ = fs::create_dir_all(&self.dir);
-        let _ = fs::write(self.file("state.json"), Value::Object(cur.clone()).to_string());
+        let _ = wisply_core::save(self.file("state.json"), Value::Object(cur.clone()).to_string());
         cur
     }
 

@@ -78,7 +78,7 @@ fn remember_me(home: &Path, exe: &str, name: &str) {
         data[exe] = json!({});
     }
     data[exe]["me"] = json!(name);
-    let _ = fs::write(path, serde_json::to_string_pretty(&data).unwrap_or_default());
+    let _ = wisply_core::save(path, serde_json::to_string_pretty(&data).unwrap_or_default());
 }
 
 fn area(el: &El) -> i64 {

@@ -66,7 +66,7 @@ pub fn permitted(home: &Path, host: &str) -> bool {
 
 fn save(home: &Path, hosts: &[String]) -> Result<(), Fail> {
     fs::create_dir_all(home)
-        .and_then(|()| fs::write(path(home), hosts.join("\n") + "\n"))
+        .and_then(|()| wisply_core::save(path(home), hosts.join("\n") + "\n"))
         .map_err(|e| Fail::new(format!("cannot save {}: {e}", path(home).display())))
 }
 

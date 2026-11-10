@@ -19,13 +19,14 @@ const PER_ENGINE: usize = 10;
 const UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 
-static ANCHOR: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(?is)<a\s[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>"#).unwrap());
-static TAGS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<[^>]*>").unwrap());
-static SPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
+static ANCHOR: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?is)<a\s[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>"#).expect("fixed pattern")
+});
+static TAGS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<[^>]*>").expect("fixed pattern"));
+static SPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").expect("fixed pattern"));
 static CAPTCHA: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)captcha|unusual traffic|are you a robot|verify you are human|anomaly-modal|challenge-form")
-        .unwrap()
+        .expect("fixed pattern")
 });
 static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
     ureq::Agent::config_builder()
@@ -377,7 +378,7 @@ pub fn mark(home: &Path, name: &str, block: bool) {
     if let Some(dir) = path.parent() {
         let _ = fs::create_dir_all(dir);
     }
-    let _ = fs::write(path, Value::Object(state).to_string());
+    let _ = wisply_core::save(path, Value::Object(state).to_string());
 }
 
 #[cfg(test)]

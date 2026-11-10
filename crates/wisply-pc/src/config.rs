@@ -226,7 +226,7 @@ impl Config {
         m.insert(key.into(), json!(on));
         let text = serde_json::to_string_pretty(&Value::Object(m)).map_err(|e| e.to_string())?;
         fs::create_dir_all(dir(home))
-            .and_then(|()| fs::write(&path, text))
+            .and_then(|()| wisply_core::save(&path, text))
             .map_err(|e| format!("cannot save {}: {e}", path.display()))
     }
 

@@ -77,7 +77,7 @@ fn used(home: &Path, root: &Path) {
     let mut all = active(home);
     all.insert(root.to_string_lossy().into_owned(), json!(wisply_memory::now()));
     let _ = fs::create_dir_all(home.join("code"));
-    let _ = fs::write(roots_file(home), Value::Object(all).to_string());
+    let _ = wisply_core::save(roots_file(home), Value::Object(all).to_string());
 }
 
 fn with_index<T>(home: &Path, root: &Path, f: impl FnOnce(&mut Index) -> Result<T, String>) -> Result<T, Fail> {

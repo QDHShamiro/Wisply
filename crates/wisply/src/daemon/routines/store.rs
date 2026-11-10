@@ -60,7 +60,8 @@ pub fn save(home: &Path, r: &Value) -> Result<(), Fail> {
     fs::create_dir_all(dir(home)).map_err(|e| Fail::new(format!("cannot write routines ({e})")))?;
     let name = r["name"].as_str().unwrap_or("");
     let text = serde_json::to_string_pretty(r).unwrap_or_default();
-    fs::write(file(home, name), indent_one(&text)).map_err(|e| Fail::new(format!("cannot save routine {name} ({e})")))
+    wisply_core::save(file(home, name), indent_one(&text))
+        .map_err(|e| Fail::new(format!("cannot save routine {name} ({e})")))
 }
 
 pub fn indent_one(pretty: &str) -> String {

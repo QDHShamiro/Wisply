@@ -70,7 +70,7 @@ pub fn accept(root: &Path, path: &Path, folder: Option<&str>) -> Result<PathBuf,
     }
     let io = |e: std::io::Error| format!("{}: {e}", posix(&dest));
     fs::create_dir_all(&dir).map_err(io)?;
-    fs::write(&dest, DRAFT.replacen(&text, 1, "").as_bytes()).map_err(io)?;
+    wisply_core::save(&dest, DRAFT.replacen(&text, 1, "").as_bytes()).map_err(io)?;
     fs::remove_file(path).map_err(|e| format!("{}: {e}", posix(path)))?;
     register(root, &dest, &kind, meta.get("project").map_or("-", String::as_str));
     Ok(dest)
@@ -95,7 +95,7 @@ fn register(root: &Path, dest: &Path, kind: &str, project: &str) {
         }
         None => format!("{}\n{line}\n", text.trim_end_matches('\n')),
     };
-    let _ = fs::write(&index, out.replace('\n', eol));
+    let _ = wisply_core::save(&index, out.replace('\n', eol));
 }
 
 pub fn drop_draft(root: &Path, path: &Path) -> Result<PathBuf, String> {

@@ -204,7 +204,7 @@ pub fn weekly_tip(home: &Path) -> String {
         return String::new();
     }
     st["shown"] = json!(at);
-    let _ = fs::write(&path, st.to_string());
+    let _ = wisply_core::save(&path, st.to_string());
     let s = summary(home, DAYS, at);
     let Some(p) = s.patterns.first().filter(|_| s.failed >= MIN_FAILS) else { return String::new() };
     format!(
