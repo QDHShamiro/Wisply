@@ -98,6 +98,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   Reports are saved to the vault (`Research/`) and found again by `recall`.
 
 ### Fixed
+- `fill Name=Ada Test` without quotes, and so every `fill` step inside `do "fill Name=Ada Test; click Send"`, stopped
+  with `fill wants Label=value pairs` because the value was cut at the space. A word without `=` now continues the
+  value before it. In four of four test sessions the AI wrote exactly that call and had to repeat the steps one by one.
+- Setup and `install` left reference files of an older skill in the skill folders of the AI apps. Markdown files in
+  `wisply/references` that the new skill no longer has are removed there; other files stay.
+- The test of the channel ledger failed when the clock moved to the next second between its two steps (`1 s ago`
+  instead of `0 s ago`, seen once on the Windows runner). It now passes the time in, and also checks the minutes.
 - A `brain.json` with a wrong shape (a page without its element list, a list where a table belongs, a short entry)
   made every command that learns from a page fail. The file is now mended when it is loaded: broken parts are
   dropped, the rest is kept.
@@ -185,6 +192,12 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   is now taken as it is written.
 
 ### Changed
+- The skill every AI reads is smaller and sorted by topic. The description that sits in every session went from 431
+  to 250 characters, and the two large reference files (15.1 KB and 11.2 KB) became seven small ones of 1.8 to 5.2 KB
+  (apps, chats, video, routines, memory, web, system), so an AI that needs one detail reads a third of the text at
+  most. Measured with twenty headless sessions of a small model on five tasks: 10 of 10 solved with the new text, 8
+  of 10 with the old one, about the same cost (0.065 against 0.068 USD), and no session opened a whole reference file
+  where one with the old text read all 15 KB. A test keeps the sizes in check.
 - Every error for a wrong command or value says what to try: `headless`, `statusline`, `statusline set`, `update`,
   `progress`, `dialog`, `install` and the MCP answers for a blocked command, a missing setup and a busy daemon now
   end in `-> try: ...` like the rest, without the word `usage:`, and an unknown word is shown in quotes everywhere.
