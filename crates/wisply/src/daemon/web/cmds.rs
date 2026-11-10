@@ -409,7 +409,7 @@ pub fn history(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
 pub fn dialog(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
     let verb = c.pos.first().map(|p| p.to_lowercase()).unwrap_or_default();
     if !["accept", "dismiss", "ok", "cancel"].contains(&verb.as_str()) {
-        return Err(Fail::new("dialog accept|dismiss [text]"));
+        return Err(Fail::hint("dialog needs accept or dismiss", "wisply dialog accept|dismiss [text]"));
     }
     let text = if c.pos.len() > 1 { json!(c.pos[1..].join(" ")) } else { Value::Null };
     let args = obj(json!({"accept": verb == "accept" || verb == "ok", "text": text}));

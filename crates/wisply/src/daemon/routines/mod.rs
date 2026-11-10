@@ -217,7 +217,7 @@ pub fn command(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         "schedules" => schedule::listing(&d.home),
         "unschedule" => schedule::remove(&d.home, need(rest, "unschedule")?)?,
         "schedule" => schedule::add(&d.home, need(rest, "schedule")?, &rest[1..])?,
-        other => return Err(Fail::hint(format!("unknown routine command {other}"), SUBS)),
+        other => return Err(Fail::hint(format!("unknown routine command '{other}'"), SUBS)),
     };
     Ok(Out::Text(text_out))
 }

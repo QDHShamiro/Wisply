@@ -61,7 +61,7 @@ fn setup_fills_a_home_without_touching_the_browser_and_uninstall_clears_it() {
     let (code, out) = home.run(&["install", "cursor"]);
     assert!(code == 1 && out.contains("add --register to point it here"), "{out}");
     let (code, out) = home.run(&["install", "nope"]);
-    assert!(code == 1 && out.contains("usage: wisply install <antigravity|"), "{out}");
+    assert!(code == 1 && out.contains("unknown AI app 'nope' -> try: wisply install <antigravity|"), "{out}");
     let (code, out) = home.run(&["uninstall", "--purge"]);
     assert!(code == 0 && out.contains("memory and notes stay"), "{out}");
     assert!(!home.0.join("extension").exists() && !home.0.join("v3").exists());

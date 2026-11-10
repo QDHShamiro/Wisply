@@ -277,14 +277,15 @@ fn app_name(raw: &str) -> String {
     if app.contains('.') { app } else { format!("{app}.exe") }
 }
 
+const ADD_HINT: &str = "wisply keys add discord.exe \"ctrl+k=quick switcher\"";
+const RM_HINT: &str = "wisply keys rm discord.exe ctrl+k";
+
 pub fn command(home: &Path, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     let verb = c.pos.first().map(|p| p.to_lowercase()).unwrap_or_default();
     if verb == "add" || verb == "rm" {
         if c.pos.len() < 3 {
-            return Err(Fail::hint(
-                format!("keys {} needs an app and a key", c.pos[0]),
-                "wisply keys add discord.exe \"ctrl+k=quick switcher\"",
-            ));
+            let hint = if verb == "add" { ADD_HINT } else { RM_HINT };
+            return Err(Fail::hint(format!("keys {verb} needs an app and a key"), hint));
         }
         let app = app_name(&c.pos[1]);
         let rest = c.pos[2..].join(" ");
@@ -385,6 +386,9 @@ mod tests {
         };
         assert_eq!(rm("ctrl+q").unwrap(), "removed ctrl+q for discord.exe");
         assert!(rm("ctrl+q").unwrap_err().text().starts_with("err: no saved key ctrl+q for discord.exe"));
+        let short = |verb: &str| command(&home, ctx, &wisply_core::parse(&["keys".into(), verb.into()])).unwrap_err();
+        assert_eq!(short("rm").text(), "err: keys rm needs an app and a key -> try: wisply keys rm discord.exe ctrl+k");
+        assert!(short("add").text().ends_with("-> try: wisply keys add discord.exe \"ctrl+k=quick switcher\""));
         fs::remove_dir_all(&home).unwrap();
     }
 }

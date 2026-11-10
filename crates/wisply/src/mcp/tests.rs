@@ -79,8 +79,12 @@ fn secrets_come_from_the_environment() {
 fn blocked_empty_and_broken_lines_answer_locally() {
     let (res, argv, _) = run("daemon");
     assert!(argv.is_empty());
-    assert_eq!(said(&res), ("err: daemon is not available through MCP", true));
-    assert_eq!(said(&run("wisply mcp").0), ("err: mcp is not available through MCP", true));
+    assert_eq!(said(&res), ("err: daemon is not available through MCP -> try: help", true));
+    assert_eq!(said(&run("wisply mcp").0), ("err: mcp is not available through MCP -> try: help", true));
+    let (res, argv, _) = run("install cursor");
+    let own = "err: install is not available through MCP -> try: the user runs wisply install in a terminal themselves";
+    assert!(argv.is_empty());
+    assert_eq!(said(&res), (own, true));
     assert_eq!(said(&run("   ").0), ("err: empty command -> try: help", true));
     assert_eq!(said(&run("wisply").0), ("err: empty command -> try: help", true));
     assert_eq!(said(&run("click \"Sign in").0), ("err: No closing quotation", true));
@@ -107,6 +111,9 @@ fn protocol_answers_like_the_2x_server() {
     assert_eq!(ok[0]["id"], 4);
     let wrong = one(r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"other"}}"#);
     assert_eq!(wrong[0]["error"]["code"], -32602);
+    assert_eq!(wrong[0]["error"]["message"], "unknown tool 'other', the only tool is wisply");
+    let unnamed = one(r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{}}"#);
+    assert_eq!(unnamed[0]["error"]["message"], "tools/call needs the tool name: wisply");
     assert_eq!(one(r#"{"jsonrpc":"2.0","id":6,"method":"nope"}"#)[0]["error"]["code"], -32601);
     assert_eq!(one(r#"{"jsonrpc":"2.0","id":7,"method":"resources/list"}"#)[0]["result"]["resources"], json!([]));
     assert_eq!(one("{not json")[0]["error"]["code"], -32700);

@@ -110,10 +110,8 @@ fn handle(msg: &Value, call: &Daemon<'_>) -> Option<Value> {
                 let cmd = params.get("arguments").and_then(|a| a.get("cmd")).and_then(Value::as_str).unwrap_or("");
                 result(id, run_cmd(cmd, call))
             }
-            other => {
-                let name = other.unwrap_or("None");
-                error(id, -32602, &format!("unknown tool {name}"))
-            }
+            Some(other) => error(id, -32602, &format!("unknown tool '{other}', the only tool is wisply")),
+            None => error(id, -32602, "tools/call needs the tool name: wisply"),
         },
         "resources/list" => result(id, json!({"resources": []})),
         "prompts/list" => result(id, json!({"prompts": []})),
@@ -168,7 +166,7 @@ fn run_cmd(line: &str, call: &Daemon<'_>) -> Value {
     }
     let first = argv[0].as_str();
     if BLOCKED.contains(&first) {
-        return reply_text(&format!("err: {first} is not available through MCP"), true);
+        return reply_text(&blocked(first), true);
     }
     if LOCAL.contains(&first) {
         return own(&argv);
@@ -237,10 +235,18 @@ fn parse_ms(value: &str) -> Option<f64> {
     Some((num.parse::<f64>().ok()? * factor).trunc())
 }
 
+fn blocked(first: &str) -> String {
+    let hint = match first {
+        "install" | "uninstall" => format!("the user runs wisply {first} in a terminal themselves"),
+        _ => "help".to_string(),
+    };
+    format!("err: {first} is not available through MCP -> try: {hint}")
+}
+
 fn call_daemon(argv: &[String], secret: Option<&str>) -> Value {
     let home = wisply_proto::home();
     let Some(token) = wisply_proto::key_token(&home) else {
-        return reply_text("err: Wisply is not set up on this computer -> run: setup", true);
+        return reply_text("err: Wisply is not set up on this computer -> try: setup", true);
     };
     let cwd = env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
     let sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
@@ -257,7 +263,7 @@ fn call_daemon(argv: &[String], secret: Option<&str>) -> Value {
             let log = home.join("daemon.log");
             reply_text(&format!("err: wisply daemon closed the connection, see {}", log.display()), true)
         }
-        Ok(Got::Busy) => reply_text("err: wisply daemon is busy, try again", true),
+        Ok(Got::Busy) => reply_text("err: the wisply daemon is busy -> try: the same command again in a moment", true),
         Ok(Got::Down) => {
             let log = home.join("daemon.log");
             reply_text(&format!("err: the wisply daemon did not start, see {}", log.display()), true)
@@ -312,7 +318,7 @@ fn own(argv: &[String]) -> Value {
 fn old(argv: &[String], secret: Option<&str>) -> Value {
     match v2::client_exe() {
         Some(exe) => delegate(&exe, argv, secret),
-        None => reply_text("err: Wisply is not set up on this computer -> run: setup", true),
+        None => reply_text("err: Wisply is not set up on this computer -> try: setup", true),
     }
 }
 

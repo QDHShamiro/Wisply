@@ -88,7 +88,7 @@ pub fn run_one(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<(Out, Strin
             return Ok((Out::Stop("wisply daemon stopped".into()), call.name));
         }
         "status" => status(d, ctx),
-        "log" => log(d, ctx, &call),
+        "log" => log(d, ctx, &call)?,
         "config" => {
             let (text, changed) = config::command(&d.home, &call.pos)?;
             if changed {
@@ -190,19 +190,29 @@ fn status(d: &Daemon, ctx: &Ctx) -> String {
     lines.join("\n")
 }
 
-fn log(d: &Daemon, ctx: &mut Ctx, call: &Call) -> String {
+fn log(d: &Daemon, ctx: &mut Ctx, call: &Call) -> Result<String, Fail> {
     let mut pos = call.pos.as_slice();
     let mut counts = call.on("stats");
     if pos.first().is_some_and(|p| p.eq_ignore_ascii_case("stats")) {
         pos = &pos[1..];
         counts = true;
     }
-    let n = pos.first().filter(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())).and_then(|p| p.parse().ok());
+    let n = match pos.first() {
+        Some(word) => Some(lines_of(word)?),
+        None => None,
+    };
     if !counts {
-        return listing(&d.home, n.unwrap_or(15));
+        return Ok(listing(&d.home, n.unwrap_or(15)));
     }
-    let Some(text) = stats(&d.home, n.unwrap_or(2000)) else { return "log is empty".into() };
-    web::capped(d, ctx, &text, "log-stats", Some(STATS_LINES), OUT_CHARS)
+    let Some(text) = stats(&d.home, n.unwrap_or(2000)) else { return Ok("log is empty".into()) };
+    Ok(web::capped(d, ctx, &text, "log-stats", Some(STATS_LINES), OUT_CHARS))
+}
+
+fn lines_of(word: &str) -> Result<usize, Fail> {
+    let digits = !word.is_empty() && word.bytes().all(|b| b.is_ascii_digit());
+    word.parse().ok().filter(|_| digits).ok_or_else(|| {
+        Fail::hint(format!("log takes a number of lines, not '{word}'"), "wisply log 30 | wisply log stats")
+    })
 }
 
 #[cfg(test)]
@@ -225,5 +235,13 @@ mod tests {
         assert_eq!(help(Some("voice")).ok().as_deref(), Some(HELP));
         assert_eq!(help(None).ok().as_deref(), Some(HELP));
         assert!(help(Some("zzz")).is_err());
+    }
+
+    #[test]
+    fn log_wants_a_number_of_lines() {
+        assert_eq!(lines_of("30").ok(), Some(30));
+        let said = lines_of("abc").unwrap_err().text();
+        assert_eq!(said, "err: log takes a number of lines, not 'abc' -> try: wisply log 30 | wisply log stats");
+        assert!(lines_of("-3").is_err() && lines_of("").is_err());
     }
 }

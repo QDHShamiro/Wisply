@@ -127,6 +127,9 @@ fn a_reported_amount_wins_and_keeps_its_label() {
     for bad in ["140", "3/0", "3/x", "1.5"] {
         assert_eq!(report(&home, "k", &[bad]), Err(BAD_AMOUNT.to_string()), "{bad}");
     }
+    assert!(BAD_AMOUNT.ends_with("like 40 or 3/8 -> try: wisply progress 40 \"what you are doing\""));
+    let no_id = command(&home, &["--session".to_string()]).unwrap_err();
+    assert!(no_id.starts_with("--session needs the session id -> try: wisply progress ["), "{no_id}");
     assert_eq!(report(&home, "new", &["Looking around"]).unwrap(), "Looking around");
     let _ = fs::remove_dir_all(&home);
 }

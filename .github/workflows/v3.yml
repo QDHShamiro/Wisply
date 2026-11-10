@@ -49,6 +49,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npx --no-install tsc --noEmit
+          npm test
           npm run build
           git diff --exit-code -- dist
       - name: Format

@@ -170,7 +170,8 @@ fn setup(home: &Path, manual: bool, global: bool, browser: Option<&str>) -> Resu
 
 fn install(home: &Path, name: &str, global: bool) -> Result<(), String> {
     if !agents::NAMES.contains(&name) {
-        return Err(format!("usage: wisply install <{}>", agents::NAMES.join("|")));
+        let what = if name.is_empty() { "install needs the AI app".into() } else { format!("unknown AI app '{name}'") };
+        return Err(format!("{what} -> try: wisply install <{}>", agents::NAMES.join("|")));
     }
     if !global {
         return Err(format!(

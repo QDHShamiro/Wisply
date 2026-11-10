@@ -18,8 +18,8 @@ use paint::{draw, plain};
 
 const FOLDER: &str = "progress";
 const USAGE: &str =
-    "usage: wisply progress [<percent> | <done>/<total>] [\"what you are doing\"] | show [--color] [--ascii] | clear";
-const BAD_AMOUNT: &str = "the amount is a percent from 0 to 100 or done/total, like 40 or 3/8";
+    "wisply progress [<percent> | <done>/<total>] [\"what you are doing\"] | show [--color] [--ascii] | clear";
+const BAD_AMOUNT: &str = "the amount is a percent from 0 to 100 or done/total, like 40 or 3/8 -> try: wisply progress 40 \"what you are doing\"";
 const NOTHING: &str = "no progress noted -> try: wisply progress 40 \"what you are doing\"";
 const NO_KEY: &str = "no session and no folder to note progress for";
 const NOT_SAVED: &str = "cannot save the progress";
@@ -386,7 +386,10 @@ fn command(home: &Path, args: &[String]) -> Result<String, String> {
     let mut list = args.iter();
     while let Some(arg) = list.next() {
         match arg.as_str() {
-            "--session" => session = Some(list.next().ok_or(USAGE)?.clone()),
+            "--session" => {
+                session =
+                    Some(list.next().ok_or_else(|| format!("--session needs the session id -> try: {USAGE}"))?.clone());
+            }
             "--color" => color = true,
             "--ascii" => ascii = true,
             _ => rest.push(arg.as_str()),

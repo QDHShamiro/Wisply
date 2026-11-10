@@ -143,8 +143,9 @@ pub fn refresh_skills(root: Option<&Path>) {
 
 pub fn install(name: &str, exe: &Path, root: Option<&Path>) -> io::Result<()> {
     let home = wisply_proto::user_dir();
-    let path =
-        config_file(name).ok_or_else(|| io::Error::other(format!("usage: wisply install <{}>", NAMES.join("|"))))?;
+    let path = config_file(name).ok_or_else(|| {
+        io::Error::other(format!("unknown AI app '{name}' -> try: wisply install <{}>", NAMES.join("|")))
+    })?;
     let base = entry(exe);
     match name {
         "codex" => merge_toml(&path, exe),

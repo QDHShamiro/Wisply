@@ -143,7 +143,11 @@ pub fn command(home: &Path, pos: &[String]) -> Result<(String, bool), Fail> {
     }
     let raw = pos[1..].join(" ");
     let val = match default {
-        Value::Bool(_) => json!(["1", "true", "on", "yes"].contains(&raw.to_lowercase().as_str())),
+        Value::Bool(_) => match raw.to_lowercase().as_str() {
+            "1" | "true" | "on" | "yes" => json!(true),
+            "0" | "false" | "off" | "no" => json!(false),
+            _ => return Err(Fail::hint(format!("{key} is on or off"), format!("wisply config {key} on"))),
+        },
         Value::Number(_) => match raw.trim().parse::<i64>() {
             Ok(n) => json!(n),
             Err(_) => {
@@ -218,6 +222,10 @@ browser = \"auto\""
             "err: focus is one of never, away, idle -> try: wisply config focus never"
         );
         assert!(fail(&["shot_width", "big"]).starts_with("err: shot_width takes a whole number"));
+        assert_eq!(fail(&["window", "maybe"]), "err: window is on or off -> try: wisply config window on");
+        assert!(on(&load(&h), "window"));
+        assert_eq!(command(&h, &args(&["window", "No"])).unwrap(), ("window = false".into(), true));
+        assert_eq!(command(&h, &args(&["window", "YES"])).unwrap(), ("window = true".into(), true));
         fs::write(h.join("blocklist.txt"), "# no\n.Bank.example\n\nshop.test \n").unwrap();
         assert_eq!(payload(&h)["blocklist"], json!(["bank.example", "shop.test"]));
         assert_eq!(payload(&h)["pointer"], json!(false));
