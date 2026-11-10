@@ -1,13 +1,13 @@
 const STEP_SHOWN: usize = 36;
 const LAST_SHOWN: usize = 28;
 const BAR_CELLS: usize = 10;
+const LABEL: &str = "task ";
 const MIDWAY_AT: i64 = 34;
 const LATE_AT: i64 = 67;
 const ESC: char = '\u{1b}';
-const EARLY: u8 = 220;
-const MIDWAY: u8 = 39;
+const EARLY: u8 = 136;
+const MIDWAY: u8 = 33;
 const LATE: u8 = 70;
-const FULL: u8 = 46;
 const BRIGHT: u8 = 252;
 const GREY: u8 = 245;
 const DIM: u8 = 238;
@@ -40,9 +40,7 @@ pub fn plain(text: &str) -> String {
 }
 
 fn shade(percent: i64) -> u8 {
-    if percent >= 100 {
-        FULL
-    } else if percent >= LATE_AT {
+    if percent >= LATE_AT {
         LATE
     } else if percent >= MIDWAY_AT {
         MIDWAY
@@ -51,16 +49,17 @@ fn shade(percent: i64) -> u8 {
     }
 }
 
-fn bar(percent: i64, ascii: bool) -> String {
+fn bar(percent: i64) -> String {
     let filled = usize::try_from(percent.clamp(0, 100)).unwrap_or(0) * BAR_CELLS / 100;
-    let (full, empty) = if ascii { ("#", "-") } else { ("\u{2501}", "\u{2501}") };
-    format!("{}{}", paint(shade(percent), &full.repeat(filled)), paint(DIM, &empty.repeat(BAR_CELLS - filled)))
+    let cells =
+        format!("{}{}", paint(shade(percent), &"=".repeat(filled)), paint(DIM, &"-".repeat(BAR_CELLS - filled)));
+    format!("{}[{cells}]", paint(GREY, LABEL))
 }
 
 pub fn draw(percent: Option<i64>, count: &str, text: &str, last: Option<&str>, ascii: bool) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
     if let Some(percent) = percent {
-        parts.push(bar(percent, ascii));
+        parts.push(bar(percent));
         parts.push(paint(shade(percent), &format!("{percent}%")));
     }
     if !count.is_empty() {
@@ -69,7 +68,7 @@ pub fn draw(percent: Option<i64>, count: &str, text: &str, last: Option<&str>, a
     if !text.is_empty() {
         parts.push(paint(BRIGHT, &short(text, STEP_SHOWN, ascii)));
     } else if percent.is_some_and(|p| p >= 100) {
-        parts.push(paint(FULL, if ascii { "done" } else { "\u{2713}" }));
+        parts.push(paint(LATE, if ascii { "done" } else { "\u{2713}" }));
     }
     if let Some(last) = last {
         let arrow = if ascii { ">" } else { "\u{203a}" };

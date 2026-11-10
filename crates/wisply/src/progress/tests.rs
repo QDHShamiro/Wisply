@@ -26,14 +26,14 @@ fn a_todo_list_gives_percent_count_and_the_running_step() {
         {"content": "Ship", "status": "pending", "activeForm": "Shipping"}
     ]});
     assert!(note(&home, &tool("s1", "TodoWrite", todos, Value::Null)));
-    assert_eq!(shown(&home, "s1"), "##-------- 25% 1/4 Writing the fix");
+    assert_eq!(shown(&home, "s1"), "task [==--------] 25% 1/4 Writing the fix");
     let colored = field(&home, Some("s1"), None, now(), false).unwrap();
-    assert!(colored.contains("\u{1b}[38;5;220m25%\u{1b}[0m"), "{colored:?}");
+    assert!(colored.contains("\u{1b}[38;5;136m25%\u{1b}[0m"), "{colored:?}");
     assert_eq!(shown(&home, "s2"), "");
     let plan = json!({"plan": [{"step": "Look", "status": "completed"}, {"step": "Build", "status": "in_progress"}]});
     assert!(note(&home, &tool("s2", "update_plan", plan, Value::Null)));
-    assert_eq!(shown(&home, "s2"), "#####----- 50% 1/2 Build");
-    assert_eq!(shown(&home, "s1"), "##-------- 25% 1/4 Writing the fix");
+    assert_eq!(shown(&home, "s2"), "task [=====-----] 50% 1/2 Build");
+    assert_eq!(shown(&home, "s1"), "task [==--------] 25% 1/4 Writing the fix");
     let _ = fs::remove_dir_all(&home);
 }
 
@@ -44,15 +44,15 @@ fn task_tools_build_the_plan_step_by_step() {
     let first = json!({"subject": "Write the tests", "description": "x", "activeForm": "Writing the tests"});
     assert!(note(&home, &tool("s1", "TaskCreate", first, made("1"))));
     assert!(note(&home, &tool("s1", "TaskCreate", json!({"subject": "Ship it"}), made("2"))));
-    assert_eq!(shown(&home, "s1"), "---------- 0% 0/2 Write the tests");
+    assert_eq!(shown(&home, "s1"), "task [----------] 0% 0/2 Write the tests");
     assert!(note(&home, &tool("s1", "TaskUpdate", json!({"taskId": "1", "status": "in_progress"}), Value::Null)));
-    assert_eq!(shown(&home, "s1"), "---------- 0% 0/2 Writing the tests");
+    assert_eq!(shown(&home, "s1"), "task [----------] 0% 0/2 Writing the tests");
     assert!(note(&home, &tool("s1", "TaskUpdate", json!({"taskId": "1", "status": "completed"}), Value::Null)));
-    assert_eq!(shown(&home, "s1"), "#####----- 50% 1/2 Ship it");
+    assert_eq!(shown(&home, "s1"), "task [=====-----] 50% 1/2 Ship it");
     assert!(note(&home, &tool("s1", "TaskUpdate", json!({"taskId": "2", "status": "deleted"}), Value::Null)));
-    assert_eq!(shown(&home, "s1"), "########## 100% 1/1 done");
+    assert_eq!(shown(&home, "s1"), "task [==========] 100% 1/1 done");
     assert!(note(&home, &tool("s1", "TaskUpdate", json!({"taskId": "9", "status": "completed"}), Value::Null)));
-    assert_eq!(shown(&home, "s1"), "########## 100% 1/1 done");
+    assert_eq!(shown(&home, "s1"), "task [==========] 100% 1/1 done");
     let _ = fs::remove_dir_all(&home);
 }
 
@@ -64,9 +64,12 @@ fn the_last_tool_is_shown_next_to_the_plan() {
     assert_eq!(shown(&home, "s1"), "> Bash cargo test");
     let todos = json!({"todos": [{"content": "Fix", "status": "in_progress", "activeForm": "Fixing"}]});
     assert!(note(&home, &tool("s1", "TodoWrite", todos, Value::Null)));
-    assert_eq!(shown(&home, "s1"), "---------- 0% 0/1 Fixing > Bash cargo test");
+    assert_eq!(shown(&home, "s1"), "task [----------] 0% 0/1 Fixing > Bash cargo test");
     let later = now() + LAST_FRESH + 1;
-    assert_eq!(field(&home, Some("s1"), None, later, true).map(|l| plain(&l)).unwrap(), "---------- 0% 0/1 Fixing");
+    assert_eq!(
+        field(&home, Some("s1"), None, later, true).map(|l| plain(&l)).unwrap(),
+        "task [----------] 0% 0/1 Fixing"
+    );
     assert!(!note(&home, &json!({"session_id": "s1"})));
     assert!(!note(&home, &json!({"tool_name": "Bash"})));
     let _ = fs::remove_dir_all(&home);
@@ -90,13 +93,37 @@ fn the_tool_label_leaves_out_arguments_secrets_and_folders() {
 }
 
 #[test]
+fn a_progress_report_is_not_shown_as_the_last_tool() {
+    let home = temp("own");
+    let bash = |command: &str| tool("s1", "Bash", json!({"command": command}), Value::Null);
+    assert!(!note(&home, &bash("cargo test --workspace")));
+    assert_eq!(shown(&home, "s1"), "> Bash cargo test");
+    for own in [
+        "wisply progress 2/3 @Writing the fix@",
+        "rtk wisply progress 40",
+        "C:/Users/me/.wisply/bin/wisply.exe progress show",
+        "@C:/Users/me/.wisply/bin/Wisply.exe@ progress 1/3",
+        "cd /work && ~/.wisply/bin/wisply progress 3/3",
+    ] {
+        assert!(!note(&home, &bash(&own.replace('@', "\""))));
+        assert_eq!(shown(&home, "s1"), "> Bash cargo test", "{own}");
+    }
+    assert!(!note(&home, &bash("wisply recall progress")));
+    assert_eq!(shown(&home, "s1"), "> Bash wisply recall progress");
+    assert!(!note(&home, &bash("cargo build && wisply progress 2/3")));
+    assert_eq!(shown(&home, "s1"), "> Bash cargo build");
+    assert!(!own_report("Read", &json!({"command": "wisply progress 40"})));
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
 fn a_reported_amount_wins_and_keeps_its_label() {
     let home = temp("report");
-    assert_eq!(report(&home, "k", &["3/8", "Fixing", "tests"]).unwrap(), "###------- 37% 3/8 Fixing tests");
-    assert_eq!(report(&home, "k", &["40"]).unwrap(), "####------ 40% Fixing tests");
-    assert_eq!(report(&home, "k", &["Writing docs"]).unwrap(), "####------ 40% Writing docs");
-    assert_eq!(report(&home, "k", &["100%"]).unwrap(), "########## 100% Writing docs");
-    assert_eq!(report(&home, "k", &["9/3"]).unwrap(), "########## 100% 3/3 Writing docs");
+    assert_eq!(report(&home, "k", &["3/8", "Fixing", "tests"]).unwrap(), "task [===-------] 37% 3/8 Fixing tests");
+    assert_eq!(report(&home, "k", &["40"]).unwrap(), "task [====------] 40% Fixing tests");
+    assert_eq!(report(&home, "k", &["Writing docs"]).unwrap(), "task [====------] 40% Writing docs");
+    assert_eq!(report(&home, "k", &["100%"]).unwrap(), "task [==========] 100% Writing docs");
+    assert_eq!(report(&home, "k", &["9/3"]).unwrap(), "task [==========] 100% 3/3 Writing docs");
     for bad in ["140", "3/0", "3/x", "1.5"] {
         assert_eq!(report(&home, "k", &[bad]), Err(BAD_AMOUNT.to_string()), "{bad}");
     }
@@ -111,11 +138,11 @@ fn old_progress_is_not_shown_any_more() {
     note(&home, &tool("s1", "TodoWrite", todos, Value::Null));
     let at = now();
     let line = |time: u64| field(&home, Some("s1"), None, time, true).map(|l| plain(&l));
-    assert_eq!(line(at + DONE_FRESH + 1).as_deref(), Some("#####----- 50% 1/2 B"));
+    assert_eq!(line(at + DONE_FRESH + 1).as_deref(), Some("task [=====-----] 50% 1/2 B"));
     assert_eq!(line(at + PLAN_FRESH + 5), None);
     let done = json!({"todos": [{"content": "A", "status": "completed"}, {"content": "B", "status": "completed"}]});
     note(&home, &tool("s1", "TodoWrite", done, Value::Null));
-    assert_eq!(line(now()).as_deref(), Some("########## 100% 2/2 done"));
+    assert_eq!(line(now()).as_deref(), Some("task [==========] 100% 2/2 done"));
     assert_eq!(line(now() + DONE_FRESH + 5), None);
     let _ = fs::remove_dir_all(&home);
 }
@@ -128,7 +155,7 @@ fn a_folder_stands_in_when_there_is_no_session() {
     let key = keys(None, Some("C:/work/app")).remove(0);
     report(&home, &key, &["2/4", "Building"]).unwrap();
     let line = field(&home, Some("unknown"), Some("c:\\work\\app"), now(), true).map(|l| plain(&l));
-    assert_eq!(line.as_deref(), Some("#####----- 50% 2/4 Building"));
+    assert_eq!(line.as_deref(), Some("task [=====-----] 50% 2/4 Building"));
     assert_eq!(field(&home, Some("unknown"), Some("C:/other"), now(), true), None);
     let _ = fs::remove_dir_all(&home);
 }
@@ -167,21 +194,23 @@ fn a_broken_file_is_ignored_and_then_replaced() {
     assert_eq!(shown(&home, "s1"), "");
     let todos = json!({"todos": [{"content": "A", "status": "pending"}, {"bad": 1}, "text"]});
     assert!(note(&home, &tool("s1", "TodoWrite", todos, Value::Null)));
-    assert_eq!(shown(&home, "s1"), "---------- 0% 0/1 A");
+    assert_eq!(shown(&home, "s1"), "task [----------] 0% 0/1 A");
     let _ = fs::remove_dir_all(&home);
 }
 
 #[test]
 fn the_line_is_drawn_with_colours_by_how_far_it_is() {
     let line = |percent: i64| draw(Some(percent), "", "", None, false).unwrap();
-    assert!(line(10).contains("\u{1b}[38;5;220m10%"));
-    assert!(line(40).contains("\u{1b}[38;5;39m40%"));
+    assert!(line(10).contains("\u{1b}[38;5;136m10%"));
+    assert!(line(40).contains("\u{1b}[38;5;33m40%"));
     assert!(line(70).contains("\u{1b}[38;5;70m70%"));
-    assert!(line(100).contains("\u{1b}[38;5;46m100%"));
-    assert_eq!(
-        plain(&line(100)),
-        "\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501} 100% \u{2713}"
+    assert!(line(100).contains("\u{1b}[38;5;70m100%"));
+    assert!(
+        line(40).starts_with(
+            "\u{1b}[38;5;245mtask \u{1b}[0m[\u{1b}[38;5;33m====\u{1b}[0m\u{1b}[38;5;238m------\u{1b}[0m] "
+        )
     );
+    assert_eq!(plain(&line(100)), "task [==========] 100% \u{2713}");
     let long = "A very long description of the current step that does not fit";
     assert_eq!(plain(&draw(None, "", long, None, true).unwrap()), "A very long description of the curre...");
     assert_eq!(plain(&draw(None, "", long, None, false).unwrap()), "A very long description of the curre\u{2026}");

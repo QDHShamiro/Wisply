@@ -13,7 +13,7 @@ mod label;
 #[path = "progress/paint.rs"]
 pub mod paint;
 
-use label::activity;
+use label::{activity, own_report};
 use paint::{draw, plain};
 
 const FOLDER: &str = "progress";
@@ -350,7 +350,9 @@ pub fn note(home: &Path, event: &Value) -> bool {
         "TaskCreate" => change(&plan, |p| p.add(input, &event["tool_response"]["task"], time)),
         "TaskUpdate" => change(&plan, |p| p.update(input)),
         _ => {
-            mark(&dir(home).join(format!("{key}.now")), &activity(tool, input));
+            if !own_report(tool, input) {
+                mark(&dir(home).join(format!("{key}.now")), &activity(tool, input));
+            }
             return false;
         }
     };

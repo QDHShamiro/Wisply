@@ -12,7 +12,7 @@ pub fn user() -> String {
         .to_lowercase()
 }
 
-fn user_dir() -> PathBuf {
+pub fn user_dir() -> PathBuf {
     PathBuf::from(env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default())
 }
 

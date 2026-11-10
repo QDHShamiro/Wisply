@@ -53,8 +53,13 @@ impl Client {
                 thread::sleep(GAP - since);
             }
         }
-        self.last = Some(Instant::now());
         self.sent += 1;
+        let done = self.send(url);
+        self.last = Some(Instant::now());
+        done
+    }
+
+    fn send(&self, url: &str) -> Result<Resp, String> {
         let mut resp = self.agent.get(url).call().map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();
         let headers = resp

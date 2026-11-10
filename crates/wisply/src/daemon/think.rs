@@ -13,10 +13,6 @@ const WAIT: Duration = Duration::from_secs(1800);
 const CHARS: usize = 12000;
 const CWDS: usize = 200;
 
-fn user_home() -> PathBuf {
-    env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).unwrap_or_default()
-}
-
 pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
     let home = d.home.clone();
     let sid = ctx.sid.clone();
@@ -30,7 +26,7 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
             let cwds = Store::open(&home).and_then(|s| s.recent_cwds(CWDS)).unwrap_or_default();
             let env = wisply_think::Env {
                 home,
-                user: user_home(),
+                user: wisply_proto::user_dir(),
                 sid,
                 cwd,
                 playing: game::running(),

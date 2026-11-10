@@ -30,134 +30,18 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   `skill add <folder>` and `skill get <owner/repo/path>` take an existing one; `skill check <folder or name>` says what is
   wrong or could be better; `skill rm <name>` removes only what Wisply installed.
 - The status line shows how far the task is: a coloured bar with the percent, the steps done, the step in work and
-  the last tool, like `━━━━━━━━━━ 40% 2/5 Running the tests › Bash cargo test`. The plan comes by itself from the
+  the last tool, like `task [====------] 40% 2/5 Running the tests › Bash cargo test`. The plan comes by itself from the
   plan tools of the AI (TodoWrite, TaskCreate and TaskUpdate, `update_plan`) through the post hook. Every AI can
   also say it: `wisply progress 3/8 "what it is doing"` or `wisply progress 40`. `wisply progress show [--color]`
   prints the field for a status line of your own, `progress clear` empties it and `statusline set progress off`
   hides it. The note about the last tool keeps the tool name and a file name, a host or the first words of a
-  command: no arguments, no `NAME=value`, no folders. It lives per session in `~/.wisply/progress` and is removed
-  after three days.
+  command: no arguments, no `NAME=value`, no folders; the AI's own `wisply progress` call is not noted. It lives
+  per session in `~/.wisply/progress` and is removed after three days.
 - The AI works alone and asks the user only where it matters: a tool or skill script that deletes or overwrites
   files, loosens what an AI may do, touches money, accounts, keys or uploads, or sets up autostart or runs code from
   the internet is refused with "ask them first" until the call is repeated with `--yes`. The same holds for a skill
   from the internet that brings scripts or hidden text, and for one that would overwrite a skill another tool
   installed.
-
-### Fixed
-- A `brain.json` with a wrong shape (a page without its element list, a list where a table belongs, a short entry)
-  made every command that learns from a page fail. The file is now mended when it is loaded: broken parts are
-  dropped, the rest is kept.
-- `wisply think` no longer stops with a panic when the `state.json` of a run is not a table; it names the run.
-- A learned routine with a very long step no longer builds the same pattern again on every compare, and a step too
-  long for a pattern counts as different instead of stopping the command.
-- Setup in Edge: when the browser ignores `edge://extensions/` on its command line (Edge on the Windows runner does),
-  Wisply types the page into the address bar. On a narrow window it opens the side menu to reach the developer switch
-  and closes it again, and it takes the folder dialog from any process, waiting up to 25 s for it.
-- State files are replaced in one step (write next to the file, then rename), so a crash or a second session can no
-  longer leave half a `config.json`, `sessions.json`, routine, to-do list or MCP entry of another AI app behind.
-- Two hooks of one session finishing at the same moment no longer lose a remembered read, and a read is written to the
-  session table once instead of twice.
-- `wisply hook` and `wisply suggest` give up after their own short deadline when the daemon is busy instead of
-  holding the AI's tool call for up to 12 s; `hook post` stops reading its input after 64 MB or 2.5 s.
-- The MCP server starts the 3.x daemon itself and only hands a command to an old 2.x install when there is one; on a
-  computer without Wisply set up it says so instead of failing without a reason.
-- `wisply think diff` no longer shows a changed file as unchanged when its start backup is gone: it names the file,
-  compares it with the last git commit and warns; `think revert` and `think restore` refuse before touching anything
-  when a saved copy is missing, and `think start` says which files it could not save.
-- Agents page as a web page: tile grid grouped by project, filter chips, search, sort, header with running / waiting /
-  done / failed counts, limit, free RAM, build queue owner (`agents_lock`) and game mode; detail view with live output,
-  the agent's `RESULT.md` (`agents_work`, masked), reply and a two-click stop. The phone server serves the same page
-  at `http://<host>:47999/` (shell files only, data still needs the pairing token; `mobile pair` prints a `web:` link).
-  Animations use transform and opacity and respect `prefers-reduced-motion`. New: `agents status`.
-- Fix: `claude` output larger than the pipe buffer (long `claude logs`) no longer stalls for 30 s.
-- `wisply secure` grew into a defensive check of your own things: severity (high/medium/low) and a one-sentence fix on
-  every line, `--json`, more dangerous patterns (unsafe deserialization, path traversal, weak crypto, CORS `*`, debug
-  on, shell commands from input, Electron isolation), Discord webhooks and database passwords, key files and missing
-  `.gitignore` entries, pnpm/yarn/Gradle/poetry lock files for the OSV.dev check, and jars (plugin.yml, configs, class
-  strings), APKs (manifest: debuggable, cleartext, exported; keys in code), exe and Electron `app.asar` files.
-- `secure allow <domain>` plus `secure <domain>`: passive web check of allowed sites only (HTTPS, redirect,
-  certificate acceptance, security headers, cookie flags, exposed `/.env`, `/.git/HEAD`, backups, source maps,
-  directory listings, mixed content), one request per second, never follows a redirect to a site that is not allowed.
-- `secure fix [--with claude|codex]` writes FIX.md, creates `secure/fix-<date>`, lets the AI fix the list, checks again
-  and reports before/after; it never commits or pushes. `config secure off` switches the whole command off.
-
-- `wisply pc` disk guard: every hour the daemon checks the system drive. Below 40 GB free (`disk_clean_gb`, with `pc on`)
-  it cleans only safe things: temp files older than a day, package caches (npm, pip, cargo, gradle, Maven versions unused
-  for 60 days), build folders untouched for 30 days (skipped when git-tracked or in a worktree with unmerged commits)
-  and browser caches while the browser is closed. Below 25 GB free (`disk_warn_gb`) a system notification names the
-  biggest folder. Files with hard links, `~/.wisply` (except `out`), `~/.claude`, `.minecraft`, Documents and Desktop are
-  never touched, and nothing is deleted while a game runs. `pc disk` now lists the biggest folders with GB and ideas to
-  move them to another drive (junction on Windows, symlink on macOS/Linux; printed, never run). Categories switch off
-  with `clean_kinds` in `~/.wisply/pc/config.json`; the log shows every deletion and each guard run.
-
-- Big-file view, checked live with Haiku: constants (`NAME = ...`) are in the outline, look-alike lines fold into one (`L36-L868 105x, every 8 lines: ...`), the hint names Read with offset/limit and Grep first. A 249-line test file comes back as 2.6k instead of 7.4k characters (full 14.7k), and Haiku found a mid-file value in one read.
-- Builds can live outside the repo: `WISPLY_SOURCE` points setup at the source folder (used by the setup test).
-- Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a
-  `wisply more` ref; whole-file `Read` and `cat file` views of 150+ lines / ~3k+ tokens come back as head, outline
-  and tail. Edit/Write and PreCompact clear the per-session table; `Write` on a known file adds an "use Edit" hint
-  (new `PreToolUse` and `PreCompact` entries in `hooks/hooks.json`). `~/.wisply/headroom/reads-off` turns it off.
-- `wisply agents`: one table of every Claude session (`claude agents --json --all`) with name, folder name, status
-  (`running`, `waiting`, `done`, `limit`, `error`), time, tokens, estimated cost and the last line with keys, tokens,
-  mail addresses and paths masked. Also an Agents page in `wisply ui`, an `agents 2 run 1 wait` field in the status
-  line and a line in `wisply status`.
-- Limit guard: the daemon reads "usage limit reached" / "hit your limit" with the reset time and, two minutes after it
-  and never while the game mode runs, continues every background session the limit stopped exactly once
-  (`claude --bg --resume <session> "weiter"`). Sessions that did not run are never started. Events go to
-  `~/.wisply/agents/guard.log`; `config agents_resume off` and `config agents off` switch it off.
-- Events `done`, `waiting`, `limit`, `resumed` and, from other tools through `wisply notify event <kind> <title>`,
-  `ci_red`, `ci_green`, `disk`: a Windows notification that never takes focus (`config agents_notify`) and the
-  `/v1/events` stream.
-- `wisply mobile`: the phone API of the Wisply app (`pair` with QR code and PNG, `list`, `revoke`, `status`, `on`,
-  `off`). It binds only to localhost and Tailscale addresses (never `0.0.0.0`), needs a per-device token (only its
-  hash is stored), allows 20 requests per second per token, answers `401` without a valid token and takes pairing
-  codes once within 10 minutes. Config: `phone_api` (off until the first `mobile pair`), `phone_port`, `phone_bind`,
-  `phone_tailscale`.
-
-### Changed
-- `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
-- Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
-  WebFetch tools (`hooks/hooks.json` matcher). The limit is a character budget (1,200; 2,000 for logs) instead of a line
-  count: lines over 340 characters are cut to 300 with the full text one `wisply more` away, grep/rg output is grouped
-  by file (path once, at most 6 hits per file, `+N more`), and web text loses cookie, sign-in and footer lines,
-  repeated lines and `utm_` parameters. Error lines are never dropped; short dense output (`git status`, listings) is
-  untouched. On 57 made-up outputs the text shrinks by 58% (125,051 to 52,859 characters, a median of 0.02 ms per call).
-- `wisply.exe` is now a small client (3 MB instead of 19 MB) for `status`, `recall`, `code`, `more` and the hooks
-  (`hook post` included): a call takes about 10 ms instead of about 108 ms, because Windows spends ~100 ms starting a
-  large exe before `main` runs. Output and exit codes are byte for byte the same. The big program is `wisply-full`
-  next to it: the daemon and every other command (`setup`, `update`, `mcp`, `think`, `statusline`, ...) run there, as
-  does any call while the daemon is down. Setup and the self-update place both programs (a 3.0 install with one exe
-  updates as before); if `wisply-full` is missing `wisply` says so and points to `wisply setup`. The single
-  `wisply.exe` on the Releases page is still the full client.
-- `wisply code "what it does"` works without any model: names are split (camelCase, snake_case), words are stemmed, a
-  built-in list of code synonyms (save, write, store, persist / strip, remove, scrub / secret, key, password, token /
-  changed, modified, dirty) widens the question, and the words of the function body, strings, signature and path count
-  with a lower weight (BM25 over the symbols, kept in memory). Questions that used to fall back to plain name matching
-  now land on the right function in the first three hits. The map no longer embeds symbols in the background.
-- `wisply code` does no file work per question: the file check runs every 3 seconds at most and `roots.json` is
-  written once a minute.
-- `wisply recall` copes with typos (fuzzy match against the note words), mixed German/English questions (small
-  built-in word list) and weights covered words per group instead of per word.
-- `headroom` is several times faster. Lines are no longer copied one by one, the template of a line is only built when
-  a kept or repeated line needs it, the error-word check skips lines that cannot match, numbers and JSON strings take
-  an ASCII path, and the hook reads its input once, squeezes without a thread for normal sizes, hashes the full
-  output eight bytes at a time, writes the log after the answer is out and no longer checks the folders on every
-  call. What is cut and what is kept stays the same. `cargo test -p wisply-squeeze --test bench -- --ignored
-  --nocapture` and `cargo test -p wisply --test hook_speed -- --ignored --nocapture` measure it.
-- Session notes cost about 4 to 10 times fewer model tokens: the transcript is condensed harder before the local model
-  sees it (no tool calls except edits and git/PR commands, no code blocks, no "let me ..." narration, repeats gone),
-  the prompt is shorter with a fixed format, the model gets the titles of notes it already has so it does not write
-  them twice, and sessions without edits and with a single message are skipped.
-- "merk dir ..." / "remember ..." understands more phrasings (denk dran, vergiss nicht, don't forget, keep in mind,
-  note that, ...), drops leftovers like "dass" or "that" and stores a clean sentence.
-- More secrets are cut out before anything is stored: Anthropic, Stripe, Google, npm, GitLab, GitHub fine-grained and
-  Discord bot tokens, Bearer and Authorization headers, Discord/Slack/Teams webhook URLs, passwords in URLs, private
-  key blocks, "Passwort ist ...".
-- `frames`, `watch` and `shot`: fewer image tokens, faster. Contact sheets now fit the model's 28 px token grid
-  (no second resize, no empty cells, bigger tiles when there are few), near-identical scenes are dropped instead of
-  padding the sheet to the full count, and `shot` sizes snap to whole tokens (1024 px wide became 1008). Video frames
-  come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
-
-### Added
 - Earlier auto-compact, off by default: `wisply config compact 250k` (or `wisply setup --compact 250k`) writes
   `autoCompactWindow` into Claude Code's `settings.json` and names any `CLAUDE_CODE_AUTO_COMPACT_WINDOW` or per-model
   window that would override it; `compact off` removes it. `wisply doctor ai claude` gets a `context length` row: the
@@ -213,13 +97,140 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   Two rounds by default (the second searches with terms found in the first), `--quick`, `--deep`, `--site`.
   Reports are saved to the vault (`Research/`) and found again by `recall`.
 
+### Fixed
+- A `brain.json` with a wrong shape (a page without its element list, a list where a table belongs, a short entry)
+  made every command that learns from a page fail. The file is now mended when it is loaded: broken parts are
+  dropped, the rest is kept.
+- `wisply think` no longer stops with a panic when the `state.json` of a run is not a table; it names the run.
+- A learned routine with a very long step no longer builds the same pattern again on every compare, and a step too
+  long for a pattern counts as different instead of stopping the command.
+- Setup in Edge: when the browser ignores `edge://extensions/` on its command line (Edge on the Windows runner does),
+  Wisply types the page into the address bar. On a narrow window it opens the side menu to reach the developer switch
+  and closes it again, and it takes the folder dialog from any process, waiting up to 25 s for it.
+- State files are replaced in one step (write next to the file, then rename), so a crash or a second session can no
+  longer leave half a `config.json`, `sessions.json`, routine, to-do list or MCP entry of another AI app behind.
+- Two hooks of one session finishing at the same moment no longer lose a remembered read, and a read is written to the
+  session table once instead of twice.
+- `wisply hook` and `wisply suggest` give up after their own short deadline when the daemon is busy instead of
+  holding the AI's tool call for up to 12 s; `hook post` stops reading its input after 64 MB or 2.5 s.
+- The MCP server starts the 3.x daemon itself and only hands a command to an old 2.x install when there is one; on a
+  computer without Wisply set up it says so instead of failing without a reason.
+- `wisply think diff` no longer shows a changed file as unchanged when its start backup is gone: it names the file,
+  compares it with the last git commit and warns; `think revert` and `think restore` refuse before touching anything
+  when a saved copy is missing, and `think start` says which files it could not save.
+- Agents page as a web page: tile grid grouped by project, filter chips, search, sort, header with running / waiting /
+  done / failed counts, limit, free RAM, build queue owner (`agents_lock`) and game mode; detail view with live output,
+  the agent's `RESULT.md` (`agents_work`, masked), reply and a two-click stop. The phone server serves the same page
+  at `http://<host>:47999/` (shell files only, data still needs the pairing token; `mobile pair` prints a `web:` link).
+  Animations use transform and opacity and respect `prefers-reduced-motion`. New: `agents status`.
+- Fix: `claude` output larger than the pipe buffer (long `claude logs`) no longer stalls for 30 s.
+- `wisply secure` grew into a defensive check of your own things: severity (high/medium/low) and a one-sentence fix on
+  every line, `--json`, more dangerous patterns (unsafe deserialization, path traversal, weak crypto, CORS `*`, debug
+  on, shell commands from input, Electron isolation), Discord webhooks and database passwords, key files and missing
+  `.gitignore` entries, pnpm/yarn/Gradle/poetry lock files for the OSV.dev check, and jars (plugin.yml, configs, class
+  strings), APKs (manifest: debuggable, cleartext, exported; keys in code), exe and Electron `app.asar` files.
+- `secure allow <domain>` plus `secure <domain>`: passive web check of allowed sites only (HTTPS, redirect,
+  certificate acceptance, security headers, cookie flags, exposed `/.env`, `/.git/HEAD`, backups, source maps,
+  directory listings, mixed content), one request per second, never follows a redirect to a site that is not allowed.
+- `secure fix [--with claude|codex]` writes FIX.md, creates `secure/fix-<date>`, lets the AI fix the list, checks again
+  and reports before/after; it never commits or pushes. `config secure off` switches the whole command off.
+- `wisply pc` disk guard: every hour the daemon checks the system drive. Below 40 GB free (`disk_clean_gb`, with `pc on`)
+  it cleans only safe things: temp files older than a day, package caches (npm, pip, cargo, gradle, Maven versions unused
+  for 60 days), build folders untouched for 30 days (skipped when git-tracked or in a worktree with unmerged commits)
+  and browser caches while the browser is closed. Below 25 GB free (`disk_warn_gb`) a system notification names the
+  biggest folder. Files with hard links, `~/.wisply` (except `out`), `~/.claude`, `.minecraft`, Documents and Desktop are
+  never touched, and nothing is deleted while a game runs. `pc disk` now lists the biggest folders with GB and ideas to
+  move them to another drive (junction on Windows, symlink on macOS/Linux; printed, never run). Categories switch off
+  with `clean_kinds` in `~/.wisply/pc/config.json`; the log shows every deletion and each guard run.
+- Big-file view, checked live with Haiku: constants (`NAME = ...`) are in the outline, look-alike lines fold into one (`L36-L868 105x, every 8 lines: ...`), the hint names Read with offset/limit and Grep first. A 249-line test file comes back as 2.6k instead of 7.4k characters (full 14.7k), and Haiku found a mid-file value in one read.
+- Builds can live outside the repo: `WISPLY_SOURCE` points setup at the source folder (used by the setup test).
+- Read dedupe in the `hook post` hook: an unchanged, already-read file range comes back as a one-line stub with a
+  `wisply more` ref; whole-file `Read` and `cat file` views of 150+ lines / ~3k+ tokens come back as head, outline
+  and tail. Edit/Write and PreCompact clear the per-session table; `Write` on a known file adds an "use Edit" hint
+  (new `PreToolUse` and `PreCompact` entries in `hooks/hooks.json`). `~/.wisply/headroom/reads-off` turns it off.
+- `wisply agents`: one table of every Claude session (`claude agents --json --all`) with name, folder name, status
+  (`running`, `waiting`, `done`, `limit`, `error`), time, tokens, estimated cost and the last line with keys, tokens,
+  mail addresses and paths masked. Also an Agents page in `wisply ui`, an `agents 2 run 1 wait` field in the status
+  line and a line in `wisply status`.
+- Limit guard: the daemon reads "usage limit reached" / "hit your limit" with the reset time and, two minutes after it
+  and never while the game mode runs, continues every background session the limit stopped exactly once
+  (`claude --bg --resume <session> "weiter"`). Sessions that did not run are never started. Events go to
+  `~/.wisply/agents/guard.log`; `config agents_resume off` and `config agents off` switch it off.
+- Events `done`, `waiting`, `limit`, `resumed` and, from other tools through `wisply notify event <kind> <title>`,
+  `ci_red`, `ci_green`, `disk`: a Windows notification that never takes focus (`config agents_notify`) and the
+  `/v1/events` stream.
+- `wisply mobile`: the phone API of the Wisply app (`pair` with QR code and PNG, `list`, `revoke`, `status`, `on`,
+  `off`). It binds only to localhost and Tailscale addresses (never `0.0.0.0`), needs a per-device token (only its
+  hash is stored), allows 20 requests per second per token, answers `401` without a valid token and takes pairing
+  codes once within 10 minutes. Config: `phone_api` (off until the first `mobile pair`), `phone_port`, `phone_bind`,
+  `phone_tailscale`.
+- `SECURITY.md` named a `doctor --offline` switch that 3.0 does not have, and said nothing leaves the computer
+  unless asked. It now lists what does: the daily update check on GitHub (off with `wisply config update off`),
+  the package names and versions `wisply secure` sends to osv.dev (not with `--no-deps`), the search words of
+  `research`, and the downloads of `doctor --fix`.
+- `wisply memory learn` answered "learning N sessions in the background" while a game ran and the model was on this
+  computer, although nothing is learned until the game ends. It now says that the sessions wait and why, and `wisply
+  memory` shows `learning waits: <game> runs`.
+- `wisply secure <url>` counted its one-second gap from the start of the last request, so after a slow answer two
+  requests could reach the site less than a second apart. The gap now starts when the answer is in.
+- The hand-run media measurement (`cargo test measure -- --ignored`) looked for the Wisply folder through
+  `USERPROFILE` only, which macOS and Linux do not set. It now uses the same lookup as everything else.
+
 ### Changed
+- `wisply doctor ai claude` now lists what costs tokens in every request, with tokens per request and per day (read only, nothing is changed): MCP servers and claude.ai connectors and skills without a call in 14 days, skill descriptions over 250 characters, skill bodies over 3k tokens, CLAUDE.md and MEMORY.md files over 2k tokens or with lines over 120 characters, leftover claude-mem, context-engine and graphify hooks, and Wisply slash commands without `disable-model-invocation`. Transcripts are summed once per file and cached in the Wisply home, a repeat run over 200 transcripts takes well under a second. The six Wisply slash commands now carry `disable-model-invocation: true`, so the model no longer lists them in every request.
+- Headroom now also shortens outputs under 60 lines and 4,000 characters, and results of the Grep, WebSearch and
+  WebFetch tools (`hooks/hooks.json` matcher). The limit is a character budget (1,200; 2,000 for logs) instead of a line
+  count: lines over 340 characters are cut to 300 with the full text one `wisply more` away, grep/rg output is grouped
+  by file (path once, at most 6 hits per file, `+N more`), and web text loses cookie, sign-in and footer lines,
+  repeated lines and `utm_` parameters. Error lines are never dropped; short dense output (`git status`, listings) is
+  untouched. On 57 made-up outputs the text shrinks by 58% (125,051 to 52,859 characters, a median of 0.02 ms per call).
+- `wisply.exe` is now a small client (3 MB instead of 19 MB) for `status`, `recall`, `code`, `more` and the hooks
+  (`hook post` included): a call takes about 10 ms instead of about 108 ms, because Windows spends ~100 ms starting a
+  large exe before `main` runs. Output and exit codes are byte for byte the same. The big program is `wisply-full`
+  next to it: the daemon and every other command (`setup`, `update`, `mcp`, `think`, `statusline`, ...) run there, as
+  does any call while the daemon is down. Setup and the self-update place both programs (a 3.0 install with one exe
+  updates as before); if `wisply-full` is missing `wisply` says so and points to `wisply setup`. The single
+  `wisply.exe` on the Releases page is still the full client.
+- `wisply code "what it does"` works without any model: names are split (camelCase, snake_case), words are stemmed, a
+  built-in list of code synonyms (save, write, store, persist / strip, remove, scrub / secret, key, password, token /
+  changed, modified, dirty) widens the question, and the words of the function body, strings, signature and path count
+  with a lower weight (BM25 over the symbols, kept in memory). Questions that used to fall back to plain name matching
+  now land on the right function in the first three hits. The map no longer embeds symbols in the background.
+- `wisply code` does no file work per question: the file check runs every 3 seconds at most and `roots.json` is
+  written once a minute.
+- `wisply recall` copes with typos (fuzzy match against the note words), mixed German/English questions (small
+  built-in word list) and weights covered words per group instead of per word.
+- `headroom` is several times faster. Lines are no longer copied one by one, the template of a line is only built when
+  a kept or repeated line needs it, the error-word check skips lines that cannot match, numbers and JSON strings take
+  an ASCII path, and the hook reads its input once, squeezes without a thread for normal sizes, hashes the full
+  output eight bytes at a time, writes the log after the answer is out and no longer checks the folders on every
+  call. What is cut and what is kept stays the same. `cargo test -p wisply-squeeze --test bench -- --ignored
+  --nocapture` and `cargo test -p wisply --test hook_speed -- --ignored --nocapture` measure it.
+- Session notes cost about 4 to 10 times fewer model tokens: the transcript is condensed harder before the local model
+  sees it (no tool calls except edits and git/PR commands, no code blocks, no "let me ..." narration, repeats gone),
+  the prompt is shorter with a fixed format, the model gets the titles of notes it already has so it does not write
+  them twice, and sessions without edits and with a single message are skipped.
+- "merk dir ..." / "remember ..." understands more phrasings (denk dran, vergiss nicht, don't forget, keep in mind,
+  note that, ...), drops leftovers like "dass" or "that" and stores a clean sentence.
+- More secrets are cut out before anything is stored: Anthropic, Stripe, Google, npm, GitLab, GitHub fine-grained and
+  Discord bot tokens, Bearer and Authorization headers, Discord/Slack/Teams webhook URLs, passwords in URLs, private
+  key blocks, "Passwort ist ...".
+- `frames`, `watch` and `shot`: fewer image tokens, faster. Contact sheets now fit the model's 28 px token grid
+  (no second resize, no empty cells, bigger tiles when there are few), near-identical scenes are dropped instead of
+  padding the sheet to the full count, and `shot` sizes snap to whole tokens (1024 px wide became 1008). Video frames
+  come from one ffmpeg call per batch instead of one per frame, and screen text is read on four frames at once.
 - Headroom v2: about 38% fewer characters than before on 24 real and generated outputs (cargo, Gradle, Maven, npm, tests,
   server logs, JSON), every error and warning line kept, 7 ms at most per output. Head and tail grow with the output,
   progress bars and download lines are dropped, framework stack frames and similar lines are folded, summaries always
   stay, and "0 errors" no longer counts as an error. The full output is still saved and `wisply more` works as before.
 - The repository is now `QDHShamiro/Wisply` (old links redirect). The crates are `wisply`, `wisply-ui` and
   `wisply-core`, `wisply-memory`, `wisply-proto`, `wisply-code`, `wisply-squeeze`.
+- CI: a `v3` run now ends red when one of its steps failed, instead of green with the failure only in the result
+  note. On Windows, Edge is closed after the setup step so its tabs no longer mix into the selftest.
+- Window web packages: TypeScript 7.0.2, marked 18.2.0, sigma 4.0.6.
+- The user's home folder is looked up in one place (`wisply_proto::user_dir`) instead of six copies.
+- The timing test for reading a long transcript takes the best of three reads, so a busy computer no longer fails
+  it (limit unchanged).
 
 ## [3.0.1] - 2026-10-31
 

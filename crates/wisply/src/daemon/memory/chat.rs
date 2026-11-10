@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
@@ -52,10 +52,6 @@ impl Provider {
     }
 }
 
-fn user_home() -> PathBuf {
-    env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).unwrap_or_default()
-}
-
 pub fn gemini_key() -> Option<String> {
     api_key(KEY_NAME)
 }
@@ -64,7 +60,7 @@ pub fn api_key(name: &str) -> Option<String> {
     if let Some(k) = env::var(name).ok().filter(|k| !k.trim().is_empty()) {
         return Some(k.trim().to_string());
     }
-    let file = KEY_FILE.iter().fold(user_home(), |p, part| p.join(part));
+    let file = KEY_FILE.iter().fold(wisply_proto::user_dir(), |p, part| p.join(part));
     let text = fs::read_to_string(file).ok()?;
     text.lines().find_map(|line| {
         let (k, v) = line.split_once('=')?;
