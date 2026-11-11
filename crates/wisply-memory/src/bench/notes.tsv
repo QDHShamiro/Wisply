@@ -1,0 +1,8 @@
+garden	fact	The greenhouse door code is 4812
+garden	decision	Tomatoes move to the south bed	The north bed stays wet after rain, so the roots rot there.
+garden	rule	Never water the cactus shelf on weekdays
+garden	fact	The pump controller listens on port 8080
+garden	fact	The pump controller listens on port 9090	Changed with the new controller, 8080 is no longer used.
+garden	fact	Seeds were ordered on 2026-03-14 from the mill shop
+garden	fact	The beehive stands behind the old shed
+kitchen	fact	The oven needs ten minutes to preheat

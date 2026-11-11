@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use regex::Regex;
 use serde_json::Value;
 use wisply_core::{Call, Fail};
-use wisply_memory::{DRAFTS_MAX, DbResult, Store, date, day, now, oneline, project_of, stop_word};
+use wisply_memory::{DRAFTS_MAX, DbResult, Hit, Store, date, day, now, oneline, project_of, stop_word};
 
 use super::super::ctx::Ctx;
 use super::super::{Daemon, config, routines};
@@ -27,7 +27,8 @@ const TYPED_PREFIX: usize = 400;
 const HINT_BUDGET: Duration = Duration::from_millis(800);
 const HINT_SIM: f32 = 0.6;
 const HINT_POOL: usize = 8;
-const HINTS: usize = 2;
+pub(super) const HINTS: usize = 2;
+const HINT_WORDS: usize = 3;
 const HINT_TERMS: usize = 2;
 const HINT_SHARE: f64 = 0.4;
 const SAVED_MIN: usize = 6;
@@ -121,7 +122,7 @@ fn compact_text(s: &mut Store, here: &str) -> DbResult<String> {
     Ok(lines.join("\n"))
 }
 
-fn start_text(s: &mut Store, here: &str, commits: Vec<String>) -> DbResult<String> {
+pub(super) fn start_text(s: &mut Store, here: &str, commits: Vec<String>) -> DbResult<String> {
     let mut lines = vec![format!(
         "Wisply memory ({}): wisply recall \"<words>\" searches {} notes (vault, session notes and Claude memory \
          included), wisply remember \"<fact>\" keeps one, wisply todo tracks work.",
@@ -284,8 +285,7 @@ fn memory_tip(d: &Daemon, ctx: &mut Ctx, prompt: String) -> Result<String, Fail>
             "Wisply memory saved #{id}: \"{shown}\" (wisply forget {id} if that was not meant to be kept)"
         ));
     }
-    let asked = stems(&without_paths(&prompt));
-    if asked.len() < 3 {
+    if stems(&without_paths(&prompt)).len() < HINT_WORDS {
         return Ok(String::new());
     }
     let here = project_of(&ctx.cwd);
@@ -293,26 +293,15 @@ fn memory_tip(d: &Daemon, ctx: &mut Ctx, prompt: String) -> Result<String, Fail>
         return Ok(String::new());
     };
     let vec = vecs.pop();
-    let hits = with_store(d, |s| s.search(&prompt, &here, HINT_POOL, vec.as_deref(), HINT_SIM))?;
+    let hits = with_store(d, |s| hints(s, &prompt, &here, vec.as_deref()))?;
     let mut out = Vec::new();
-    for h in hits {
-        let n = &h.note;
+    for n in hits.iter().map(|h| &h.note) {
         let key = format!("m:{}", n.id);
-        if ctx.told.contains_key(&key)
-            || n.kind == "session"
-            || n.kind == "draft"
-            || (n.project != here && !n.project.is_empty())
-        {
+        if ctx.told.contains_key(&key) {
             continue;
         }
-        let have = stems(&format!("{} {}", n.title, n.body));
-        let hit = asked.intersection(&have).count();
-        let words_ok = hit >= HINT_TERMS && hit as f64 / asked.len() as f64 >= HINT_SHARE;
-        let titled = !asked.is_disjoint(&stems(&n.title));
-        if words_ok && titled && h.sim.unwrap_or(0.0) >= HINT_SIM {
-            ctx.told.insert(key, now());
-            out.push(format!("#{} {}", n.id, oneline(&n.title, 100)));
-        }
+        ctx.told.insert(key, now());
+        out.push(format!("#{} {}", n.id, oneline(&n.title, 100)));
         if out.len() >= HINTS {
             break;
         }
@@ -322,6 +311,25 @@ fn memory_tip(d: &Daemon, ctx: &mut Ctx, prompt: String) -> Result<String, Fail>
     } else {
         format!("Wisply memory may help (wisply recall <id>): {}", out.join(" | "))
     })
+}
+
+pub(super) fn hints(s: &mut Store, prompt: &str, here: &str, vec: Option<&[f32]>) -> DbResult<Vec<Hit>> {
+    let asked = stems(&without_paths(prompt));
+    if asked.len() < HINT_WORDS || vec.is_none() {
+        return Ok(Vec::new());
+    }
+    let mut hits = s.search(prompt, here, HINT_POOL, vec, HINT_SIM)?;
+    hits.retain(|h| {
+        let n = &h.note;
+        if n.kind == "session" || n.kind == "draft" || (n.project != here && !n.project.is_empty()) {
+            return false;
+        }
+        let have = stems(&format!("{} {}", n.title, n.body));
+        let hit = asked.intersection(&have).count();
+        let words_ok = hit >= HINT_TERMS && hit as f64 / asked.len() as f64 >= HINT_SHARE;
+        words_ok && !asked.is_disjoint(&stems(&n.title)) && h.sim.unwrap_or(0.0) >= HINT_SIM
+    });
+    Ok(hits)
 }
 
 #[cfg(test)]
