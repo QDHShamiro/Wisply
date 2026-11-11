@@ -169,8 +169,8 @@ pub use doctor::run as doctor;
 pub use media::tools::{ffmpeg, run as run_tool, which};
 #[cfg(windows)]
 pub use media::{multipart, spoken, whisper_service};
-#[cfg(windows)]
 pub use memory::bench::run as memory_bench;
+#[cfg(windows)]
 pub use memory::chat::api_key;
 pub use squeeze::{MAX_BYTES as SQUEEZE_MAX_BYTES, USAGE as SQUEEZE_USAGE};
 pub use web::installed_browsers;
