@@ -26,6 +26,7 @@ video   watch <link|file|e40> [\"question\"] [--from 1:00 --to 2:00] [--at 0:10,
 memory  recall \"words\" [--all] [--max n] | recall <id>   remember \"fact\" [--kind k]   forget <id>
         todo [--all] | todo add \"task\" [--list name] [--doing] | todo done|doing|drop|open <id> [note] | todo note <id> \"text\"
         memory [learn|on|off]   memory lessons | memory unlearn <n> (fixes learned from failed commands)
+        memory bench [freeze | run | compare <old> <new> | open | judge] (measures the search on a frozen copy)
         wiki | wiki accept <n> [folder] | wiki drop <n> | wiki show <n> (drafts in the vault inbox)
         ui (a window: projects, notes, to-dos, graph, what each session does)
 keys    keys [site] [-f x]   keys add <site> \"ctrl+k=what\"   keys rm <site> <key>

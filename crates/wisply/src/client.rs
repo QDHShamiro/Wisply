@@ -55,6 +55,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     if first == "ui" {
         return open_ui(&home);
     }
+    if first == "memory" && args.get(1).is_some_and(|a| a == "bench") {
+        return crate::daemon::memory_bench(&home, &args[2..]);
+    }
     if first == "squeeze" {
         return crate::pipe::squeeze(&home, &args);
     }

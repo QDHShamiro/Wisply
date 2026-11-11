@@ -8,6 +8,15 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply memory bench`: measures how well the memory search answers, so a change to it can be proven instead of
+  felt. `bench freeze` copies the memory once, `bench run` asks every labelled question of
+  `~/.wisply/bench/memory/questions.jsonl` against that copy and prints hit@1, hit@3, MRR, hits on outdated notes,
+  wrong hints, answer size, time and the size of the start info, per class of question as well; `--vectors` adds the
+  cached query vectors, `--hold` asks the hold-out part and shows sums only. `bench compare <old> <new>` takes two
+  tags or result files, judges both with the labels of today on the questions both runs asked, counts won and lost
+  questions and calls it a gain only with ten won and twice as many won as lost; `bench open` lists the hits nobody judged yet and the questions still without a good note, `bench judge`
+  labels them. Runs without a model and without the daemon, the questions never
+  leave the PC, and every result carries the commit it was measured on.
 - `wisply peek <file|folder> ... [--head 10] [--outline]`: size, line count and one word of advice per file (`whole`,
   `parts`, `grep`, `skip`) for many files in one call, before any of them is read. Folders list their files and mark
   build output and dependency folders; `--outline` adds the functions and types with line numbers. Runs in the

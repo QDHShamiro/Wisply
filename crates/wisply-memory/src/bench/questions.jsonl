@@ -1,0 +1,7 @@
+{"id": "door", "class": "fact", "project": "garden", "query": "greenhouse door code", "good": [1]}
+{"id": "tomato", "class": "decision", "project": "garden", "query": "why do the tomatoes move to the south bed", "good": [2]}
+{"id": "cactus", "class": "rule", "project": "garden", "query": "water the cactus shelf", "good": [3], "bad": [8]}
+{"id": "pump", "class": "stale", "project": "garden", "query": "pump controller port", "good": [5], "old": [4]}
+{"id": "seeds", "class": "time", "project": "garden", "query": "when were the seeds ordered", "good": [6]}
+{"id": "tower", "class": "none", "project": "garden", "query": "how tall is the lighthouse"}
+{"id": "bees", "class": "fact", "cross": true, "split": "hold", "project": "garden", "query": "Wo steht der Bienenstock", "good": [7]}

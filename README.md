@@ -615,7 +615,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | Find | `recall "words" [--all]` · `recall 42` · `forget 42` |
 | To-dos | `todo [--all]` · `todo add "task" --list x` · `todo doing\|done\|drop 12` · `todo note 12 "text"` |
 | Notes | `wiki` · `wiki show 3` · `wiki accept 3 [folder]` · `wiki drop 3` · `config vault <folder>` · `config vault_inbox Inbox` |
-| Model | `memory` · `memory model` · `memory learn` · `memory lessons` · `memory import claude-mem` · `config memory_api <url>` · `memory off` |
+| Model | `memory` · `memory model` · `memory learn` · `memory lessons` · `memory import claude-mem` · `config memory_api <url>` · `memory off` · `memory bench` |
 
 **Code map** (per project folder, kept in `~/.wisply/code`)
 

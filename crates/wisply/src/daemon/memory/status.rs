@@ -5,7 +5,7 @@ use super::super::route::later;
 use super::super::{Daemon, config, game};
 use super::{chat, embed, index, learner, with_store};
 
-const MEMORY_HELP: &str = "wisply memory [learn | on | off | lessons | unlearn <n>]";
+const MEMORY_HELP: &str = "wisply memory [learn | on | off | lessons | unlearn <n> | bench]";
 const FIX_CHARS: usize = 80;
 
 pub fn memory(d: &Daemon, c: &Call) -> Result<String, Fail> {

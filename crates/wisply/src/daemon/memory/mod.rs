@@ -1,3 +1,4 @@
+pub mod bench;
 mod blind;
 mod board;
 pub mod chat;
@@ -18,7 +19,8 @@ use std::time::Duration;
 
 use wisply_core::{Call, Fail};
 use wisply_memory::{
-    DbResult, NewNote, Note, Store, Todo, date, day, mentions, oneline, project_of, scrub, short, snippet, terms, words,
+    DbResult, Hit, NewNote, Note, Store, Todo, date, day, mentions, oneline, project_of, scrub, short, snippet, terms,
+    words,
 };
 
 use super::Daemon;
@@ -172,24 +174,35 @@ fn recall(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         Ok(hits)
     })?;
     let note = if why.is_empty() { String::new() } else { format!("words only, {why}") };
-    let todos = open_todos(d, &text)?;
+    let todos = with_store(d, |s| todo_hits(s, &text))?;
+    Ok(shown(&found, &todos, &here, &text, &note))
+}
+
+fn shown(found: &[Hit], todos: &[Todo], here: &str, text: &str, note: &str) -> String {
     if found.is_empty() && todos.is_empty() {
         let tail = if note.is_empty() { String::new() } else { format!(" ({note})") };
-        return Ok(format!("nothing remembered about \"{text}\"{tail}"));
+        return format!("nothing remembered about \"{text}\"{tail}");
     }
-    let want = terms(&text);
+    let want = terms(text);
     let mut lines: Vec<String> = todos.iter().map(|t| format!("to-do {}", todo_line(t, true))).collect();
     lines.extend(found.iter().map(|h| line(&h.note, !here.is_empty() && h.note.project != here, &want)));
     let tail = if note.is_empty() { String::new() } else { format!("; {note}") };
-    Ok(format!("{}\n(recall <id> = full note, ~Nt = size{tail})", lines.join("\n")))
+    format!(
+        "{}
+(recall <id> = full note, ~Nt = size{tail})",
+        lines.join(
+            "
+"
+        )
+    )
 }
 
-fn open_todos(d: &Daemon, text: &str) -> Result<Vec<Todo>, Fail> {
+fn todo_hits(s: &Store, text: &str) -> DbResult<Vec<Todo>> {
     let raw = words(text);
     if raw.is_empty() {
         return Ok(Vec::new());
     }
-    let all = with_store(d, |s| s.todos(None, true))?;
+    let all = s.todos(None, true)?;
     Ok(all.into_iter().filter(|t| mentions(&format!("{} {}", t.task, t.note), &raw)).take(TODO_HITS).collect())
 }
 

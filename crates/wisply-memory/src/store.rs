@@ -124,6 +124,7 @@ pub struct Store {
     pub(crate) vecs: Option<(i64, Vec<i64>, Vec<f32>)>,
     lex: Arc<RwLock<NoteIndex>>,
     seen: Option<(i64, u64)>,
+    pub(crate) clock: Option<f64>,
 }
 
 pub fn now() -> f64 {
@@ -199,7 +200,7 @@ impl Store {
             let _ = db.execute(sql, []);
         }
         let key = dir.join("memory.db");
-        Ok(Store { db, vecs: None, lex: shared(&key), seen: None })
+        Ok(Store { db, vecs: None, lex: shared(&key), seen: None, clock: None })
     }
 
     pub fn note(&self, id: i64) -> rusqlite::Result<Option<Note>> {
@@ -380,7 +381,7 @@ impl Store {
         if cands.is_empty() {
             return Ok(Vec::new());
         }
-        let t = now();
+        let t = self.clock.unwrap_or_else(now);
         let boost = |s: f64, cover: f64, proj: &str, user: bool, updated: f64| {
             let mut s = s * super::rank::weight(cover);
             if !project.is_empty() && proj == project {
