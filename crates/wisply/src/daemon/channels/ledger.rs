@@ -67,10 +67,14 @@ pub fn skip(home: &Path, key: &str, way: &str, instead: &str) -> bool {
 }
 
 pub fn last(home: &Path, key: &str) -> Option<String> {
+    told(home, key, now())
+}
+
+fn told(home: &Path, key: &str, at: u64) -> Option<String> {
     let all = load(home);
     let last = all.get(key)?.get("last")?;
     let way = last["way"].as_str()?;
-    let ago = ago(now().saturating_sub(last["at"].as_u64().unwrap_or(0)));
+    let ago = ago(at.saturating_sub(last["at"].as_u64().unwrap_or(0)));
     let state = if last["ok"].as_bool() == Some(true) { "worked" } else { "failed" };
     let why = last["why"].as_str().filter(|w| !w.is_empty()).map(|w| format!(": {w}")).unwrap_or_default();
     Some(format!("{way} {state} {ago} ago{why}"))
@@ -114,7 +118,10 @@ mod tests {
         assert!(!skip(&home, "web:a.com", "direct", "brave"));
         note(&home, "web:a.com", "brave", true, "");
         assert!(skip(&home, "web:a.com", "direct", "brave"));
-        assert_eq!(last(&home, "web:a.com").as_deref(), Some("brave worked 0 s ago"));
+        let noted = load(&home)["web:a.com"]["last"]["at"].as_u64().unwrap();
+        assert_eq!(told(&home, "web:a.com", noted).as_deref(), Some("brave worked 0 s ago"));
+        assert_eq!(told(&home, "web:a.com", noted + 90).as_deref(), Some("brave worked 1 min ago"));
+        assert!(last(&home, "web:a.com").is_some_and(|t| t.starts_with("brave worked ")));
         assert_eq!(hosts(&home, "web:"), vec!["a.com -> brave"]);
         note(&home, "web:a.com", "direct", true, "");
         assert!(!skip(&home, "web:a.com", "direct", "brave"));
