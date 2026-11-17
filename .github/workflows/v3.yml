@@ -75,7 +75,9 @@ jobs:
       - name: Test
         id: test
         continue-on-error: true
-        run: cargo nextest run --workspace --locked --no-tests=pass --no-fail-fast
+        run: |
+          cargo build --locked -p wisply-task
+          cargo nextest run --workspace --locked --no-tests=pass --no-fail-fast
       - name: Linux desktop through AT-SPI
         id: xdesk
         if: runner.os == 'Linux'
