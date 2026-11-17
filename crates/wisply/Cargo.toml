@@ -14,10 +14,6 @@ path = "src/fast.rs"
 name = "wisply-full"
 path = "src/main.rs"
 
-[[bin]]
-name = "wisply-task"
-path = "src/task.rs"
-
 [build-dependencies]
 winresource.workspace = true
 
