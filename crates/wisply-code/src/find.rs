@@ -231,6 +231,39 @@ mod tests {
     }
 
     #[test]
+    fn test_files_rank_below_the_code_they_test() {
+        let code = ("src/field.rs", "set_value", "function", "typed value lands field");
+        for path in ["src/field_tests.rs", "web/field.spec.ts"] {
+            let test = (path, "a_typed_value_lands_in_the_field", "function", "typed value lands field");
+            let lex = lex_of(&[code, test]);
+            let first = lex.search("where a typed value lands in a field", 2).first().map(|s| s.name.clone());
+            assert_eq!(first.as_deref(), Some("set_value"), "{path}");
+        }
+    }
+
+    #[test]
+    fn a_module_is_test_code_by_its_whole_name() {
+        let named = |name: &str, kind: &str| Sym {
+            id: 1,
+            path: "src/field.rs".into(),
+            name: name.into(),
+            low: name.to_lowercase(),
+            kind: kind.into(),
+            line: 1,
+            end: 2,
+            parent: String::new(),
+            sig: String::new(),
+        };
+        for name in ["tests", "test", "Tests", "field_tests", "unit_test"] {
+            assert!(is_test(&named(name, "mod")), "{name}");
+        }
+        for name in ["latest", "contest", "attests", "tested"] {
+            assert!(!is_test(&named(name, "mod")), "{name}");
+        }
+        assert!(!is_test(&named("tests", "function")));
+    }
+
+    #[test]
     #[ignore = "debug helper: WISPLY_BENCH_HOME and WISPLY_PEEK_CODE"]
     fn explain() {
         let (Some(home), Ok(query)) = (std::env::var_os("WISPLY_BENCH_HOME"), std::env::var("WISPLY_PEEK_CODE")) else {

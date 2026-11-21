@@ -428,6 +428,27 @@ mod tests {
     }
 
     #[test]
+    fn callers_in_a_tests_file_are_marked_and_come_last() {
+        let ix = index("callers-tests-file");
+        call(&ix, "src/trace_tests.rs", 4, "it_traces");
+        call(&ix, "src/trace.rs", 9, "run");
+        let out = ix.callers("search").unwrap();
+        let rows: Vec<&str> = out.lines().collect();
+        assert_eq!(rows[1], "  src/trace.rs:9 in run", "{out}");
+        assert_eq!(rows[2], "  src/trace_tests.rs:4 in it_traces [test]", "{out}");
+    }
+
+    #[test]
+    fn a_file_named_like_its_tests_is_a_test_file() {
+        for path in ["src/trace_tests.rs", "pkg/trace_test.go", "web/trace.spec.ts", "src/safety/tests.rs"] {
+            assert!(is_test_path(path), "{path}");
+        }
+        for path in ["src/latest.rs", "src/contests.rs", "src/attests.rs"] {
+            assert!(!is_test_path(path), "{path}");
+        }
+    }
+
+    #[test]
     fn names_with_several_words_beat_names_with_one() {
         let mut ix = index("names");
         sym(&ix, "save", "src/x.rs", "");
