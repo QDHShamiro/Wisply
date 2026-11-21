@@ -7,6 +7,7 @@ mod junk;
 mod kit;
 #[cfg(windows)]
 mod launch;
+mod lint;
 mod mcp;
 mod more;
 mod peek;
@@ -16,6 +17,7 @@ mod pupil;
 mod reads;
 mod readstate;
 mod readview;
+mod review;
 mod risk;
 mod setup;
 mod skill;

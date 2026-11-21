@@ -7,7 +7,10 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 const EXE: &str = env!("CARGO_BIN_EXE_wisply-full");
-const TASK: &str = env!("CARGO_BIN_EXE_wisply-task");
+
+fn task() -> PathBuf {
+    PathBuf::from(EXE).with_file_name(if cfg!(windows) { "wisply-task.exe" } else { "wisply-task" })
+}
 
 struct Home(PathBuf);
 
@@ -50,11 +53,11 @@ impl Drop for Home {
 #[test]
 fn the_task_runner_starts_wisply_without_a_window_and_logs() {
     let home = Home::new("task");
-    let status = Command::new(TASK).arg(&home.0).arg("version").status().unwrap();
+    let status = Command::new(task()).arg(&home.0).arg("version").status().unwrap();
     assert!(status.success());
     let log = fs::read_to_string(home.0.join("schedule.log")).unwrap();
     assert_eq!(log.trim(), env!("CARGO_PKG_VERSION"));
-    assert_eq!(Command::new(TASK).status().unwrap().code(), Some(2));
+    assert_eq!(Command::new(task()).status().unwrap().code(), Some(2));
     assert_eq!(home.run(&["routine", "schedules"]).1.split(" -> ").next(), Some("no scheduled routines"));
     let (code, out) = home.run(&["routine", "unschedule", "nope"]);
     assert!(code == 1 && out.starts_with("err: nope has no schedule"), "{out}");

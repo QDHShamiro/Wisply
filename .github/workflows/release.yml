@@ -58,7 +58,7 @@ jobs:
               lipo -create -output "out/$b" "target/aarch64-apple-darwin/release/$b" "target/x86_64-apple-darwin/release/$b"
             done
           else
-            cargo build --release --locked -p wisply -p wisply-ui
+            cargo build --release --locked -p wisply -p wisply-ui -p wisply-task
             if [ "$RUNNER_OS" = Windows ]; then
               cp target/release/wisply.exe target/release/wisply-full.exe target/release/wisply-ui.exe target/release/wisply-task.exe out/
             else

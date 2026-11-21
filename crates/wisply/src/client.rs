@@ -40,6 +40,12 @@ pub fn run(raw: &[String]) -> ExitCode {
     if first == "update" {
         return crate::update::run(&home, &args[1..]);
     }
+    if matches!(first, "lint" | "safe") {
+        return crate::lint::run(&home, &args[1..]);
+    }
+    if matches!(first, "review" | "analyze") {
+        return crate::review::run(&home, &args[1..]);
+    }
     if matches!(first, "setup" | "install" | "uninstall") {
         return crate::setup::run(&home, &args);
     }
