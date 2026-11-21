@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::expand::variants;
+use super::expand::{parts, variants};
 use super::store::{Hit, Note};
 use super::text::{oneline, similar, stop_word};
 
@@ -64,6 +64,10 @@ pub fn groups(terms: &[String]) -> Vec<Group> {
         .map(|t| {
             let mut group = vec![t.clone()];
             group.extend(variants(t).into_iter().map(String::from));
+            for p in parts(t) {
+                group.extend(variants(&p).into_iter().map(String::from));
+                group.push(p);
+            }
             group
         })
         .collect()

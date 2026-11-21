@@ -1,0 +1,707 @@
+titel title titles
+inventar inventory
+höhe height
+schaden damage
+groß big large
+größe size
+klein small little tiny
+einstellung einstellungen setting settings config konfiguration configuration
+option optionen options
+abbrechen abgebrochen abbruch abort aborted cancel cancelled canceled
+löschen gelöscht delete deleted erase entfernen entfernt remove removed
+neu new
+datenset datensatz dataset
+umweg umgehung umgehen umgangen detour bypass workaround
+sicht sight view
+luft air
+wasser water
+notfall emergency
+passwort kennwort password
+zurücksetzen zurückgesetzt reset
+sperren gesperrt sperre lock locked
+entsperren entsperrt freischalten freigeschaltet unlock unlocked
+blockieren blockiert blocken geblockt sperren gesperrt block blocked blocking
+unterbefehl subcommand
+hintergrund background
+dunkelgrau darkgray
+grau gray grey
+schwelle schwellen schwellwert threshold thresholds
+begrenzen begrenzt begrenzung limit limited cap
+start startup boot starten gestartet launch launched
+serverstart boot startup
+fehler error errors failure bug bugs
+fehlermeldung error
+beheben behoben behebung fix fixed fixes
+reparieren repariert reparatur repair repaired
+erstellen erstellt anlegen angelegt create created
+erzeugen erzeugt generieren generiert generate generated
+hinzufügen hinzugefügt add added
+umsetzen umgesetzt umsetzung implement implemented implementation
+ändern änderung änderungen geändert change changed changes modify modified
+überarbeiten überarbeitet redesign redesigned rewrite rewritten rework
+umbauen umgebaut umbau refactor refactored
+speichern gespeichert save saved store stored persist
+speicher arbeitsspeicher memory ram
+gedächtnis memory
+lager lagerung storage
+spieler player players
+waffe waffen weapon weapons gun guns
+zombie zombies
+mauer wall barricade
+bauen gebaut build built building
+fertig erledigt abgeschlossen done complete completed finished
+plan planung planen geplant plans planning planned
+zeitplan schedule scheduled
+ziel ziele goal goals target targets
+test tests testen getestet testing tested
+anmelden angemeldet anmeldung einloggen eingeloggt login signin
+abmelden abgemeldet logout signout
+registrieren registriert registrierung register registered signup registration
+benutzer nutzer user users
+sprache sprachen language languages
+sprache stimme voice speech
+bild bilder image images picture pictures
+foto fotos photo photos
+ordner verzeichnis folder folders directory
+datei dateien file files
+schnell fast quick
+geschwindigkeit tempo speed
+leistung performance
+langsam slow slower
+sicherheit security safety
+verschlüsseln verschlüsselt verschlüsselung encrypt encrypted encryption
+entschlüsseln entschlüsselt decrypt decrypted
+abfrage abfragen query queries
+anzeige anzeigen angezeigt zeigen gezeigt einblenden display show shown
+oberfläche benutzeroberfläche interface ui gui
+zeile zeilen line lines row rows
+wert werte value values
+vorlage vorlagen template templates
+meldung meldungen nachricht nachrichten message messages
+befehl befehle command commands
+berechtigung berechtigungen rechte permission permissions
+sichern gesichert sicherung backup backups
+aktualisieren aktualisiert aktualisierung update updated updates upgrade
+fenster window windows
+kopieren kopiert kopie copy copied
+verbinden verbunden verbindung connect connected connection
+abstürzen abgestürzt absturz crash crashed crashes
+gruppe gruppen gruppieren gruppiert group groups grouped
+zeit time
+runde runden round rounds
+runden gerundet rundung round rounded rounding
+ergebnis ergebnisse result results
+bester beste best
+preis preise kosten price prices cost costs
+pause pausieren pausiert break paused
+eindeutig einzigartig unique
+niemals nie never
+immer always
+öffnen geöffnet open opened
+schließen geschlossen close closed
+suche suchen gesucht search searching
+finden gefunden find found
+senden gesendet schicken geschickt send sent
+empfangen erhalten receive received
+empfänger recipient recipients receiver
+absender sender
+verschieben verschoben move moved
+bewegen bewegt bewegung movement motion move
+einfügen eingefügt paste insert inserted
+überspringen übersprungen skip skipped
+überschreiben überschrieben overwrite overwritten override
+zurücknehmen zurückgenommen rückgängig revert reverted undo rollback
+auslösen ausgelöst auslöser trigger triggered triggers
+teilen geteilt share shared
+aufteilen aufgeteilt split
+anteil anteile share shares portion
+prozent percent percentage
+zählen gezählt zähler count counter counting
+anzahl count number amount
+messen gemessen messung measure measured measurement
+vergleichen verglichen vergleich compare compared comparison
+prüfen geprüft prüfung überprüfen überprüft check checked validate validation verify
+laden geladen load loaded loading
+herunterladen heruntergeladen download downloaded
+hochladen hochgeladen upload uploaded
+installieren installiert installation install installed
+deinstallieren deinstalliert uninstall uninstalled
+stoppen gestoppt anhalten angehalten stop stopped halt
+neustart neustarten neugestartet restart restarted reboot
+beenden beendet exit quit shutdown
+warten gewartet wait waiting
+wartung maintenance
+bestätigen bestätigt bestätigung confirm confirmed confirmation
+ablehnen abgelehnt reject rejected deny denied decline declined
+erlauben erlaubt zulassen zugelassen allow allowed permit
+verbieten verboten untersagt forbid forbidden prohibited
+verstecken versteckt ausblenden ausgeblendet hide hidden
+sichtbar sichtbarkeit visible visibility
+unsichtbar invisible
+auswählen ausgewählt auswahl select selected selection choose chosen
+klicken geklickt klick click clicked
+eingeben eingegeben eingabe input enter entered
+ausgabe ausgeben ausgegeben output
+drucken gedruckt print printed
+lesen gelesen read reading
+schreiben geschrieben write written writing
+ersetzen ersetzt replace replaced
+umbenennen umbenannt rename renamed
+zusammenführen zusammengeführt merge merged
+trennen getrennt separate separated disconnect
+sortieren sortiert sortierung sort sorted sorting
+reihenfolge order sequence ordering
+filtern gefiltert filter filtered
+kürzen gekürzt shorten shortened trim truncate truncated
+erweitern erweitert erweiterung extend extended extension
+erhöhen erhöht steigern gesteigert increase increased raise
+senken gesenkt verringern verringert reduzieren reduziert decrease reduce reduced lower
+sammeln gesammelt collect collected gather
+kaufen gekauft kauf buy bought purchase purchased
+verkaufen verkauft verkauf sell sold sale
+bezahlen bezahlt zahlung zahlungen pay paid payment payments
+erstatten erstattet erstattung rückerstattung refund refunded
+kündigen gekündigt kündigung cancel cancellation
+lernen gelernt learn learned learning
+merken gemerkt erinnern erinnert remember remembered
+erinnerung erinnerungen reminder reminders
+vergessen forget forgotten
+zusammenfassen zusammengefasst zusammenfassung summary summarize summarized
+übersetzen übersetzt übersetzung translate translated translation
+erklären erklärt erklärung explain explained explanation
+frage fragen gefragt question questions ask asked
+antwort antworten geantwortet answer answered reply response
+entscheiden entschieden entscheidung entscheidungen decide decided decision decisions
+vorschlagen vorgeschlagen vorschlag vorschläge suggest suggested suggestion proposal
+empfehlen empfohlen empfehlung recommend recommended recommendation
+verbessern verbessert verbesserung improve improved improvement
+kaputt defekt broken
+funktioniert funktionieren works working
+ausführen ausgeführt ausführung run execute executed execution
+aufrufen aufgerufen aufruf call called invoke
+überwachen überwacht überwachung monitor monitoring watch
+protokoll protokollieren log logs logging
+aufnehmen aufgenommen aufnahme aufzeichnen aufgezeichnet record recorded recording
+abspielen abgespielt wiedergabe play playback
+zeichnen gezeichnet draw drawn render rendered
+drehen gedreht drehung rotate rotated rotation
+springen gesprungen sprung jump jumped
+rennen sprinten sprint sprinting
+fliegen geflogen flug fly flying flight
+fallen gefallen fall falling
+schlagen geschlagen schlag hieb hiebe hit hits strike
+angreifen angegriffen angriff attack attacked
+verteidigen verteidigt verteidigung defend defense
+töten getötet kill killed kills
+sterben gestorben tod death died
+heilen geheilt heilung heal healed healing
+betäuben betäubt betäubung stun stunned
+schweben schwebend schwebt float floating hover hovering
+einzäunen eingezäunt umzäunen umzäunt enclose enclosed fence fenced
+graben gegraben dig digging
+abbauen abgebaut mine mined mining
+platzieren platziert setzen gesetzt place placed
+zerstören zerstört destroy destroyed
+herstellen hergestellt craften craft crafted crafting
+verzaubern verzaubert verzauberung enchant enchanted enchantment
+tauschen getauscht handeln handel trade traded trading
+haltbarkeit durability
+benutzen benutzt verwenden verwendet nutzen genutzt nutzung use used usage
+benötigen benötigt require required requires
+geben gegeben give given
+holen geholt abrufen abgerufen fetch fetched
+veröffentlichen veröffentlicht veröffentlichung publish published release released
+entwickeln entwickelt entwicklung develop developed development
+entwerfen entworfen entwurf entwürfe draft drafts
+gestalten gestaltet gestaltung design layout
+leeren geleert clear cleared
+aufräumen aufgeräumt bereinigen bereinigt cleanup clean cleaned
+wiederherstellen wiederhergestellt wiederherstellung restore restored recovery recover
+umziehen umgezogen umzug migrieren migriert migration migrate migrated
+einrichten eingerichtet einrichtung setup configure configured
+bereitstellen bereitgestellt bereitstellung deploy deployed deployment
+ausrollen ausgerollt rollout
+aktivieren aktiviert einschalten eingeschaltet enable enabled activate activated
+deaktivieren deaktiviert ausschalten ausgeschaltet abschalten abgeschaltet disable disabled deactivate
+umschalten umgeschaltet schalter toggle switch
+bannen gebannt bann ban banned
+stummschalten stummgeschaltet stumm mute muted
+melden gemeldet report reported
+markieren markiert geflaggt flag flagged mark marked
+warnen gewarnt warnung warnungen warning warnings warn warned
+bestrafen bestraft strafe strafen punish punishment penalty
+fehlschlagen fehlgeschlagen gescheitert fail failed fails
+hängen aufgehängt eingefroren einfrieren freeze frozen hang
+verzögern verzögert verzögerung delay delayed
+wiederholen wiederholt wiederholung repeat repeated retry
+verfolgen verfolgt track tracked tracking
+beobachten beobachtet observe observed
+erkennen erkannt erkennung detect detected detection recognize
+ignorieren ignoriert ignore ignored
+erwarten erwartet expect expected
+vermeiden vermieden avoid avoided
+verhindern verhindert prevent prevented
+schützen geschützt schutz protect protected protection
+wächter guard watchdog
+umleiten umgeleitet weiterleiten weitergeleitet weiterleitung redirect forward forwarding
+verteilen verteilt distribute distributed
+zuweisen zugewiesen assign assigned
+übergeben übergabe handoff handover
+einbinden eingebunden integrieren integriert integrate integrated
+einbetten eingebettet einbettung embed embedded embedding embeddings
+auslesen ausgelesen parse parsed extract extracted
+umwandeln umgewandelt konvertieren konvertiert convert converted
+berechnen berechnet berechnung calculate calculated calculation compute
+schätzen geschätzt schätzung estimate estimated
+bewerten bewertet bewertung rate rated rating score
+gewichten gewichtet gewicht weight weighted
+mischen gemischt mix mixed shuffle
+stapeln gestapelt stapel stack stacked
+verknüpfen verknüpft verknüpfung link linked
+anhängen angehängt anhang attach attached attachment append
+einrücken eingerückt indent indented
+hervorheben hervorgehoben highlight highlighted
+schwärzen geschwärzt redact redacted
+unterschreiben unterschrieben unterschrift signatur sign signed signature
+zustimmen zugestimmt zustimmung einwilligung consent agree agreed
+widersprechen widerspruch einspruch appeal object objection
+beschweren beschwerde complaint complain
+helfen geholfen hilfe help support
+verstehen verstanden understand understood
+wissen gewusst know known knowledge
+wünschen gewünscht wunsch wünsche wish request
+versuchen versucht versuch try tried attempt
+gewinnen gewonnen sieg win won victory
+verlieren verloren niederlage lose lost defeat
+spielen gespielt play played
+spiel spiele game games
+fortsetzen fortgesetzt weitermachen continue continued resume
+freigeben freigegeben freigabe genehmigen genehmigt genehmigung approve approved approval
+verweigern verweigert refuse refused
+einladen eingeladen einladung invite invited invitation
+beitreten beigetreten join joined
+verlassen leave leaving
+folgen gefolgt follow followed
+abonnieren abonniert abo abonnement subscribe subscribed subscription
+datenbank datenbanken database databases db
+tabelle tabellen table tables
+spalte spalten column columns
+zelle zellen cell cells
+eintrag einträge entry entries record records
+schlüssel key keys
+liste listen list lists
+warteschlange queue queued
+baum tree
+knoten node nodes
+kante kanten edge edges
+festplatte platte disk drive hdd
+prozessor cpu
+grafikkarte gpu
+netzwerk netz network
+anfrage anfragen request requests
+schnittstelle schnittstellen interface api
+klasse klassen class classes
+methode methoden method methods
+funktion funktionen function functions
+variable variablen variables
+konstante konstanten constant constants
+schleife schleifen loop loops
+bedingung bedingungen condition conditions
+ausnahme ausnahmen exception exceptions
+hinweis hinweise hint hints notice tip tips
+bibliothek bibliotheken library libraries
+abhängigkeit abhängigkeiten dependency dependencies
+paket pakete package packages
+modul module modules
+plugin plugins erweiterung erweiterungen extension extensions addon
+version versionen versions
+zweig zweige branch branches
+konflikt konflikte conflict conflicts
+quellcode quelltext code source
+kommentar kommentare comment comments
+dokumentation doku docs documentation
+anleitung anleitungen guide tutorial manual
+beispiel beispiele example examples sample
+lizenz lizenzen license licence licenses licensing
+geheimnis geheim secret secrets
+zugangsdaten credentials
+zugriff zugriffe access
+rolle rollen role roles
+besitzer eigentümer inhaber owner owners
+gast gäste guest guests
+mitglied mitglieder member members
+kunde kunden customer customers client clients
+käufer buyer buyers
+verkäufer seller sellers
+bestellung bestellungen order orders
+rechnung rechnungen invoice invoices bill
+lieferung delivery
+produkt produkte product products
+angebot angebote offer offers
+kostenlos gratis umsonst free
+kostenpflichtig paid premium
+nutzungsbedingungen agb terms tos
+datenschutz privacy gdpr dsgvo
+impressum imprint
+minderjährig minderjährige minderjährigen minor minors underage
+eltern parents parent
+vertrag verträge contract contracts
+gesetz gesetze rechtlich law legal
+haftung liability
+urheberrecht copyright
+marke brand trademark
+anonym anonymous
+zertifikat zertifikate certificate certificates
+lücke sicherheitslücke schwachstelle vulnerability exploit
+werbung ad ads advertising
+bildschirm screen display monitor
+bildschirmfoto screenshot screenshots
+schaltfläche knopf button buttons
+menü menu menus
+leiste bar toolbar
+reiter tab tabs
+seite seiten page pages
+startseite homepage home
+webseite website websites site
+adresse adressen address url
+formular form forms
+feld felder field fields
+symbol symbole icon icons
+farbe farben color colors colour
+schrift schriftart font fonts
+text texte texts
+name namen names
+nummer nummern number numbers
+überschrift heading headline header
+absatz paragraph
+rand border margin
+abstand spacing padding gap
+breite width
+länge length
+dunkel dark
+rot red
+grün green
+blau blue
+gelb yellow
+schwarz black
+weiß white
+durchsichtig transparent transparency
+übergang transition
+fortschritt progress
+benachrichtigung benachrichtigungen notification notifications
+tastatur keyboard
+tastenkürzel kürzel shortcut hotkey
+maus mouse
+zeiger cursor pointer
+zwischenablage clipboard
+ziehen gezogen drag dragged
+lesezeichen bookmark bookmarks
+verlauf history
+postfach posteingang inbox
+betreff subject
+kalender calendar
+termin termine appointment meeting
+notiz notizen note notes
+tagebuch journal diary
+aufgabe aufgaben task tasks todo
+projekt projekte project projects
+sitzung sitzungen session sessions
+gespräch unterhaltung conversation
+kontext context
+modell modelle model models
+ähnlich ähnlichkeit similar similarity
+treffer hit hits match matches
+rangfolge ranking
+rang ränge rank ranks
+mikrofon microphone mic
+lautsprecher speaker speakers
+kopfhörer headphones headset
+vorschaubild thumbnail thumbnails
+kamera camera
+kanal kanäle channel channels
+abonnent abonnenten subscriber subscribers
+zuschauer viewer viewers
+beitrag beiträge post posts
+konto konten account accounts
+profil profile profiles
+spitzname nickname
+kennung id identifier
+zeitstempel timestamp
+datum date
+zeitzone timezone
+deutsch german
+englisch english
+werkzeug werkzeuge tool tools
+arbeitsablauf ablauf workflow
+automatisch automatisierung automatisiert automatic automation automated auto
+manuell händisch manual manually
+dienst dienste service services daemon
+prozess prozesse process processes
+zeitüberschreitung timeout
+zwischenspeicher cache cached
+puffer buffer
+auslastung load usage
+verbrauch consumption usage
+engpass bottleneck
+ruckeln ruckler lag lagging stutter
+müll papierkorb garbage trash
+leer empty
+voll full
+platz space room
+pfad pfade path paths
+archiv archive
+umgebung environment env
+produktion production prod live
+fehlersuche debug debugging
+abdeckung coverage
+regel regeln rule rules
+richtlinie richtlinien policy guideline guidelines
+standard voreinstellung default defaults
+pflicht erforderlich required mandatory
+modus mode
+zustand status state
+bereit ready
+beschäftigt busy
+ausstehend pending
+erfolgreich erfolg success successful
+gültig valid
+ungültig invalid
+richtig korrekt correct right
+falsch wrong incorrect
+doppelt duplikat duplikate duplicate duplicates double
+zufällig zufall random
+erste erster first
+letzte letzter last
+nächste nächster next
+vorherige vorheriger previous
+oben top
+unten bottom
+mitte center middle
+anfang beginn begin beginning
+ende end
+aktuell current latest
+veraltet deprecated outdated stale obsolete
+früher earlier before
+später later
+häufig oft often frequent frequently
+selten rare rarely
+wichtig important
+dringend urgent
+schwierig schwer hard difficult
+gefährlich gefahr dangerous danger
+risiko risk
+öffentlich public
+privat private
+lokal local
+intern internal
+extern external
+persönlich personal
+gemeinsam shared common
+einzeln single
+mehrere multiple several
+teil teile part parts
+hälfte half
+paar pair
+zahl zahlen number numbers
+ziffer digit
+buchstabe letter
+zeichen character characters
+wort wörter word words
+satz sätze sentence sentences
+zeichenkette string
+ganzzahl integer
+typ type
+muster pattern patterns
+entfernung distanz distance
+richtung direction
+standort ort location place
+koordinaten coordinates coords
+winkel angle
+kreis circle
+würfel cube
+linie line
+punkt punkte point points dot
+fläche area surface
+licht light
+schatten shadow
+helligkeit brightness
+nebel fog
+wolke cloud
+dauer duration
+sekunde sekunden second seconds
+minuten minute minutes
+stunde stunden hour hours
+tage täglich days daily
+woche wochen week weeks
+wöchentlich weekly
+monat monate month months
+monatlich monthly
+jahr jahre year years
+heute today
+gestern yesterday
+abklingzeit cooldown
+ereignis ereignisse event events
+gegner feind feinde enemy enemies
+freund freunde friend friends
+gilde clan guild
+stufe stufen level levels stage tier
+erfahrung xp experience
+leben life lives
+gesundheit health hp
+herz herzen heart hearts
+hunger essen nahrung food
+trank tränke potion potions
+effekt effekte effect effects
+zauber magie spell magic
+fähigkeit fähigkeiten ability abilities skill skills
+belohnung belohnungen reward rewards
+beute loot
+kopfgeld bounty bounties
+geld münzen währung coins money currency
+guthaben kontostand balance
+laden geschäft shop store
+markt marktplatz market marketplace
+auktion auktionen auktionshaus auction auctions
+steuer steuern tax taxes
+gebühr gebühren fee fees
+rabatt discount
+gutschein coupon voucher
+gewinn gewinne profit gain
+verlust loss
+mindest mindestens minimum min minimal
+höchst höchstens maximum max maximal
+durchschnitt average avg
+summe gesamt total sum
+menge amount quantity
+gegenstand gegenstände item items
+grundstück plot claim
+gebiet bereich zone region area
+grenze border boundary
+karte map
+kampf fight combat battle pvp
+duell duel
+ausrüstung equipment gear
+welle wellen wave waves
+schwert schwerter sword swords
+axt äxte axe axes
+spitzhacke pickaxe
+schaufel shovel
+bogen bow
+pfeil pfeile arrow arrows
+schild shield shields
+schild schilder sign signs
+rüstung armor armour
+helm helmet
+stiefel boots
+dorfbewohner villager villagers
+dorf village
+kiste truhe chest chests
+ofen furnace
+trichter hopper hoppers
+werkbank workbench
+amboss anvil
+leuchtfeuer beacon
+bett bed
+tür door
+zaun fence
+fackel torch
+stein stone
+erde dirt
+holz wood
+eisen iron
+diamant diamanten diamond diamonds
+smaragd emerald
+kohle coal
+kupfer copper
+glas glass
+kies gravel
+feuer fire
+eis ice
+schnee snow
+regen rain
+wetter weather
+nacht night
+welt welten world worlds
+höhle höhlen cave caves
+berg mountain
+wald forest
+wüste desert
+meer ozean ocean sea
+fluss river
+insel island
+himmel sky
+boden ground floor
+decke ceiling
+dach roof
+haus house
+turm tower
+brücke bridge
+ernte harvest crop crops
+kuh cow
+schwein pig
+schaf sheep
+huhn chicken
+pferd horse
+katze cat
+hund dog
+fisch fish
+spinne spider
+skelett skeleton
+hexe witch
+drache dragon
+biene bee
+bestenliste rangliste leaderboard
+statistik statistiken stats statistics
+errungenschaft achievement advancement
+hologramm hologramme hologram holograms
+partikel particle particles
+geräusch geräusche sound sounds
+musik music
+lautstärke volume
+flüstern whisper
+ankündigung durchsage announcement broadcast
+betrüger cheater cheaters
+betrug fraud scam
+verdächtig suspicious
+beweis beweise evidence proof
+abstimmung vote voting
+ki ai
+eingabeaufforderung prompt
+anbieter provider vendor
+kontingent quota
+abrechnung billing
+halluzination hallucination
+diktieren diktiert diktat dictation dictate
+zuhören hören listen hear
+sprechen reden speak talk
+pupille pupil
+blick gaze
+auge augen eye eyes
+schule school
+lehrer teacher
+hausaufgabe hausaufgaben homework
+unterricht lesson
+klausur klassenarbeit exam
+arbeit work job
+familie family
+urlaub ferien vacation holiday holidays
+geburtstag birthday
+geschenk present
+arzt doctor
+krank sick ill
+server servers
+system systeme systems
+code codes
+format formate formats
+chat chats
+form formen shape shapes
+reichweite range reach
+entziehen entzogen entzug widerrufen widerruf revoke revoked revocation
+programm programme program programs
+anwendung anwendungen app apps application applications
+zeilenumbruch zeilenumbrüche newline newlines linebreak
+daten data
+information informationen info infos
+haupt main primary
+laufen läuft gelaufen lauf läufe running runs
+minecraft
