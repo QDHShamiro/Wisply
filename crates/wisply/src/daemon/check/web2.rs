@@ -170,6 +170,14 @@ pub fn browser(r: &mut Run, srv: &Server, decoy: &str) {
     r.step("type into a list points to select", &["type", "#country", "Austria"], |o, e| {
         e && o.contains("wisply select")
     });
+    r.step("type into a checkbox points to check", &["type", "#remember", "yes"], |o, e| {
+        e && o.contains("wisply check")
+    });
+    r.step("type into a checkbox by its name points to check", &["type", "Remember me", "yes"], |o, e| {
+        e && o.contains("wisply check")
+    });
+    let kept = "(b => b.value + ' ' + b.checked)(document.getElementById('remember'))";
+    r.step("the checkbox kept its value and its tick", &["js", kept], |o, _| o.trim() == "on true");
     r.step("text (markdown)", &["text"], |o, e| {
         !e && o.contains("| Beta | 2.50 |")
             && !o.contains("IGNORE ALL")
