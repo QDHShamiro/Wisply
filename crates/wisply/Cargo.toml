@@ -14,10 +14,6 @@ path = "src/fast.rs"
 name = "wisply-full"
 path = "src/main.rs"
 
-[[bin]]
-name = "wisply-task"
-path = "src/task.rs"
-
 [build-dependencies]
 winresource.workspace = true
 
@@ -34,6 +30,8 @@ wisply-proto.workspace = true
 wisply-squeeze.workspace = true
 wisply-think.workspace = true
 wisply-pc.workspace = true
+wisply-pupil.workspace = true
+wisply-hear.workspace = true
 pdf-extract.workspace = true
 regex.workspace = true
 roxmltree.workspace = true

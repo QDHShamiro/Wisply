@@ -105,6 +105,10 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   their passages without any AI model and returns a short report with links and what several sources agree on.
   Two rounds by default (the second searches with terms found in the first), `--quick`, `--deep`, `--site`.
   Reports are saved to the vault (`Research/`) and found again by `recall`.
+- `wisply pupil ...`: the local video and picture model (Pupil) and its ear now run inside Wisply. `pupil watch`, `ask`,
+  `chat`, `bench`, `status`, `game` and the rest behave as before, `pupil hear <video>` turns speech and sounds into
+  text. Settings live in `~/.wisply/pupil/pupil.toml` and `hear.toml` (or `PUPIL_CONFIG` / `PUPIL_HEAR_CONFIG`); sound
+  tagging loads the ONNX Runtime named by `runtime` in `hear.toml` instead of building it in.
 
 ### Fixed
 - A `brain.json` with a wrong shape (a page without its element list, a list where a table belongs, a short entry)

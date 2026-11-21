@@ -1,4 +1,7 @@
 use std::collections::HashSet;
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 use super::expand::variants;
 use super::store::{Hit, Note};
@@ -117,16 +120,54 @@ fn sentences(body: &str) -> Vec<&str> {
     out
 }
 
+fn drop_title_echo<'a>(part: &'a str, base: &str) -> &'a str {
+    let blen = base.chars().count();
+    if blen < 12 {
+        return part;
+    }
+    let mut end = 0;
+    let mut matched = 0;
+    for (bc, (i, c)) in base.chars().zip(part.char_indices()) {
+        if !c.eq_ignore_ascii_case(&bc) {
+            break;
+        }
+        end = i + c.len_utf8();
+        matched += 1;
+    }
+    if matched * 5 < blen * 4 {
+        return part;
+    }
+    let mut tail = &part[end..];
+    if part[..end].chars().next_back().is_some_and(char::is_alphanumeric) && tail.starts_with(char::is_alphanumeric) {
+        tail = tail.find(char::is_whitespace).map_or("", |s| &tail[s..]);
+    }
+    let tail = tail.trim_start_matches(['…', ':', '-', '>', ' ', ',', '.', ';', '*', '(', ')']).trim();
+    if tail.chars().count() < 6 { "" } else { tail }
+}
+
+static WIKI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[\[(?:[^\]|]*\|)?([^\]|]+)\]\]").expect("wiki link"));
+static LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!?\[([^\]]*)\]\([^)]*\)").expect("md link"));
+static CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").expect("code span"));
+static BOLD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*\*([^*]+)\*\*").expect("bold span"));
+
+fn strip_md(s: &str) -> String {
+    let wiki = WIKI.replace_all(s, "${1}");
+    let link = LINK.replace_all(&wiki, "${1}");
+    let code = CODE.replace_all(&link, "${1}");
+    BOLD.replace_all(&code, "${1}").into_owned()
+}
+
 pub fn snippet(body: &str, title: &str, terms: &[String], n: usize) -> String {
     let title = title.to_lowercase();
     let mut best: Option<(usize, &str)> = None;
     let mut first: Option<&str> = None;
     for part in sentences(body) {
-        let part = part.trim().trim_start_matches(['#', '-', '*', '>', ' ']);
-        if part.chars().count() < 6 {
+        let part = part.trim();
+        let probe = part.trim_start_matches(['#', '-', '*', '>', ' ']);
+        if probe.chars().count() < 6 {
             continue;
         }
-        let low = part.to_lowercase();
+        let low = probe.to_lowercase();
         if title.contains(&low) {
             continue;
         }
@@ -136,7 +177,15 @@ pub fn snippet(body: &str, title: &str, terms: &[String], n: usize) -> String {
             best = Some((n_hit, part));
         }
     }
-    best.map(|(_, p)| p).or(first).map(|p| oneline(p, n)).unwrap_or_default()
+    let base = title.trim_end_matches(['…', '.', ' ']);
+    best.map(|(_, p)| p)
+        .or(first)
+        .map(|p| {
+            let clean = strip_md(p);
+            let clean = clean.trim_start_matches(['#', '-', '*', '>', ' ']);
+            oneline(drop_title_echo(clean, base), n)
+        })
+        .unwrap_or_default()
 }
 
 pub fn fold(hits: Vec<Hit>, limit: usize) -> Vec<Hit> {
@@ -197,6 +246,20 @@ mod tests {
     }
 
     #[test]
+    fn snippet_strips_inline_markdown() {
+        let body = "See the **ship** script via [[git-flow|flow]] and `cargo test` in [docs](http://x).";
+        let t = terms("ship script");
+        assert_eq!(snippet(body, "", &t, 120), "See the ship script via flow and cargo test in docs.");
+    }
+
+    #[test]
+    fn snippet_strips_leading_bold_label() {
+        let body = "**Why:** the ship script keeps logs tidy for review.";
+        let t = terms("ship script");
+        assert_eq!(snippet(body, "", &t, 120), "Why: the ship script keeps logs tidy for review.");
+    }
+
+    #[test]
     fn snippet_picks_the_sentence_with_the_words() {
         let body = "# Plan\nIntro line about nothing. The hopper moves 10 items per transfer. Last bit.";
         let t = terms("hopper items");
@@ -204,6 +267,150 @@ mod tests {
         assert_eq!(snippet(body, "", &terms("zzz"), 80), "Intro line about nothing.");
         assert_eq!(snippet("", "", &t, 80), "");
         assert_eq!(snippet("Same words. Extra detail here", "Same words.", &terms("words"), 80), "Extra detail here");
+    }
+
+    #[test]
+    fn snippet_surfaces_the_sentence_that_carries_the_query() {
+        let cases: &[(&str, &str, &str)] = &[
+            (
+                "The daemon forwards recall to a worker. Snippets are stripped of markdown before display.",
+                "markdown display",
+                "stripped of markdown",
+            ),
+            (
+                "**Why:** the HDD spins down after twenty minutes. First access waits for spinup.",
+                "spins minutes",
+                "spins down after twenty",
+            ),
+            (
+                "Config lives in the config file. Messages live in the messages file. Layouts live in the gui folder.",
+                "layouts folder",
+                "gui folder",
+            ),
+            (
+                "Arena bounds are defined in FactionPVPCore. The yml files sit under the arenas directory.",
+                "arenas directory",
+                "arenas directory",
+            ),
+            (
+                "Redis crashed on startup last week. The fix was to restart the worker after Redis boots.",
+                "restart worker",
+                "restart the worker",
+            ),
+            (
+                "This plugin supports Folia on Paper. All disk and network IO runs async off the main thread.",
+                "async network",
+                "async off the main thread",
+            ),
+            (
+                "The token hint shows an estimate. It only appears above the configured threshold value.",
+                "threshold configured",
+                "above the configured threshold",
+            ),
+            (
+                "Overview of the deploy flow goes here. The deploy script runs after the CI pipeline turns green.",
+                "deploy script pipeline",
+                "deploy script runs after",
+            ),
+            (
+                "Baltop caches offline heads. The head texture loads from the Mojang profile endpoint.",
+                "texture profile",
+                "texture loads from the Mojang profile",
+            ),
+            (
+                "Intro sentence with no keywords at all. The scoreboard updates every server tick without flicker.",
+                "scoreboard flicker",
+                "scoreboard updates every server tick",
+            ),
+        ];
+        for (body, query, want) in cases {
+            let got = snippet(body, "", &terms(query), 200);
+            assert!(got.contains(want), "query {query:?} -> snippet {got:?} is missing {want:?}");
+        }
+    }
+
+    #[test]
+    fn fold_drops_exact_and_near_duplicate_notes_within_kind() {
+        let h = |id: i64, title: &str, kind: &str, score: f64| Hit {
+            note: Note { id, title: title.into(), kind: kind.into(), ..Note::default() },
+            score,
+            sim: None,
+        };
+        let hits = vec![
+            h(1, "redis crash fix", "fact", 1.0),
+            h(2, "redis crash fix", "note", 0.9),
+            h(3, "redis crash patch", "fact", 0.8),
+            h(4, "redis crash fix now", "fact", 0.7),
+            h(5, "redis crash fix now", "note", 0.6),
+            h(6, "totally other subject", "fact", 0.5),
+        ];
+        let kept: Vec<i64> = fold(hits.clone(), 10).into_iter().map(|x| x.note.id).collect();
+        assert_eq!(
+            kept,
+            [1, 3, 5, 6],
+            "exact title folds across kinds, same-kind near-dup folds, kind-guarded near-dup and sub-threshold stay"
+        );
+        let capped: Vec<i64> = fold(hits, 2).into_iter().map(|x| x.note.id).collect();
+        assert_eq!(capped, [1, 3], "limit caps the folded output");
+    }
+
+    #[test]
+    fn recall_ranking_puts_the_on_topic_note_first() {
+        let corpus = [
+            note(1, "Sniper live build rules", "Build the sniper jar obfuscated then push it to the live folder."),
+            note(
+                2,
+                "Redis crash on the fernhost server",
+                "The async team worker crashed on startup; restart it once redis boots again.",
+            ),
+            note(3, "FactionPVP arena bounds", "Arena bounds live in FactionPVPCore under the arenas directory."),
+            note(4, "Wisply recall snippet stripping", "Snippets strip markdown yet keep bold labels before display."),
+            note(
+                5,
+                "cpvpgens economy coins",
+                "Coin one, compressed value, heavy token as items; the heavy price is the item itself.",
+            ),
+            note(6, "Video edit pipeline watermark", "Edits follow the headbop style with a watermark on export."),
+            note(
+                7,
+                "Bewerbung Ausbildung apprenticeship",
+                "The apprenticeship application has a deadline at the district office.",
+            ),
+            note(8, "Discord friends mapping", "Franz maps to Froxotron and Lukas to the lukfighter handle."),
+            note(9, "External disk spindown", "The external disk spins down after twenty minutes before spinup."),
+            note(10, "ThumbnailEngine renderer", "Thumbnails use a procedural renderer with no image model at all."),
+        ];
+        let cases: &[(&str, i64)] = &[
+            ("sniper obfuscated jar", 1),
+            ("redis worker restart", 2),
+            ("arena bounds factionpvpcore", 3),
+            ("snippet markdown bold", 4),
+            ("economy coins heavy", 5),
+            ("watermark edit export", 6),
+            ("apprenticeship deadline office", 7),
+            ("disk spindown spinup", 9),
+        ];
+        for (query, want) in cases {
+            let g = groups(&terms(query));
+            let mut ranked: Vec<(i64, f64)> = corpus.iter().map(|n| (n.id, weight(coverage(n, &g, None)))).collect();
+            ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).expect("finite scores"));
+            assert_eq!(
+                ranked[0].0, *want,
+                "query {query:?} ranked {:?} first, want {want}; scores {ranked:?}",
+                ranked[0].0
+            );
+            assert!(ranked[0].1 > ranked[1].1, "query {query:?} top tied: {ranked:?}");
+        }
+    }
+
+    #[test]
+    fn snippet_drops_truncated_title_echo() {
+        let body = "cpvpgens premium kit blocker war falsch asynckits kits yml sind editierbar und dann folgt noch viel mehr neuer text als neue information";
+        let title = "cpvpgens premium kit blocker war falsch…";
+        let out = snippet(body, title, &terms("asynckits"), 56);
+        assert!(!out.is_empty() && !out.starts_with("cpvpgens") && out.starts_with("asynckits"), "{out}");
+        assert_eq!(drop_title_echo("Deploy target changed to X", "deploy target"), "changed to X");
+        assert_eq!(drop_title_echo("short", "deploy target now here"), "short");
     }
 
     #[test]
