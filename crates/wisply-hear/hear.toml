@@ -1,0 +1,110 @@
+[paths]
+ffmpeg = "ffmpeg"
+work_dir = "pupil/run/hear"
+
+[audio]
+sample_rate = 16000
+
+[speech]
+enabled = true
+exe = "whisper-cli"
+default = "turbo"
+language = "auto"
+threads = 4
+extra_args = ["-np"]
+noise_brackets = [["[", "]"], ["(", ")"], ["*", "*"]]
+min_seconds = 0.0
+
+[[speech.models]]
+name = "turbo"
+file = "models/hear/ggml-large-v3-turbo-q5_0.bin"
+
+[[speech.models]]
+name = "small"
+file = "models/hear/ggml-small-q5_1.bin"
+
+[[speech.models]]
+name = "base"
+file = "models/hear/ggml-base-q5_1.bin"
+
+[sound]
+enabled = true
+runtime = "onnxruntime.dll"
+default = "ced-tiny"
+threads = 2
+window_seconds = 3.0
+hop_seconds = 1.0
+threshold = 0.35
+min_seconds = 1.0
+merge_gap_seconds = 1.0
+max_labels_per_slot = 2
+score_decimals = 2
+drop_labels = [
+    "Speech",
+    "Male speech, man speaking",
+    "Female speech, woman speaking",
+    "Child speech, kid speaking",
+    "Conversation",
+    "Narration, monologue",
+    "Babbling",
+    "Speech synthesizer",
+    "Whispering",
+    "Hubbub, speech noise, speech babble",
+    "Inside, small room",
+    "Inside, large room or hall",
+    "Inside, public space",
+    "Outside, urban or manmade",
+    "Outside, rural or natural",
+    "Silence",
+    "Noise",
+    "Environmental noise",
+]
+
+[[sound.models]]
+name = "ced-tiny"
+file = "models/hear/ced-tiny/model.onnx"
+labels = "models/hear/ced-tiny/class_labels_indices.csv"
+
+[[sound.models]]
+name = "ced-tiny-int8"
+file = "models/hear/ced-tiny/model.int8.onnx"
+labels = "models/hear/ced-tiny/class_labels_indices.csv"
+
+[[sound.models]]
+name = "ced-mini"
+file = "models/hear/ced-mini/model.onnx"
+labels = "models/hear/ced-mini/class_labels_indices.csv"
+
+[mel]
+n_fft = 512
+hop = 160
+n_mels = 64
+f_min = 0.0
+f_max = 8000.0
+amin = 1e-10
+top_db = 120.0
+frame_pad = 256
+
+[gpu]
+query = ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"]
+poll_ms = 200
+
+[output]
+pretty = true
+time_decimals = 2
+timing = true
+
+[messages]
+bad_args = "Bad arguments: {detail}"
+usage = "Usage: wisply pupil hear <video> [--start S] [--end E] [--config FILE] [--speech MODEL] [--sound MODEL] [--only speech|sound]"
+config = "The config could not be read: {detail}"
+video_missing = "The video file {path} does not exist."
+ffmpeg_failed = "ffmpeg could not read the audio: {detail}"
+no_audio = "The video has no audio between {start} and {end}."
+speech_failed = "whisper failed: {detail}"
+speech_output = "whisper wrote no readable result: {detail}"
+model_unknown = "There is no model called {name}. Use one of: {names}."
+model_missing = "The model file {path} is missing."
+sound_failed = "The sound model failed: {detail}"
+labels_bad = "The label file {path} is not valid: {detail}"
+work_dir = "The work folder {path} could not be used: {detail}"

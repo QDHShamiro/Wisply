@@ -43,6 +43,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     if matches!(first, "setup" | "install" | "uninstall") {
         return crate::setup::run(&home, &args);
     }
+    if first == "pupil" {
+        return crate::pupil::run(&home, &args[1..]);
+    }
     if !home.join(MARKER).is_file() {
         return v2(&home, raw);
     }
