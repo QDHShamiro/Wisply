@@ -268,8 +268,13 @@ pub mod system {
         false
     }
 
+    unsafe extern "C" {
+        #[link_name = "kill"]
+        fn signal(pid: i32, sig: i32) -> i32;
+    }
+
     pub fn alive(pid: u32) -> bool {
-        std::path::Path::new(&format!("/proc/{pid}")).exists()
+        pid != 0 && i32::try_from(pid).is_ok_and(|p| unsafe { signal(p, 0) } == 0)
     }
 
     pub fn kill(pid: u32) -> bool {
@@ -277,7 +282,15 @@ pub mod system {
     }
 
     pub fn process_path(pid: u32) -> String {
-        std::fs::read_link(format!("/proc/{pid}/exe")).map(|p| p.to_string_lossy().to_lowercase()).unwrap_or_default()
+        if let Ok(path) = std::fs::read_link(format!("/proc/{pid}/exe")) {
+            return path.to_string_lossy().to_lowercase();
+        }
+        std::process::Command::new("ps")
+            .args(["-o", "comm=", "-p", &pid.to_string()])
+            .stderr(std::process::Stdio::null())
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_lowercase())
+            .unwrap_or_default()
     }
 
     pub fn process_paths() -> Vec<String> {
