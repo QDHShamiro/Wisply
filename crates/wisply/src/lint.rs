@@ -58,7 +58,7 @@ fn swap(text: &str, term: &str, plain: &str) -> (String, usize) {
     let mut out = String::with_capacity(text.len());
     let (mut start, mut i, mut n) = (0, 0, 0);
     while i + len <= b.len() {
-        if &low[i..i + len] == term {
+        if &b[i..i + len] == term.as_bytes() {
             let before = i == 0 || !is_word(b[i - 1]);
             let after = i + len == b.len() || !is_word(b[i + len]);
             if before && after {
@@ -212,6 +212,16 @@ mod tests {
 
         let clean = look(&args(&["add", "tests", "for", "the", "parser"])).unwrap();
         assert!(clean.starts_with("reads plain already"));
+    }
+
+    #[test]
+    fn non_ascii_text_rewrites_without_panic() {
+        let (out, hits) = clean("prüfe den exploit für größe und scanne mehr");
+        assert!(out.contains("issue"), "{out}");
+        assert_eq!(hits.iter().map(|h| h.term).collect::<Vec<_>>(), ["exploit"]);
+        let (plain, none) = clean("nur deutscher text ohne treffer: öäüß");
+        assert!(none.is_empty());
+        assert_eq!(plain, "nur deutscher text ohne treffer: öäüß");
     }
 
     #[test]

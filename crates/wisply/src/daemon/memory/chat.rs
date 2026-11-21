@@ -83,6 +83,19 @@ pub fn provider(home: &Path) -> Option<Provider> {
     (!base.is_empty() && !model.is_empty()).then(|| Provider::Api { base: base.to_string(), model })
 }
 
+pub fn provider_local(home: &Path) -> Option<Provider> {
+    let cfg = config::load(home);
+    let base = config::text(&cfg, "memory_api");
+    let model = config::text(&cfg, "memory_api_model");
+    let base = base.trim_end_matches('/');
+    let base = base.strip_suffix("/v1").unwrap_or(base);
+    if base.is_empty() || model.is_empty() {
+        return None;
+    }
+    let p = Provider::Api { base: base.to_string(), model };
+    p.local().then_some(p)
+}
+
 pub fn wait_turn() {
     let Ok(mut last) = LAST_GEMINI.lock() else { return };
     if let Some(at) = *last {

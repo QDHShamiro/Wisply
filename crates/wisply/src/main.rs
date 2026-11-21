@@ -16,6 +16,7 @@ mod progress;
 mod reads;
 mod readstate;
 mod readview;
+mod review;
 mod risk;
 mod setup;
 mod skill;
