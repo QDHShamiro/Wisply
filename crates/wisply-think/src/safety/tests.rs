@@ -61,6 +61,41 @@ fn one_file_counts_once_however_its_path_is_written() {
 }
 
 #[test]
+fn a_changed_file_is_counted_and_shown_when_git_cannot_start() {
+    let base = std::env::temp_dir().join(format!("wisply-think-nogit-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    let work = base.join("work");
+    fs::create_dir_all(&work).unwrap();
+    let (a, fresh) = (work.join("a.txt"), work.join("new.txt"));
+    fs::write(&a, "one\ntwo\nthree\nfour\n").unwrap();
+    let mut run = Run::create(&Home::new(&base, "s"), "nogit");
+    run.map().insert("paths".into(), json!([files::slashed(&work)]));
+    backup(&run, &files::walk(&run.paths()));
+    checkpoint(&run, 1, &[a.clone(), fresh.clone()]).unwrap();
+    fs::write(&a, "one\n2\nthree\nfour\n").unwrap();
+    fs::write(&fresh, "x\n").unwrap();
+    let d = diff_with(&run, "t", "wisply-no-such-git").unwrap_or_else(|why| panic!("{why}"));
+    assert_eq!((d.files, d.plus, d.minus), (2, 2, 1));
+    let shown = fs::read_to_string(&d.file).unwrap();
+    let lines: Vec<&str> = shown.lines().collect();
+    assert!(lines.contains(&"-two") && lines.contains(&"+2") && lines.contains(&"+x"), "{shown}");
+    assert!(!lines.contains(&"-one") && !lines.contains(&"-four"), "{shown}");
+    assert!(shown.contains("before/a.txt") && shown.contains("git could not be started"), "{shown}");
+    let _ = fs::remove_dir_all(&base);
+}
+
+#[test]
+fn a_run_without_backup_names_git_when_it_cannot_start() {
+    let base = std::env::temp_dir().join(format!("wisply-think-nogit-bare-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    let mut run = Run::create(&Home::new(&base, "s"), "bare");
+    run.map().insert("git".into(), json!({"repo": true}));
+    let Err(why) = diff_with(&run, "t", "wisply-no-such-git") else { panic!("a diff without git and backup") };
+    assert!(why.contains("git could not be started") && why.contains("no backup"), "{why}");
+    let _ = fs::remove_dir_all(&base);
+}
+
+#[test]
 fn a_lost_backup_is_named_and_never_shown_as_no_change() {
     let base = std::env::temp_dir().join(format!("wisply-think-lost-{}", std::process::id()));
     let _ = fs::remove_dir_all(&base);
