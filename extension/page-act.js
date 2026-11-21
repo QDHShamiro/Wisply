@@ -92,28 +92,42 @@
         sel.addRange(range);
       }
     }
-    return { ok: true, focused: document.activeElement === el || el.contains(document.activeElement) };
+    return { ok: true, focused: document.activeElement === el || el.contains(document.activeElement), list: t === "SELECT" };
+  }
+
+  function holdsText(el) {
+    return !!el && (el.isContentEditable || el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+  }
+
+  function fieldOf(el) {
+    if (holdsText(el)) return el;
+    const active = document.activeElement;
+    return holdsText(active) && el.contains(active) ? active : null;
   }
 
   function valueOf(r) {
     const el = get(r);
     if (!el) return { gone: true };
-    const v = el.isContentEditable ? el.innerText : el.value;
+    const field = fieldOf(el);
+    if (!field) return { value: null };
+    const v = field.isContentEditable ? field.innerText : field.value;
     return { value: typeof v === "string" ? v : "" };
   }
 
   function setValue(r, text) {
     const el = get(r);
     if (!el) return { gone: true };
-    if (el.isContentEditable) {
-      el.innerText = text;
+    const field = fieldOf(el);
+    if (!field) return { none: true };
+    if (field.isContentEditable) {
+      field.innerText = text;
     } else {
-      const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const proto = field.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
-      setter.call(el, text);
+      setter.call(field, text);
     }
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
     return { ok: true };
   }
 

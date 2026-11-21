@@ -220,6 +220,7 @@ export async function type(a, tab) {
   if (r.gone) throw new Error(f.ref + " is gone -> try: wisply snap");
   await point(tabId, r.x, r.y);
   const fo = await page(tabId, "act.focusFor", [f.ref, !!a.append]);
+  if (fo.list) throw new Error(f.ref + " is a list, not a text field -> try: wisply select " + f.ref + ' "<option>"');
   if (!fo.focused) await I.click(tabId, r.x, r.y);
   const text = String(a.value || "");
   await I.insertText(tabId, text);
