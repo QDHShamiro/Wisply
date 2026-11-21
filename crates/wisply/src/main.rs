@@ -13,6 +13,7 @@ mod more;
 mod peek;
 mod pipe;
 mod progress;
+mod pupil;
 mod reads;
 mod readstate;
 mod readview;

@@ -58,6 +58,7 @@ const LOCAL: &[&str] = &[
     "safe",
     "review",
     "analyze",
+    "pupil",
 ];
 
 fn main() -> ExitCode {
