@@ -270,6 +270,66 @@ mod tests {
     }
 
     #[test]
+    fn snippet_surfaces_the_sentence_that_carries_the_query() {
+        let cases: &[(&str, &str, &str)] = &[
+            (
+                "The daemon forwards recall to a worker. Snippets are stripped of markdown before display.",
+                "markdown display",
+                "stripped of markdown",
+            ),
+            (
+                "**Why:** the HDD spins down after twenty minutes. First access waits for spinup.",
+                "spins minutes",
+                "spins down after twenty",
+            ),
+            (
+                "Config lives in the config file. Messages live in the messages file. Layouts live in the gui folder.",
+                "layouts folder",
+                "gui folder",
+            ),
+            (
+                "Arena bounds are defined in FactionPVPCore. The yml files sit under the arenas directory.",
+                "arenas directory",
+                "arenas directory",
+            ),
+            (
+                "Redis crashed on startup last week. The fix was to restart the worker after Redis boots.",
+                "restart worker",
+                "restart the worker",
+            ),
+            (
+                "This plugin supports Folia on Paper. All disk and network IO runs async off the main thread.",
+                "async network",
+                "async off the main thread",
+            ),
+            (
+                "The token hint shows an estimate. It only appears above the configured threshold value.",
+                "threshold configured",
+                "above the configured threshold",
+            ),
+            (
+                "Overview of the deploy flow goes here. The deploy script runs after the CI pipeline turns green.",
+                "deploy script pipeline",
+                "deploy script runs after",
+            ),
+            (
+                "Baltop caches offline heads. The head texture loads from the Mojang profile endpoint.",
+                "texture profile",
+                "texture loads from the Mojang profile",
+            ),
+            (
+                "Intro sentence with no keywords at all. The scoreboard updates every server tick without flicker.",
+                "scoreboard flicker",
+                "scoreboard updates every server tick",
+            ),
+        ];
+        for (body, query, want) in cases {
+            let got = snippet(body, "", &terms(query), 200);
+            assert!(got.contains(want), "query {query:?} -> snippet {got:?} is missing {want:?}");
+        }
+    }
+
+    #[test]
     fn snippet_drops_truncated_title_echo() {
         let body = "cpvpgens premium kit blocker war falsch asynckits kits yml sind editierbar und dann folgt noch viel mehr neuer text als neue information";
         let title = "cpvpgens premium kit blocker war falsch…";
