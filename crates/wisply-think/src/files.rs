@@ -400,6 +400,16 @@ mod tests {
     }
 
     #[test]
+    fn a_rust_test_module_in_its_own_file_is_a_test() {
+        for path in ["crates/x/src/tests.rs", "crates/x/src/store/tests.rs", "crates/x/src/route_tests.rs"] {
+            assert!(is_test(Path::new(path)), "{path}");
+        }
+        for path in ["crates/x/src/contests.rs", "crates/x/src/tests_of_time.rs", "crates/x/src/protests.rs"] {
+            assert!(!is_test(Path::new(path)), "{path}");
+        }
+    }
+
+    #[test]
     fn walk_skips_ignored_and_dot_folders_and_roots_find_the_workspace() {
         let base = std::env::temp_dir().join(format!("wisply-think-walk-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);

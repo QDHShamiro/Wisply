@@ -430,6 +430,27 @@ mod tests {
     }
 
     #[test]
+    fn a_test_gate_with_a_second_condition_ends_the_checked_code() {
+        let rules = |text: &str| -> Vec<String> {
+            check("rs", text, false, &packs(&[Pack::Code, Pack::Rust])).iter().map(|f| f.rule.clone()).collect()
+        };
+        for gate in ["#[cfg(all(test, windows))]", "#[cfg(all(test, not(windows)))]", "#[cfg(all(unix, test))]"] {
+            let text = format!("fn a() {{}}
+{gate}
+mod tests {{ fn t() {{ z.unwrap(); }} }}
+");
+            assert!(rules(&text).is_empty(), "{gate}");
+        }
+        for gate in ["#[cfg(any(windows, test))]", "#[cfg(all(not(test), windows))]", "#[cfg(windows)]"] {
+            let text = format!("fn a() {{}}
+{gate}
+fn b() {{ z.unwrap(); }}
+");
+            assert_eq!(rules(&text), ["unwrap"], "{gate}");
+        }
+    }
+
+    #[test]
     fn language_rules_fire_outside_tests_only() {
         let rust = "fn a() { let x = y.unwrap(); dbg!(x); }\n#[cfg(test)]\nmod tests { fn t() { z.unwrap(); } }\n";
         let got: Vec<String> =
