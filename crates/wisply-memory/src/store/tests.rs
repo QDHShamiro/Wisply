@@ -59,3 +59,48 @@ fn todos_keep_status_and_notes() {
     drop(s);
     let _ = fs::remove_dir_all(&dir);
 }
+fn mix(parts: &[(usize, f32)]) -> Vec<f32> {
+    let mut v = vec![0.0f32; VEC_DIM];
+    for (i, w) in parts {
+        v[*i] = *w;
+    }
+    let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for x in &mut v {
+            *x /= norm;
+        }
+    }
+    v
+}
+
+#[test]
+fn semantic_recall_ranks_by_vector_closeness() {
+    let dir = home("semantic");
+    let mut s = Store::open(&dir).unwrap();
+    let new =
+        |title: &'static str| NewNote { project: "", kind: "fact", title, body: "", source: "user", session: "s1" };
+    let a = s.add_note(&new("alpha nimbus")).unwrap().unwrap();
+    let b = s.add_note(&new("beta quartz")).unwrap().unwrap();
+    let c = s.add_note(&new("gamma cobalt")).unwrap().unwrap();
+    let e = s.add_note(&new("delta ember")).unwrap().unwrap();
+    s.save_vecs(&[(a, mix(&[(10, 1.0)])), (b, mix(&[(11, 1.0)])), (c, mix(&[(12, 1.0)])), (e, mix(&[(13, 1.0)]))])
+        .unwrap();
+    let cases: &[(Vec<f32>, i64)] = &[
+        (mix(&[(10, 0.95), (11, 0.31)]), a),
+        (mix(&[(11, 1.0)]), b),
+        (mix(&[(12, 0.9), (13, 0.44)]), c),
+        (mix(&[(13, 0.97), (12, 0.24)]), e),
+    ];
+    for (q, want) in cases {
+        let hits = s.search("qqqq zzzz", "", 8, Some(q), 0.0).unwrap();
+        assert_eq!(hits[0].note.id, *want, "query toward {want} ranked {:?} first", hits[0].note.id);
+        let top = hits[0].sim.expect("top carries a similarity");
+        assert!(top >= SEMANTIC_SURE, "top sim {top} below the sure threshold");
+        for w in hits.windows(2) {
+            let (x, y) = (w[0].sim.unwrap_or(0.0), w[1].sim.unwrap_or(0.0));
+            assert!(x >= y - 1e-6, "similarity not sorted: {x} then {y}");
+        }
+    }
+    drop(s);
+    let _ = fs::remove_dir_all(&dir);
+}
