@@ -32,11 +32,12 @@ pub struct Sym {
     pub sig: String,
 }
 
-fn is_test_path(path: &str) -> bool {
+pub fn is_test_path(path: &str) -> bool {
     let low = path.to_lowercase();
     low.contains("/test")
         || low.starts_with("test")
         || low.contains("_test.")
+        || low.contains("_tests.")
         || low.contains(".test.")
         || low.contains(".spec.")
 }

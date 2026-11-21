@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rusqlite::Connection;
 
-use super::ask::{MEANT, Sym};
+use super::ask::{MEANT, Sym, is_test_path};
 use super::words::{near, query_terms, split_ident, stem, synonyms, words_of};
 
 const W_NAME: f32 = 3.0;
@@ -21,6 +21,8 @@ const KIND_OTHER: f32 = 0.7;
 const TEST_PENALTY: f32 = 0.08;
 const BUILT_PENALTY: f32 = 0.2;
 const SIG_WORDS: usize = 16;
+const MODULES: &[&str] = &["mod", "module", "namespace"];
+const TEST_MODULES: &[&str] = &["test", "tests"];
 
 type Postings = HashMap<String, Vec<(u32, f32, bool)>>;
 
@@ -37,14 +39,17 @@ pub struct Lex {
     avg: f32,
 }
 
+fn is_test_module(sym: &Sym) -> bool {
+    let low = sym.name.to_lowercase();
+    MODULES.contains(&sym.kind.as_str())
+        && (TEST_MODULES.contains(&low.as_str()) || low.ends_with("_test") || low.ends_with("_tests"))
+}
+
 fn is_test(sym: &Sym) -> bool {
-    let low = sym.path.to_lowercase();
-    low.contains("/test")
-        || low.starts_with("test")
-        || low.contains("_test.")
-        || low.contains(".test.")
+    is_test_path(&sym.path)
         || sym.parent.to_lowercase().contains("test")
         || sym.name.starts_with("test_")
+        || is_test_module(sym)
 }
 
 fn is_built(path: &str) -> bool {
