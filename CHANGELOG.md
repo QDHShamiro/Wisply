@@ -203,6 +203,10 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   is now taken as it is written.
 
 ### Changed
+- The graph in `wisply ui` no longer stutters on big graphs: focusing, hovering, dragging, zooming, the filters and
+  the time slider touch only the nodes that change instead of every node, the highlight is drawn by a small second
+  layer, and the layout runs in a worker so the window stays usable while a new graph settles. Edges and names now
+  stay visible while a big graph moves.
 - Every error for a wrong command or value says what to try: `headless`, `statusline`, `statusline set`, `update`,
   `progress`, `dialog`, `install` and the MCP answers for a blocked command, a missing setup and a busy daemon now
   end in `-> try: ...` like the rest, without the word `usage:`, and an unknown word is shown in quotes everywhere.
