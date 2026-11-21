@@ -8,6 +8,14 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply pupil info <YouTube link>` and `wisply pupil captions <YouTube link>`: Wisply reads a YouTube video without
+  watching it. `info` names title, channel, length, picture size, sound, spoken language, chapters and which text the
+  video has. `captions` prints its subtitles (or, without any, the automatic captions of the spoken language) as
+  short timed lines; `--start` and `--end` read one part, `--find "words"` shows only the lines that match. A long
+  text stops at a limit and names the call that reads on. Details are kept for a day and the text for good, so a
+  second call does not ask YouTube again. Needs `yt-dlp`; private, age-restricted, members-only, blocked and not yet
+  started videos are named in plain words, with the next step where there is one. A `yt-dlp` on the PATH that ends
+  without a word (a launcher whose Python is gone) is skipped for the next one that is found.
 - `wisply pupil limits`: the first part of watching videos inside Wisply. It shows how much of the free limits is
   used today: requests per model of the ladder, YouTube video time, the speech service and the number of cached
   answers, with the time the day resets and any block after a rejected request. Settings live in
