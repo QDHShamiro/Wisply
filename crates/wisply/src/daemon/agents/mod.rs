@@ -8,6 +8,7 @@ mod limit;
 mod model;
 mod net;
 mod price;
+mod push;
 mod qr;
 mod secret;
 mod server;

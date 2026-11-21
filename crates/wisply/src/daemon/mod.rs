@@ -15,7 +15,7 @@ mod hosts;
 mod hotkey;
 mod lane;
 mod media;
-mod memory;
+pub(crate) mod memory;
 mod pc;
 mod phone;
 mod record;
