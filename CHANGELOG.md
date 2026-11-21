@@ -8,6 +8,11 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply pupil limits`: the first part of watching videos inside Wisply. It shows how much of the free limits is
+  used today: requests per model of the ladder, YouTube video time, the speech service and the number of cached
+  answers, with the time the day resets and any block after a rejected request. Settings live in
+  `~/.wisply/pupil/video.toml`, counters and cache in `video.db` next to it. Nothing is sent anywhere yet: links,
+  times, the cache and the limit guard are in place for the `watch` commands that follow.
 - `wisply memory bench`: measures how well the memory search answers, so a change to it can be proven instead of
   felt. `bench freeze` copies the memory once, `bench run` asks every labelled question of
   `~/.wisply/bench/memory/questions.jsonl` against that copy and prints hit@1, hit@3, MRR, hits on outdated notes,

@@ -32,6 +32,7 @@ wisply-think.workspace = true
 wisply-pc.workspace = true
 wisply-pupil.workspace = true
 wisply-hear.workspace = true
+wisply-video.workspace = true
 pdf-extract.workspace = true
 regex.workspace = true
 roxmltree.workspace = true
