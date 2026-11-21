@@ -9,7 +9,10 @@ use wisply_core::Fail;
 use crate::daemon::memory::chat::{self, ChatError};
 
 const FILE_MAX: usize = 12_000;
-const SYSTEM: &str = "You are a senior code reviewer. Given a goal and optional code, return concrete, specific improvements. Each improvement names the area, the concrete change, and why it helps. Plain engineering only, no security framing. Reply only as the given JSON schema.";
+const SYSTEM: &str = "You are a senior code reviewer. Given a goal and optional code, \
+return concrete, specific improvements. Each improvement names the area, the concrete \
+change, and why it helps. Plain engineering only, no security framing. Reply only as the \
+given JSON schema.";
 
 fn schema() -> Value {
     json!({
