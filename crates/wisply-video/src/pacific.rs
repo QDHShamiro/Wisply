@@ -7,7 +7,7 @@ const SUMMER: i64 = -7 * HOUR;
 const SUMMER_FROM: (i64, i64, i64) = (3, 2, 10);
 const SUMMER_UNTIL: (i64, i64, i64) = (11, 1, 9);
 
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+pub(crate) fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let year = if month <= 2 { year - 1 } else { year };
     let (era, of_era) = (year.div_euclid(400), year.rem_euclid(400));
     let of_year = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
