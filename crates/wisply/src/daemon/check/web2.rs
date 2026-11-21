@@ -167,6 +167,9 @@ pub fn browser(r: &mut Run, srv: &Server, decoy: &str) {
     r.step("the field in the box got the text once", &["js", "document.getElementById('city').value"], |o, _| {
         o.trim() == "Erfurt"
     });
+    r.step("type into a list points to select", &["type", "#country", "Austria"], |o, e| {
+        e && o.contains("wisply select")
+    });
     r.step("text (markdown)", &["text"], |o, e| {
         !e && o.contains("| Beta | 2.50 |")
             && !o.contains("IGNORE ALL")
