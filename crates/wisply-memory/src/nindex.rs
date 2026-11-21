@@ -4,7 +4,7 @@ use std::sync::{Arc, LazyLock, Mutex, PoisonError, RwLock};
 
 use rusqlite::Connection;
 
-use super::expand::{near, stem_word, variants};
+use super::expand::{near, parts, stem_word, variants};
 use super::text::stop_word;
 
 const BODY_TERMS: usize = 220;
@@ -16,6 +16,7 @@ const BODY_CAP: u8 = 4;
 const K1: f32 = 1.2;
 const B: f32 = 0.5;
 const VARIANT_W: f32 = 0.85;
+const PART_W: f32 = 0.7;
 const PREFIX_W: f32 = 0.6;
 const FUZZY_W: f32 = 0.7;
 const PREFIX_FROM: usize = 5;
@@ -228,10 +229,19 @@ impl NoteIndex {
             .map(|t| {
                 let key = stem_word(t);
                 let mut group: Vec<(String, f32)> = vec![(key.clone(), 1.0)];
-                for v in variants(t) {
-                    let s = stem_word(v);
+                let mut add = |word: &str, weight: f32| {
+                    let s = stem_word(word);
                     if !group.iter().any(|(g, _)| *g == s) {
-                        group.push((s, VARIANT_W));
+                        group.push((s, weight));
+                    }
+                };
+                for v in variants(t) {
+                    add(v, VARIANT_W);
+                }
+                for p in parts(t) {
+                    add(&p, PART_W);
+                    for v in variants(&p) {
+                        add(v, PART_W * VARIANT_W);
                     }
                 }
                 if key.chars().count() >= PREFIX_FROM {
@@ -359,6 +369,25 @@ mod tests {
         assert_eq!(top(&mut s, "fresh hoppers"), Some(c));
         assert_eq!(s.forget(c).unwrap(), Ok(1));
         assert_ne!(top(&mut s, "fresh hoppers"), Some(c));
+        drop(s);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn german_questions_reach_english_notes() {
+        let dir = std::env::temp_dir().join(format!("nidx-cross-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mut s = Store::open(&dir).unwrap();
+        let backup = put(&mut s, "Shopkeep", "Database backup runs weekly", "The dump lands on the second disk");
+        let keys = put(&mut s, "Shopkeep", "Keyboard shortcut opens the search window", "");
+        let refund = put(&mut s, "Shopkeep", "Refund rules", "Payments are refunded within 14 days");
+        put(&mut s, "Shopkeep", "Fenster putzen am Samstag", "");
+        put(&mut s, "Other", "Deploy with ship.sh", "unrelated body about hoppers");
+        let top = |s: &mut Store, q: &str| s.search(q, "", 3, None, 0.0).unwrap().first().map(|h| h.note.id);
+        assert_eq!(top(&mut s, "Datenbanksicherung wöchentlich"), Some(backup));
+        assert_eq!(top(&mut s, "Tastenkürzel Suchfenster"), Some(keys));
+        assert_eq!(top(&mut s, "Zahlungen erstattet"), Some(refund));
+        assert_eq!(top(&mut s, "wann wird die Zahlung erstattet"), Some(refund));
         drop(s);
         let _ = fs::remove_dir_all(&dir);
     }
