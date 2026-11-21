@@ -168,6 +168,21 @@ fn python_functions(lines: &[&str]) -> Vec<Function> {
     out
 }
 
+fn test_gate(line: &str) -> bool {
+    let Some(cond) = line.strip_prefix("#[cfg(").and_then(|rest| rest.strip_suffix(")]")) else { return false };
+    let all = cond.trim().strip_prefix("all(").and_then(|rest| rest.strip_suffix(')'));
+    let mut depth = 0usize;
+    let outer = |c: char| {
+        depth = match c {
+            '(' => depth + 1,
+            ')' => depth.saturating_sub(1),
+            _ => depth,
+        };
+        c == ',' && depth == 0
+    };
+    all.unwrap_or(cond).split(outer).any(|part| part.trim() == "test")
+}
+
 fn first_line(text: &str, pat: &Regex, test_cut: usize) -> Option<(usize, usize)> {
     let mut first = None;
     let mut n = 0;
@@ -321,7 +336,7 @@ pub fn check(lang: &str, text: &str, test: bool, packs: &BTreeSet<Pack>) -> Vec<
         return out;
     }
     let cut = if lang == "rs" {
-        text.lines().position(|l| l.trim() == "#[cfg(test)]").map_or(usize::MAX, |i| i + 1)
+        text.lines().position(|l| test_gate(l.trim())).map_or(usize::MAX, |i| i + 1)
     } else {
         usize::MAX
     };
@@ -435,17 +450,11 @@ mod tests {
             check("rs", text, false, &packs(&[Pack::Code, Pack::Rust])).iter().map(|f| f.rule.clone()).collect()
         };
         for gate in ["#[cfg(all(test, windows))]", "#[cfg(all(test, not(windows)))]", "#[cfg(all(unix, test))]"] {
-            let text = format!("fn a() {{}}
-{gate}
-mod tests {{ fn t() {{ z.unwrap(); }} }}
-");
+            let text = format!("fn a() {{}}\n{gate}\nmod tests {{ fn t() {{ z.unwrap(); }} }}\n");
             assert!(rules(&text).is_empty(), "{gate}");
         }
         for gate in ["#[cfg(any(windows, test))]", "#[cfg(all(not(test), windows))]", "#[cfg(windows)]"] {
-            let text = format!("fn a() {{}}
-{gate}
-fn b() {{ z.unwrap(); }}
-");
+            let text = format!("fn a() {{}}\n{gate}\nfn b() {{ z.unwrap(); }}\n");
             assert_eq!(rules(&text), ["unwrap"], "{gate}");
         }
     }

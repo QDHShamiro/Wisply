@@ -282,6 +282,8 @@ pub fn is_test(p: &Path) -> bool {
         || s.contains(".test.")
         || s.contains("_test.")
         || s.contains(".spec.")
+        || s.ends_with("/tests.rs")
+        || s.ends_with("_tests.rs")
 }
 
 pub fn is_minified(p: &Path) -> bool {
