@@ -117,6 +117,31 @@ fn sentences(body: &str) -> Vec<&str> {
     out
 }
 
+fn drop_title_echo<'a>(part: &'a str, base: &str) -> &'a str {
+    let blen = base.chars().count();
+    if blen < 12 {
+        return part;
+    }
+    let mut end = 0;
+    let mut matched = 0;
+    for (bc, (i, c)) in base.chars().zip(part.char_indices()) {
+        if !c.eq_ignore_ascii_case(&bc) {
+            break;
+        }
+        end = i + c.len_utf8();
+        matched += 1;
+    }
+    if matched * 5 < blen * 4 {
+        return part;
+    }
+    let mut tail = &part[end..];
+    if part[..end].chars().next_back().is_some_and(char::is_alphanumeric) && tail.starts_with(char::is_alphanumeric) {
+        tail = tail.find(char::is_whitespace).map_or("", |s| &tail[s..]);
+    }
+    let tail = tail.trim_start_matches(['…', ':', '-', '>', ' ', ',', '.', ';', '*', '(', ')']).trim();
+    if tail.chars().count() < 6 { "" } else { tail }
+}
+
 pub fn snippet(body: &str, title: &str, terms: &[String], n: usize) -> String {
     let title = title.to_lowercase();
     let mut best: Option<(usize, &str)> = None;
@@ -136,7 +161,8 @@ pub fn snippet(body: &str, title: &str, terms: &[String], n: usize) -> String {
             best = Some((n_hit, part));
         }
     }
-    best.map(|(_, p)| p).or(first).map(|p| oneline(p, n)).unwrap_or_default()
+    let base = title.trim_end_matches(['…', '.', ' ']);
+    best.map(|(_, p)| p).or(first).map(|p| oneline(drop_title_echo(p, base), n)).unwrap_or_default()
 }
 
 pub fn fold(hits: Vec<Hit>, limit: usize) -> Vec<Hit> {
@@ -204,6 +230,16 @@ mod tests {
         assert_eq!(snippet(body, "", &terms("zzz"), 80), "Intro line about nothing.");
         assert_eq!(snippet("", "", &t, 80), "");
         assert_eq!(snippet("Same words. Extra detail here", "Same words.", &terms("words"), 80), "Extra detail here");
+    }
+
+    #[test]
+    fn snippet_drops_truncated_title_echo() {
+        let body = "cpvpgens premium kit blocker war falsch asynckits kits yml sind editierbar und dann folgt noch viel mehr neuer text als neue information";
+        let title = "cpvpgens premium kit blocker war falsch…";
+        let out = snippet(body, title, &terms("asynckits"), 56);
+        assert!(!out.is_empty() && !out.starts_with("cpvpgens") && out.starts_with("asynckits"), "{out}");
+        assert_eq!(drop_title_echo("Deploy target changed to X", "deploy target"), "changed to X");
+        assert_eq!(drop_title_echo("short", "deploy target now here"), "short");
     }
 
     #[test]
