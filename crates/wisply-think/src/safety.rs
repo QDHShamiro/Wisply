@@ -288,10 +288,10 @@ pub fn restore_all(run: &Run) -> Result<(usize, usize), String> {
     Ok((orig.len(), removed))
 }
 
-fn git_diff(old: Option<&Path>, new: &Path, empty: &Path) -> String {
+fn git_diff(git: &str, old: Option<&Path>, new: &Path, empty: &Path) -> String {
     let old = old.unwrap_or(empty);
     let new_or_empty = if new.exists() { new } else { empty };
-    crate::measure::quiet(&mut Command::new("git"))
+    crate::measure::quiet(&mut Command::new(git))
         .args(["diff", "--no-index", "--no-color", "-U3", "--"])
         .arg(old)
         .arg(new_or_empty)
@@ -336,6 +336,10 @@ pub struct Diff {
 }
 
 pub fn diff(run: &Run, label: &str) -> Result<Diff, String> {
+    diff_with(run, label, "git")
+}
+
+fn diff_with(run: &Run, label: &str, git: &str) -> Result<Diff, String> {
     let (orig, created) = originals(run);
     let mut chunks = Vec::new();
     let mut lost = Vec::new();
@@ -351,14 +355,14 @@ pub fn diff(run: &Run, label: &str) -> Result<Diff, String> {
             if fs::read(abs).ok() == fs::read(bak).ok() {
                 continue;
             }
-            let d = git_diff(Some(bak), Path::new(abs), &empty);
+            let d = git_diff(git, Some(bak), Path::new(abs), &empty);
             chunks.push(d.replace(&files::slashed(bak), &format!("before/{}", short(abs))));
         }
         for abs in &created {
-            chunks.push(git_diff(None, Path::new(abs), &empty));
+            chunks.push(git_diff(git, None, Path::new(abs), &empty));
         }
     } else if run.s.pointer("/git/repo").and_then(Value::as_bool) == Some(true) {
-        let out = crate::measure::quiet(&mut Command::new("git"))
+        let out = crate::measure::quiet(&mut Command::new(git))
             .arg("-C")
             .arg(run.root())
             .arg("diff")
