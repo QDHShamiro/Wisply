@@ -21,6 +21,7 @@ web     open <url> [-n] [-f \"a|b\"] [--text]   snap [-f \"a|b\"] [-s css|ref] [
         research \"words\" [\"other words\" ...] [--quick|--deep] [--site host] [--fresh] (10 engines, best passages, no AI)
 apps    windows   focus <w3|app:Name>   launch <app|uri|file> [--yes]   close <w3>   clip [set \"text\"]   shot w3|screen --seconds 10 (mp4)
         snap|click|type|press|scroll|drag|read|shot ... w3 (or app:Name)   wait \"text\" --on app [--gone]
+chats   unread [w5]   inbox <w5|\"@Name\"> [--from name] [--timeout 10m]   reply <w5|\"@Name\"> \"text\" [--wait] [--yes]
 video   watch <link|file|e40> [\"question\"] [--from 1:00 --to 2:00] [--at 0:10,0:20] [--fps n] [--frames] [--text]
         listen <link|file|e40> [\"question\"] [--from --to] [--live] [--lang de] [--local]   shot --ask \"question\"
 memory  recall \"words\" [--all] [--max n] | recall <id>   remember \"fact\" [--kind k]   forget <id>
@@ -236,6 +237,13 @@ mod tests {
         assert_eq!(help(Some("voice")).ok().as_deref(), Some(HELP));
         assert_eq!(help(None).ok().as_deref(), Some(HELP));
         assert!(help(Some("zzz")).is_err());
+    }
+
+    #[test]
+    fn help_has_a_row_for_the_chat_commands() {
+        for name in ["unread", "inbox", "reply"] {
+            assert!(about(name).is_some_and(|row| row.starts_with("unread [w5]")), "{name}");
+        }
     }
 
     #[test]
