@@ -162,11 +162,12 @@ pub fn snippet(body: &str, title: &str, terms: &[String], n: usize) -> String {
     let mut best: Option<(usize, &str)> = None;
     let mut first: Option<&str> = None;
     for part in sentences(body) {
-        let part = part.trim().trim_start_matches(['#', '-', '*', '>', ' ']);
-        if part.chars().count() < 6 {
+        let part = part.trim();
+        let probe = part.trim_start_matches(['#', '-', '*', '>', ' ']);
+        if probe.chars().count() < 6 {
             continue;
         }
-        let low = part.to_lowercase();
+        let low = probe.to_lowercase();
         if title.contains(&low) {
             continue;
         }
@@ -181,7 +182,8 @@ pub fn snippet(body: &str, title: &str, terms: &[String], n: usize) -> String {
         .or(first)
         .map(|p| {
             let clean = strip_md(p);
-            oneline(drop_title_echo(&clean, base), n)
+            let clean = clean.trim_start_matches(['#', '-', '*', '>', ' ']);
+            oneline(drop_title_echo(clean, base), n)
         })
         .unwrap_or_default()
 }
@@ -248,6 +250,13 @@ mod tests {
         let body = "See the **ship** script via [[git-flow|flow]] and `cargo test` in [docs](http://x).";
         let t = terms("ship script");
         assert_eq!(snippet(body, "", &t, 120), "See the ship script via flow and cargo test in docs.");
+    }
+
+    #[test]
+    fn snippet_strips_leading_bold_label() {
+        let body = "**Why:** the ship script keeps logs tidy for review.";
+        let t = terms("ship script");
+        assert_eq!(snippet(body, "", &t, 120), "Why: the ship script keeps logs tidy for review.");
     }
 
     #[test]
