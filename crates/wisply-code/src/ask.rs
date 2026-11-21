@@ -70,17 +70,7 @@ impl Index {
         self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
     }
 
-    pub fn overview(&self) -> rusqlite::Result<String> {
-        let mut q = self.db.prepare("select lang, count(*), sum(lines) l from files group by lang order by l desc")?;
-        let langs: Vec<(String, i64, i64)> = q
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<i64>>(2)?.unwrap_or(0))))?
-            .collect::<Result<_, _>>()?;
-        let shown = self.root.to_string_lossy().replace('\\', "/");
-        if langs.is_empty() {
-            return Ok(format!("no code files in {shown}"));
-        }
-        let kinds: Vec<String> = langs.iter().take(5).map(|(l, n, c)| format!("{n} {l} files ({c} lines)")).collect();
-        let mut lines = vec![format!("{shown}: {}", kinds.join(", "))];
+    fn folder_line(&self) -> rusqlite::Result<String> {
         let mut q = self.db.prepare("select path from files")?;
         let paths: Vec<Vec<String>> = q
             .query_map([], |r| r.get::<_, String>(0))?
@@ -108,7 +98,21 @@ impl Index {
         ranked.sort_by_key(|r| std::cmp::Reverse(r.1));
         let folders: Vec<String> = ranked.iter().take(FOLDERS).map(|(k, n)| format!("{k} ({n})")).collect();
         let under = if base.is_empty() { String::new() } else { format!(" under {base}") };
-        lines.push(format!("folders{under}: {}", folders.join(", ")));
+        Ok(format!("folders{under}: {}", folders.join(", ")))
+    }
+
+    pub fn overview(&self) -> rusqlite::Result<String> {
+        let mut q = self.db.prepare("select lang, count(*), sum(lines) l from files group by lang order by l desc")?;
+        let langs: Vec<(String, i64, i64)> = q
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<i64>>(2)?.unwrap_or(0))))?
+            .collect::<Result<_, _>>()?;
+        let shown = self.root.to_string_lossy().replace('\\', "/");
+        if langs.is_empty() {
+            return Ok(format!("no code files in {shown}"));
+        }
+        let kinds: Vec<String> = langs.iter().take(5).map(|(l, n, c)| format!("{n} {l} files ({c} lines)")).collect();
+        let mut lines = vec![format!("{shown}: {}", kinds.join(", "))];
+        lines.push(self.folder_line()?);
         let mut q = self.db.prepare(
             "select s.name, s.path, s.line, count(*) n, (select count(*) from symbols x where x.low = s.low and x.kind = s.kind) same \
              from symbols s join refs r on r.low = s.low where s.kind in ('class', 'interface', 'struct', 'enum', 'trait', 'record', 'object') \
