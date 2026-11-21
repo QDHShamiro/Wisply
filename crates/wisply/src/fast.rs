@@ -54,6 +54,8 @@ const LOCAL: &[&str] = &[
     "claude-start",
     "kit",
     "skill",
+    "lint",
+    "safe",
 ];
 
 fn main() -> ExitCode {

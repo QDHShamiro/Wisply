@@ -7,6 +7,7 @@ mod junk;
 mod kit;
 #[cfg(windows)]
 mod launch;
+mod lint;
 mod mcp;
 mod more;
 mod peek;

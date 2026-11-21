@@ -4459,6 +4459,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wisply-task"
+version = "3.0.1"
+dependencies = [
+ "winresource",
+]
+
+[[package]]
 name = "wisply-think"
 version = "3.0.1"
 dependencies = [
