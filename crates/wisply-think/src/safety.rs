@@ -297,7 +297,28 @@ fn git_diff(git: &str, old: Option<&Path>, new: &Path, empty: &Path) -> String {
         .arg(new_or_empty)
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-        .unwrap_or_default()
+        .unwrap_or_else(|_| plain_diff(old, new_or_empty))
+}
+
+fn plain_diff(old: &Path, new: &Path) -> String {
+    let mut out = vec![
+        format!("diff --git a/{} b/{}", files::slashed(old), files::slashed(new)),
+        "# git could not be started, so every line from the first to the last changed one is listed".to_string(),
+    ];
+    let (a, b) = (fs::read(old).unwrap_or_default(), fs::read(new).unwrap_or_default());
+    if a.contains(&0) || b.contains(&0) {
+        out.push("Binary files differ".to_string());
+        return out.join("\n") + "\n";
+    }
+    let (a, b) = (String::from_utf8_lossy(&a), String::from_utf8_lossy(&b));
+    let (a, b): (Vec<&str>, Vec<&str>) = (a.lines().collect(), b.lines().collect());
+    let head = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let tail = a[head..].iter().rev().zip(b[head..].iter().rev()).take_while(|(x, y)| x == y).count();
+    let (gone, come) = (&a[head..a.len() - tail], &b[head..b.len() - tail]);
+    out.push(format!("@@ -{0},{1} +{0},{2} @@", head + 1, gone.len(), come.len()));
+    out.extend(gone.iter().map(|l| format!("-{l}")));
+    out.extend(come.iter().map(|l| format!("+{l}")));
+    out.join("\n") + "\n"
 }
 
 fn since_commit(abs: &str) -> Option<String> {
@@ -367,7 +388,7 @@ fn diff_with(run: &Run, label: &str, git: &str) -> Result<Diff, String> {
             .arg(run.root())
             .arg("diff")
             .output()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("git could not be started ({e}) and this run has no backup to compare with"))?;
         chunks.push(String::from_utf8_lossy(&out.stdout).to_string());
     } else {
         return Err("no backup and no git, so no diff".into());
