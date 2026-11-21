@@ -114,7 +114,7 @@ pub fn run(path: &Path, args: &[String]) -> i32 {
         }
         _ => {
             eprintln!(
-                "wisply pupil watch | prep | ask | chat [--page] [--afk] [--json] [--now] [--think] [--model m] [message, files, links] | write --label x [--runs n] [--model m] [--afk] | think --label x [--think] [--budget n] [--runs n] [--limit n] [--model m] [--afk] | route --set file | bench [cases.json] [--model 2b,4b] [--only a,b] | card [card.json] | status | stop | game [--afk] | hear <video> [--start S] [--end E] [--speech MODEL] [--sound MODEL] [--only speech|sound] | limits"
+                "wisply pupil watch | prep | ask | chat [--page] [--afk] [--json] [--now] [--think] [--model m] [message, files, links] | write --label x [--runs n] [--model m] [--afk] | think --label x [--think] [--budget n] [--runs n] [--limit n] [--model m] [--afk] | route --set file | bench [cases.json] [--model 2b,4b] [--only a,b] | card [card.json] | status | stop | game [--afk] | hear <video> [--start S] [--end E] [--speech MODEL] [--sound MODEL] [--only speech|sound] | info <YouTube link> | captions <YouTube link> [--start S] [--end E] [--find \"words\"] | limits"
             );
             2
         }

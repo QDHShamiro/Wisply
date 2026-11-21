@@ -4,6 +4,22 @@ busy_timeout_seconds = 5
 [gemini]
 model_ladder = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
 
+[youtube]
+command = []
+timeout_seconds = 90
+download_timeout_seconds = 600
+info_hours = 24
+frame_format = "bv*[protocol=m3u8_native]/b[protocol=m3u8_native]/bv*[protocol=https]/b[protocol=https]"
+frame_sort = "res:1080"
+description_chars = 1500
+subtitle_format = "json3/vtt"
+
+[transcript]
+segment_seconds = 15
+segment_chars = 300
+search_results = 8
+output_chars = 12000
+
 [limits]
 usage_share = 0.8
 max_wait_seconds = 65

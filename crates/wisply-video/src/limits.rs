@@ -45,6 +45,7 @@ pub fn run(folder: &Path) -> Result<String, Fail> {
 mod tests {
     use super::*;
     use crate::guard::Ask;
+    use crate::{FOLDER, fixture};
 
     const NOON: f64 = 1_768_507_200.0;
     const NEXT_DAY: f64 = 1_768_550_400.0;
@@ -57,10 +58,6 @@ mod tests {
         }
 
         fn sleep(&self, _seconds: f64) {}
-    }
-
-    fn folder(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("wisply-video-limits-{name}-{}", std::process::id()))
     }
 
     #[test]
@@ -93,7 +90,8 @@ mod tests {
 
     #[test]
     fn a_first_run_creates_the_cache_and_reports_nothing_used() {
-        let folder = folder("fresh");
+        let home = fixture::folder("limits-fresh");
+        let folder = home.join(FOLDER);
         let text = run(&folder).unwrap();
         assert!(text.starts_with("video limits (free tier), day resets "), "{text}");
         assert!(
@@ -101,19 +99,23 @@ mod tests {
             "{text}"
         );
         assert!(folder.join(STORE_FILE).is_file());
-        assert_eq!(crate::run(&folder, &["limits".to_string()]), 0);
-        assert_eq!(crate::run(&folder, &["nothing".to_string()]), 2);
-        std::fs::remove_dir_all(&folder).unwrap();
+        assert_eq!(crate::run(&home, &["limits".to_string()]), 0);
+        assert_eq!(crate::run(&home, &["nothing".to_string()]), 2);
+        assert_eq!(crate::run(&home, &[]), 2);
+        std::fs::remove_dir_all(&home).unwrap();
     }
 
     #[test]
     fn broken_settings_are_reported_instead_of_guessed() {
-        let folder = folder("broken");
+        let home = fixture::folder("limits-broken");
+        let folder = home.join(FOLDER);
         std::fs::create_dir_all(&folder).unwrap();
         std::fs::write(folder.join(CONFIG_FILE), "[limits]\nusage_share = 7\n").unwrap();
         let fail = run(&folder).unwrap_err();
         assert!(fail.message.contains("usage_share") && fail.hint.contains(CONFIG_FILE), "{}", fail.text());
-        assert_eq!(crate::run(&folder, &["limits".to_string()]), 1);
-        std::fs::remove_dir_all(&folder).unwrap();
+        assert_eq!(crate::run(&home, &["limits".to_string()]), 1);
+        assert_eq!(crate::run(&home, &["info".to_string(), "https://youtu.be/abcdefghijk".to_string()]), 1);
+        assert_eq!(crate::run(&home, &["captions".to_string()]), 1);
+        std::fs::remove_dir_all(&home).unwrap();
     }
 }
