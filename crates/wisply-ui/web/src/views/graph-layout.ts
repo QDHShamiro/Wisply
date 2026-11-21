@@ -61,7 +61,8 @@ export function arrange(g: Net, p: Plan, show: () => void, done: () => void): ()
   const { nodes, edges } = matrices(g);
   const url = URL.createObjectURL(new Blob([`(${run.toString()}).call(this);`], { type: "text/javascript" }));
   const worker = new Worker(url);
-  URL.revokeObjectURL(url);
+  const free = () => URL.revokeObjectURL(url);
+  worker.addEventListener("message", free, { once: true });
   const end = performance.now() + p.ms;
   let round = 0;
   let next = 0;
@@ -82,5 +83,17 @@ export function arrange(g: Net, p: Plan, show: () => void, done: () => void): ()
     if (last) done();
   };
   worker.postMessage({ settings: p.settings, nodes: nodes.buffer, edges: edges.buffer }, [nodes.buffer, edges.buffer]);
-  return () => worker.terminate();
+  return () => {
+    free();
+    worker.terminate();
+  };
+}
+
+export function idle(run: () => void, ms: number): () => void {
+  if (typeof requestIdleCallback === "function") {
+    const id = requestIdleCallback(run, { timeout: ms });
+    return () => cancelIdleCallback(id);
+  }
+  const id = setTimeout(run, ms);
+  return () => clearTimeout(id);
 }

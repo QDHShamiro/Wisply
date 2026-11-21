@@ -4,7 +4,7 @@ import { build } from "esbuild";
 
 const entry = `
 export { PALETTE, place, seed } from "./src/views/graph-data";
-export { matrices, plan, settle } from "./src/views/graph-layout";
+export { idle, matrices, plan, settle } from "./src/views/graph-layout";
 export { curtain, spotlight } from "./src/views/graph-light";
 export { crownOptions, lift, rgba, stageOptions } from "./src/views/graph-style";
 export { analyzeStyleDeclaration } from "sigma/types";
@@ -147,5 +147,19 @@ assert.equal(m.plan(501, 501).settings.barnesHutOptimize, true);
 assert.ok(m.plan(400, 3).rounds < m.plan(400, 400).rounds);
 assert.equal(m.plan(20000, 20000).rounds, Infinity);
 assert.ok(m.plan(20000, 5).ms < m.plan(20000, 20000).ms);
+
+assert.equal(typeof globalThis.requestIdleCallback, "undefined");
+let woke = 0;
+m.idle(() => woke++, 1);
+m.idle(() => (woke += 10), 1)();
+await new Promise((r) => setTimeout(r, 30));
+assert.equal(woke, 1);
+const idled = [];
+globalThis.requestIdleCallback = (_run, o) => idled.push(["ask", o.timeout]) + 6;
+globalThis.cancelIdleCallback = (id) => idled.push(["drop", id]);
+m.idle(() => {}, 50)();
+delete globalThis.requestIdleCallback;
+delete globalThis.cancelIdleCallback;
+assert.deepEqual(idled, [["ask", 50], ["drop", 7]]);
 
 console.log(`graph ok (${wide.order} nodes: filter ${siftMs.toFixed(1)} ms, focus ${spotMs.toFixed(1)} ms)`);

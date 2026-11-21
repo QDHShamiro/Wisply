@@ -2,7 +2,7 @@ import { board, type GraphData } from "../api";
 import { ago, enc, go, h, mount } from "../dom";
 import { T } from "../text";
 import { KINDS, loadSpots, place, saveSpots, seed, type Attrs, type Kind } from "./graph-data";
-import { arrange, plan } from "./graph-layout";
+import { arrange, idle, plan } from "./graph-layout";
 import { curtain, spotlight } from "./graph-light";
 import { crown, LABEL_MIN, lift, rgba, stage, veil, type Crown } from "./graph-style";
 
@@ -255,7 +255,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
     over?.getCamera().setState(state);
     hush(true);
   });
-  const warm = requestIdleCallback(() => (over ??= crown(top, upper, tones)), { timeout: WARM_MS });
+  const cool = idle(() => (over ??= crown(top, upper, tones)), WARM_MS);
   live.on("enterNode", ({ node }) => {
     hover = node;
     light();
@@ -288,7 +288,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
   return () => {
     clearTimeout(grid);
     clearTimeout(rest);
-    cancelIdleCallback(warm);
+    cool();
     halt();
     over?.kill();
     live.kill();
