@@ -1,0 +1,33 @@
+[store]
+busy_timeout_seconds = 5
+
+[gemini]
+model_ladder = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+
+[limits]
+usage_share = 0.8
+max_wait_seconds = 65
+youtube_seconds_per_day = 28800
+rejection_block_seconds = 60
+history_days = 3
+
+[limits.models."gemini-3.8-flash"]
+requests_per_minute = 5
+tokens_per_minute = 250000
+requests_per_day = 20
+
+[limits.models."gemini-3.6-flash"]
+requests_per_minute = 5
+tokens_per_minute = 250000
+requests_per_day = 20
+
+[limits.models."gemini-3.5-flash-lite"]
+requests_per_minute = 15
+tokens_per_minute = 250000
+requests_per_day = 500
+
+[limits.groq]
+requests_per_minute = 20
+requests_per_day = 2000
+audio_seconds_per_hour = 7200
+audio_seconds_per_day = 28800
