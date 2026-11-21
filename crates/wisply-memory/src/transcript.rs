@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::Value;
 
+use super::asked::asked;
 use super::project::project_of;
 use super::text::scrub;
 
@@ -25,11 +26,12 @@ const LEAN_CMD: usize = 120;
 const KEEP_CMDS: &[&str] =
     &["git commit", "git merge", "git push", "gh pr", "git revert", "git reset", "git checkout -b"];
 
-static REMINDER: LazyLock<Regex> = LazyLock::new(|| {
+pub(super) static REMINDER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?s)<system-reminder>.*?</system-reminder>|<local-command-caveat>.*?</local-command-caveat>")
         .expect("reminder pattern")
 });
-static TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"</?[a-zA-Z][\w-]*(?:\s[^<>]*)?>").expect("tag pattern"));
+pub(super) static TAG: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"</?[a-zA-Z][\w-]*(?:\s[^<>]*)?>").expect("tag pattern"));
 static FILLER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)^(?:now |ok,? |okay,? |sure,? |alright,? |good,? |great,? )*(?:let me|let's|i'll|i will|i'm going to|lass mich|ich werde|jetzt|gleich|first,? )")
         .expect("filler pattern")
@@ -67,6 +69,18 @@ pub fn clean(text: &str) -> String {
     TAG.replace_all(&REMINDER.replace_all(text, ""), "").trim().to_string()
 }
 
+pub(super) fn user_text(text: &str, style: Style) -> String {
+    match style {
+        Style::Full => cut(text, TEXT_CHARS),
+        Style::Lean => cut(&FENCE.replace_all(text, "[code]"), LEAN_USER),
+    }
+}
+
+fn user_line(text: &str, style: Style) -> String {
+    let text = user_text(text, style);
+    if text.is_empty() { String::new() } else { format!("USER: {text}") }
+}
+
 fn shown(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
@@ -74,7 +88,7 @@ fn shown(v: &Value) -> String {
     }
 }
 
-fn truthy(v: &Value) -> bool {
+pub(super) fn truthy(v: &Value) -> bool {
     match v {
         Value::Null => false,
         Value::Bool(b) => *b,
@@ -105,66 +119,73 @@ fn result_text(c: &Value) -> String {
     }
 }
 
+fn said(text: &str, lean: bool) -> String {
+    let mut text = clean(text);
+    if lean {
+        text = FENCE.replace_all(&text, "[code]").into_owned();
+    }
+    let skip =
+        lean && (text.chars().count() < LEAN_MIN_CLAUDE || (FILLER.is_match(&text) && !DECISION.is_match(&text)));
+    if text.is_empty() || skip {
+        String::new()
+    } else {
+        format!("CLAUDE: {}", cut(&text, if lean { LEAN_CLAUDE } else { TEXT_CHARS }))
+    }
+}
+
+fn used(c: &Value, paths: &mut Vec<String>, lean: bool) -> String {
+    let name = c.get("name").and_then(Value::as_str).unwrap_or("");
+    let input = c.get("input").cloned().unwrap_or(Value::Null);
+    let file = ["file_path", "notebook_path", "path"].iter().find_map(|k| input.get(*k)).and_then(Value::as_str);
+    if let Some(f) = file.filter(|f| ABSOLUTE.is_match(f)) {
+        let times = if EDITS.contains(&name) { EDIT_WEIGHT } else { 1 };
+        paths.extend(std::iter::repeat_n(f.to_string(), times));
+    }
+    if !lean {
+        return format!("TOOL {}", tool_line(name, &input));
+    }
+    if EDITS.contains(&name) {
+        return file.map(|f| format!("EDIT {}", cut(f, ARG_CHARS))).unwrap_or_default();
+    }
+    if name != "Bash" && name != "PowerShell" {
+        return String::new();
+    }
+    let cmd = input.get("command").map(shown).unwrap_or_default();
+    let kept = KEEP_CMDS.iter().filter_map(|k| cmd.find(k)).min();
+    kept.map(|at| format!("RAN {}", cut(&cmd[at..], LEAN_CMD))).unwrap_or_default()
+}
+
 fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>, style: Style) -> Vec<String> {
     let lean = style == Style::Lean;
     let content = d.get("message").and_then(|m| m.get("content"));
-    let items: Vec<Value> = match content {
-        Some(Value::String(s)) => vec![serde_json::json!({"type": "text", "text": s})],
-        Some(Value::Array(a)) => a.clone(),
-        _ => Vec::new(),
-    };
-    let mut out = Vec::new();
-    for c in &items {
-        let piece = match c.get("type").and_then(Value::as_str) {
-            Some("text") => {
-                let mut text = clean(c.get("text").and_then(Value::as_str).unwrap_or(""));
-                if lean {
-                    text = FENCE.replace_all(&text, "[code]").into_owned();
-                }
-                let who = if kind == "user" { "USER: " } else { "CLAUDE: " };
-                let cap = match (lean, kind == "user") {
-                    (false, _) => TEXT_CHARS,
-                    (true, true) => LEAN_USER,
-                    (true, false) => LEAN_CLAUDE,
-                };
-                let skip = lean
-                    && kind != "user"
-                    && (text.chars().count() < LEAN_MIN_CLAUDE
-                        || (FILLER.is_match(&text) && !DECISION.is_match(&text)));
-                if text.is_empty() || skip { String::new() } else { format!("{who}{}", cut(&text, cap)) }
-            }
-            Some("tool_use") => {
-                let name = c.get("name").and_then(Value::as_str).unwrap_or("");
-                let input = c.get("input").cloned().unwrap_or(Value::Null);
-                let file =
-                    ["file_path", "notebook_path", "path"].iter().find_map(|k| input.get(*k)).and_then(Value::as_str);
-                if let Some(f) = file.filter(|f| ABSOLUTE.is_match(f)) {
-                    let times = if EDITS.contains(&name) { EDIT_WEIGHT } else { 1 };
-                    paths.extend(std::iter::repeat_n(f.to_string(), times));
-                }
-                if lean {
-                    let cmd = input.get("command").map(shown).unwrap_or_default();
-                    if EDITS.contains(&name) {
-                        file.map(|f| format!("EDIT {}", cut(f, ARG_CHARS))).unwrap_or_default()
-                    } else if (name == "Bash" || name == "PowerShell") && KEEP_CMDS.iter().any(|k| cmd.contains(k)) {
-                        format!("RAN {}", cut(&cmd, LEAN_CMD))
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    format!("TOOL {}", tool_line(name, &input))
-                }
-            }
+    let mut out = vec![user_line(&asked(d), style)];
+    if let Some(text) = content.and_then(Value::as_str).filter(|_| kind == "assistant") {
+        out.push(said(text, lean));
+    }
+    for c in content.and_then(Value::as_array).into_iter().flatten() {
+        out.push(match c.get("type").and_then(Value::as_str) {
+            Some("text") if kind == "assistant" => said(c.get("text").and_then(Value::as_str).unwrap_or(""), lean),
+            Some("tool_use") => used(c, paths, lean),
             Some("tool_result") if c.get("is_error").is_some_and(truthy) => {
                 format!("ERROR: {}", cut(&result_text(c), if lean { LEAN_ERROR } else { TOOL_CHARS }))
             }
             _ => String::new(),
-        };
-        if !piece.is_empty() {
-            out.push(piece);
-        }
+        });
     }
+    out.retain(|piece| !piece.is_empty());
     out
+}
+
+fn turn(d: &Value, kind: &str, found: &[String]) -> bool {
+    let text = |v: Option<&Value>| !clean(v.and_then(Value::as_str).unwrap_or("")).is_empty();
+    match (kind, d.get("message").and_then(|m| m.get("content"))) {
+        ("attachment", _) => !found.is_empty(),
+        ("user", Some(Value::Array(items))) => {
+            items.iter().any(|c| c.get("type").and_then(Value::as_str) == Some("text") && text(c.get("text")))
+        }
+        ("user", content) => text(content),
+        _ => false,
+    }
 }
 
 pub fn condense(path: &Path, offset: u64, limit: Option<usize>) -> std::io::Result<Condensed> {
@@ -196,17 +217,18 @@ pub fn condense_as(path: &Path, offset: u64, limit: Option<usize>, style: Style)
             continue;
         }
         let side = ["isMeta", "isSidechain"].iter().any(|k| d.get(*k).is_some_and(truthy));
-        if !["user", "assistant"].contains(&kind) || side {
+        if !["user", "assistant", "attachment"].contains(&kind) || side {
             continue;
         }
-        for piece in pieces(&d, kind, &mut out.paths, style) {
+        let found = pieces(&d, kind, &mut out.paths, style);
+        out.users += usize::from(turn(&d, kind, &found));
+        for piece in found {
             if style == Style::Lean && parts.last() == Some(&piece) {
                 continue;
             }
             if style == Style::Lean && piece.starts_with("EDIT ") && parts.contains(&piece) {
                 continue;
             }
-            out.users += usize::from(piece.starts_with("USER: "));
             out.edits += usize::from(piece.starts_with("EDIT "));
             size += piece.chars().count() + 1;
             parts.push(piece);

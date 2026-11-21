@@ -1,3 +1,4 @@
+mod asked;
 mod bench;
 mod board;
 mod expand;
@@ -14,6 +15,7 @@ mod transcript;
 mod vault;
 mod wiki;
 
+pub use asked::typed_in;
 pub use bench::{
     BENCH_LIMIT, BENCH_TOP, CLASSES, CROSS, Gain, NO_ANSWER, Question, Row, SMALL_CLASS, Sums, by_class, gain, judge,
     paired, questions, rows_json, rows_of, sums,
