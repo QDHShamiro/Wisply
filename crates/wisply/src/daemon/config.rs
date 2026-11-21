@@ -12,6 +12,7 @@ const NAV_CHARS: usize = 1600;
 const SNAP_TOP: i64 = 15;
 const FOCUS_MODES: [&str; 3] = ["never", "away", "idle"];
 const UPDATE_MODES: [&str; 3] = ["auto", "notify", "off"];
+const PUSH_MODES: [&str; 2] = ["off", "ntfy"];
 const RISK_WORDS: &[&str] = &[
     "buy",
     "purchase",
@@ -77,6 +78,9 @@ fn defaults() -> Map<String, Value> {
         ("phone_port", json!(47841)),
         ("phone_bind", json!("")),
         ("phone_tailscale", json!(true)),
+        ("push", json!("off")),
+        ("push_server", json!("")),
+        ("push_topic", json!("")),
         ("secure", json!(true)),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
@@ -164,6 +168,9 @@ pub fn command(home: &Path, pos: &[String]) -> Result<(String, bool), Fail> {
     }
     if key == "update" && !UPDATE_MODES.contains(&raw.as_str()) {
         return Err(Fail::hint(format!("update is one of {}", UPDATE_MODES.join(", ")), "wisply config update auto"));
+    }
+    if key == "push" && !PUSH_MODES.contains(&raw.to_lowercase().as_str()) {
+        return Err(Fail::hint(format!("push is one of {}", PUSH_MODES.join(", ")), "wisply config push ntfy"));
     }
     let line = format!("{key} = {}", dumps(&val));
     cfg.insert(key.clone(), val);
