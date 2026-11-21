@@ -92,7 +92,11 @@
         sel.addRange(range);
       }
     }
-    return { ok: true, focused: document.activeElement === el || el.contains(document.activeElement), list: t === "SELECT" };
+    return { ok: true, focused: document.activeElement === el || el.contains(document.activeElement), list: t === "SELECT", box: boxOf(el) };
+  }
+
+  function boxOf(el) {
+    return el.tagName === "INPUT" && (el.type === "checkbox" || el.type === "radio") ? el.type : "";
   }
 
   function holdsText(el) {
