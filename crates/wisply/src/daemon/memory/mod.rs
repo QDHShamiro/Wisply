@@ -187,14 +187,7 @@ fn shown(found: &[Hit], todos: &[Todo], here: &str, text: &str, note: &str) -> S
     let mut lines: Vec<String> = todos.iter().map(|t| format!("to-do {}", todo_line(t, true))).collect();
     lines.extend(found.iter().map(|h| line(&h.note, !here.is_empty() && h.note.project != here, &want)));
     let tail = if note.is_empty() { String::new() } else { format!("; {note}") };
-    format!(
-        "{}
-(recall <id> = full note, ~Nt = size{tail})",
-        lines.join(
-            "
-"
-        )
-    )
+    format!("{}\n(recall <id> = full note, ~Nt = size{tail})", lines.join("\n"))
 }
 
 fn todo_hits(s: &Store, text: &str) -> DbResult<Vec<Todo>> {
