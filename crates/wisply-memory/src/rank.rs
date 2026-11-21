@@ -1,4 +1,7 @@
 use std::collections::HashSet;
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 use super::expand::variants;
 use super::store::{Hit, Note};
@@ -142,6 +145,18 @@ fn drop_title_echo<'a>(part: &'a str, base: &str) -> &'a str {
     if tail.chars().count() < 6 { "" } else { tail }
 }
 
+static WIKI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[\[(?:[^\]|]*\|)?([^\]|]+)\]\]").expect("wiki link"));
+static LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!?\[([^\]]*)\]\([^)]*\)").expect("md link"));
+static CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").expect("code span"));
+static BOLD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*\*([^*]+)\*\*").expect("bold span"));
+
+fn strip_md(s: &str) -> String {
+    let wiki = WIKI.replace_all(s, "${1}");
+    let link = LINK.replace_all(&wiki, "${1}");
+    let code = CODE.replace_all(&link, "${1}");
+    BOLD.replace_all(&code, "${1}").into_owned()
+}
+
 pub fn snippet(body: &str, title: &str, terms: &[String], n: usize) -> String {
     let title = title.to_lowercase();
     let mut best: Option<(usize, &str)> = None;
@@ -162,7 +177,13 @@ pub fn snippet(body: &str, title: &str, terms: &[String], n: usize) -> String {
         }
     }
     let base = title.trim_end_matches(['…', '.', ' ']);
-    best.map(|(_, p)| p).or(first).map(|p| oneline(drop_title_echo(p, base), n)).unwrap_or_default()
+    best.map(|(_, p)| p)
+        .or(first)
+        .map(|p| {
+            let clean = strip_md(p);
+            oneline(drop_title_echo(&clean, base), n)
+        })
+        .unwrap_or_default()
 }
 
 pub fn fold(hits: Vec<Hit>, limit: usize) -> Vec<Hit> {
@@ -220,6 +241,13 @@ mod tests {
         assert!((both - 1.0).abs() < 1e-9 && one > none && one < both, "{both} {one} {none}");
         assert!(weight(both) > weight(one) && weight(one) > weight(none));
         assert!((coverage(&note(4, "x", ""), &g, Some(0.9)) - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn snippet_strips_inline_markdown() {
+        let body = "See the **ship** script via [[git-flow|flow]] and `cargo test` in [docs](http://x).";
+        let t = terms("ship script");
+        assert_eq!(snippet(body, "", &t, 120), "See the ship script via flow and cargo test in docs.");
     }
 
     #[test]
