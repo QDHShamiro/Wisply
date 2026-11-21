@@ -277,4 +277,23 @@ mod tests {
         assert!(foreign("snap") && foreign("click") && !foreign("tabs"));
         assert!(windowish("w3") && windowish("App:Discord") && !windowish("e3"));
     }
+
+    #[test]
+    fn on_with_a_tab_names_the_tab_command() {
+        let on = |value: &str| {
+            let flags = BTreeMap::from([("on".to_string(), Flag::Val(value.to_string()))]);
+            aim(&Call { name: "js".into(), pos: vec!["1".into()], flags })
+        };
+        let said = |value: &str| on(value).err().map(|fail| fail.text()).unwrap_or_default();
+        assert_eq!(
+            said("t25"),
+            "err: --on takes web, app or a window like w3, and t25 is a tab -> try: wisply tab t25, then wisply js ... without --on"
+        );
+        assert_eq!(
+            said("nowhere"),
+            "err: --on takes web, app or a window like w3 or app:Name -> try: wisply js ... --on app"
+        );
+        assert!(on("web").is_ok_and(|aimed| aimed.is_none()));
+        assert!(on("w3").is_ok_and(|aimed| aimed.is_some()));
+    }
 }

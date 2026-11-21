@@ -182,6 +182,18 @@ mod tests {
     }
 
     #[test]
+    fn words_agents_typed_for_keys_apps_and_chats_name_the_real_command() {
+        let cases = [
+            ("key", "press <key> (keys lists the shortcuts of this page)"),
+            ("apps", "windows (open apps) or launch <app>"),
+            ("chat", "unread (waiting chats), inbox <w5|\"@Name\"> or reply <w5|\"@Name\"> \"text\""),
+        ];
+        for (word, hint) in cases {
+            assert_eq!(unknown(word).text(), format!("err: unknown command '{word}' -> try: wisply {hint}"));
+        }
+    }
+
+    #[test]
     fn the_known_names_are_the_2x_list_secure_and_the_window() {
         let want = "agents back bench brain call channels check claude click clip close code config console demo desktop dialog \
                     dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames grep headless help \

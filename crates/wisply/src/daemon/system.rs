@@ -238,6 +238,13 @@ mod tests {
     }
 
     #[test]
+    fn help_has_a_row_for_the_chat_commands() {
+        for name in ["unread", "inbox", "reply"] {
+            assert!(about(name).is_some_and(|row| row.starts_with("unread [w5]")), "{name}");
+        }
+    }
+
+    #[test]
     fn log_wants_a_number_of_lines() {
         assert_eq!(lines_of("30").ok(), Some(30));
         let said = lines_of("abc").unwrap_err().text();

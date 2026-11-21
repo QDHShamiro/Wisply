@@ -336,6 +336,45 @@ mod tests {
     }
 
     #[test]
+    fn a_group_word_from_the_help_names_a_step_of_that_group() {
+        let base = std::env::temp_dir().join(format!("wisply-think-group-{}", std::process::id()));
+        let env = Env {
+            home: base.join("wisply"),
+            user: base.join("user"),
+            sid: "s".into(),
+            cwd: base.clone(),
+            playing: String::new(),
+            cwds: Vec::new(),
+            notes: RefCell::new(Vec::new()),
+        };
+        let step = |word: &str| {
+            let call = Call { name: "think".into(), pos: vec![word.into()], flags: BTreeMap::new() };
+            command(&env, &call).unwrap_or_else(|said| said)
+        };
+        let cases = [
+            ("run", "start \"<name>\""),
+            ("find", "scan"),
+            ("change", "fix"),
+            ("prove", "measure <label>"),
+            ("lessons", "learn --list"),
+        ];
+        for (group, first) in cases {
+            assert_eq!(
+                step(group),
+                format!(
+                    "'{group}' is a group of steps, not a step -> try: wisply think {first} (all steps: wisply think help)"
+                )
+            );
+            let word = first.split(' ').next().unwrap_or_default();
+            let row = USAGE.lines().find(|line| line.starts_with(&format!("{group}: "))).unwrap_or_default();
+            assert!(row.contains(&format!(" {word} ")), "{group}: {row}");
+        }
+        assert_eq!(step("FIND"), step("find"));
+        assert_eq!(step("nope"), format!("no step called 'nope'\n{USAGE}"));
+        assert_eq!(step("help"), USAGE);
+    }
+
+    #[test]
     fn quick_check_reports_only_what_the_edit_brought() {
         let base = std::env::temp_dir().join(format!("wisply-think-edit-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
