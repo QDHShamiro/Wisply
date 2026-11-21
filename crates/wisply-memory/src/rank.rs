@@ -330,6 +330,55 @@ mod tests {
     }
 
     #[test]
+    fn recall_ranking_puts_the_on_topic_note_first() {
+        let corpus = [
+            note(1, "Sniper live build rules", "Build the sniper jar obfuscated then push it to the live folder."),
+            note(
+                2,
+                "Redis crash on the fernhost server",
+                "The async team worker crashed on startup; restart it once redis boots again.",
+            ),
+            note(3, "FactionPVP arena bounds", "Arena bounds live in FactionPVPCore under the arenas directory."),
+            note(4, "Wisply recall snippet stripping", "Snippets strip markdown yet keep bold labels before display."),
+            note(
+                5,
+                "cpvpgens economy coins",
+                "Coin one, compressed value, heavy token as items; the heavy price is the item itself.",
+            ),
+            note(6, "Video edit pipeline watermark", "Edits follow the headbop style with a watermark on export."),
+            note(
+                7,
+                "Bewerbung Ausbildung apprenticeship",
+                "The apprenticeship application has a deadline at the district office.",
+            ),
+            note(8, "Discord friends mapping", "Franz maps to Froxotron and Lukas to the lukfighter handle."),
+            note(9, "External disk spindown", "The external disk spins down after twenty minutes before spinup."),
+            note(10, "ThumbnailEngine renderer", "Thumbnails use a procedural renderer with no image model at all."),
+        ];
+        let cases: &[(&str, i64)] = &[
+            ("sniper obfuscated jar", 1),
+            ("redis worker restart", 2),
+            ("arena bounds factionpvpcore", 3),
+            ("snippet markdown bold", 4),
+            ("economy coins heavy", 5),
+            ("watermark edit export", 6),
+            ("apprenticeship deadline office", 7),
+            ("disk spindown spinup", 9),
+        ];
+        for (query, want) in cases {
+            let g = groups(&terms(query));
+            let mut ranked: Vec<(i64, f64)> = corpus.iter().map(|n| (n.id, weight(coverage(n, &g, None)))).collect();
+            ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).expect("finite scores"));
+            assert_eq!(
+                ranked[0].0, *want,
+                "query {query:?} ranked {:?} first, want {want}; scores {ranked:?}",
+                ranked[0].0
+            );
+            assert!(ranked[0].1 > ranked[1].1, "query {query:?} top tied: {ranked:?}");
+        }
+    }
+
+    #[test]
     fn snippet_drops_truncated_title_echo() {
         let body = "cpvpgens premium kit blocker war falsch asynckits kits yml sind editierbar und dann folgt noch viel mehr neuer text als neue information";
         let title = "cpvpgens premium kit blocker war falsch…";
