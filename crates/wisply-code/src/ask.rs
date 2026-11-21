@@ -32,11 +32,12 @@ pub struct Sym {
     pub sig: String,
 }
 
-fn is_test_path(path: &str) -> bool {
+pub fn is_test_path(path: &str) -> bool {
     let low = path.to_lowercase();
     low.contains("/test")
         || low.starts_with("test")
         || low.contains("_test.")
+        || low.contains("_tests.")
         || low.contains(".test.")
         || low.contains(".spec.")
 }
@@ -425,6 +426,27 @@ mod tests {
         assert_eq!(rows[0], "called from (4):");
         assert_eq!(rows[1], "  src/b.rs:9,12 in run");
         assert!(rows[2].ends_with("[test]") && rows[3].ends_with("[test]"), "{out}");
+    }
+
+    #[test]
+    fn callers_in_a_tests_file_are_marked_and_come_last() {
+        let ix = index("callers-tests-file");
+        call(&ix, "src/trace_tests.rs", 4, "it_traces");
+        call(&ix, "src/trace.rs", 9, "run");
+        let out = ix.callers("search").unwrap();
+        let rows: Vec<&str> = out.lines().collect();
+        assert_eq!(rows[1], "  src/trace.rs:9 in run", "{out}");
+        assert_eq!(rows[2], "  src/trace_tests.rs:4 in it_traces [test]", "{out}");
+    }
+
+    #[test]
+    fn a_file_named_like_its_tests_is_a_test_file() {
+        for path in ["src/trace_tests.rs", "pkg/trace_test.go", "web/trace.spec.ts", "src/safety/tests.rs"] {
+            assert!(is_test_path(path), "{path}");
+        }
+        for path in ["src/latest.rs", "src/contests.rs", "src/attests.rs"] {
+            assert!(!is_test_path(path), "{path}");
+        }
     }
 
     #[test]
