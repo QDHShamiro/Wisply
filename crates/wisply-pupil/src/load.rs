@@ -249,7 +249,11 @@ mod tests {
     #[test]
     fn the_temp_folder_needs_one_plain_name() {
         let mut talk = config().talk;
-        for bad in ["", "..", "a/b", "C:\\x"] {
+        let mut bad = vec!["", "..", "a/b", "/x"];
+        if cfg!(windows) {
+            bad.push("C:\\x");
+        }
+        for bad in bad {
             talk.temp_name = bad.to_string();
             assert!(Temp::new(&talk).is_err(), "{bad}");
         }

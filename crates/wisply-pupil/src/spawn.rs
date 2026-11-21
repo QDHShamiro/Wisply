@@ -8,6 +8,7 @@ const DETACHED: u32 = windows_sys::Win32::System::Threading::DETACHED_PROCESS
     | windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
 
 pub fn quiet(program: impl AsRef<OsStr>) -> Command {
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut command = Command::new(program);
     #[cfg(windows)]
     {
@@ -28,6 +29,7 @@ pub fn ear(exe: &std::path::Path) -> Command {
 }
 
 pub fn detached(program: impl AsRef<OsStr>) -> Command {
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut command = Command::new(program);
     #[cfg(windows)]
     {

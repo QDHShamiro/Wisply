@@ -5,6 +5,7 @@ use std::process::Command;
 const NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 pub fn quiet(program: impl AsRef<OsStr>) -> Command {
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut command = Command::new(program);
     #[cfg(windows)]
     {

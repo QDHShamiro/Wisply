@@ -235,6 +235,7 @@ pub struct Game {
     #[serde(default)]
     pub fullscreen_ignore: Vec<String>,
     pub d3d_state: i32,
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub shell_classes: Vec<String>,
     pub fullscreen_name: String,
     pub minecraft_name: String,
