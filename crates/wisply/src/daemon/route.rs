@@ -85,6 +85,10 @@ fn aim(c: &Call) -> Result<Option<(String, Call)>, Fail> {
     match c.flags.get("on") {
         Some(Flag::Val(on)) if on == "web" || on == "app" => Ok(None),
         Some(Flag::Val(on)) if windowish(on) => Ok(Some((on.clone(), c.clone()))),
+        Some(Flag::Val(on)) if web::ref_kind(on) == Some("t") => Err(Fail::hint(
+            format!("--on takes web, app or a window like w3, and {on} is a tab"),
+            format!("wisply tab {on}, then wisply {} ... without --on", c.name),
+        )),
         Some(_) => Err(Fail::hint(
             "--on takes web, app or a window like w3 or app:Name",
             format!("wisply {} ... --on app", c.name),

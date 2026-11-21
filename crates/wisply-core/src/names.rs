@@ -86,6 +86,9 @@ const GUESS: &[(&str, &str)] = &[
     ("screenshot", "shot"),
     ("eval", "js <code>"),
     ("sleep", "wait <ms|\"text\">"),
+    ("key", "press <key> (keys lists the shortcuts of this page)"),
+    ("apps", "windows (open apps) or launch <app>"),
+    ("chat", "unread (waiting chats), inbox <w5|\"@Name\"> or reply <w5|\"@Name\"> \"text\""),
 ];
 
 pub const QUIET: &[&str] = &[

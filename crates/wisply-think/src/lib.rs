@@ -31,17 +31,24 @@ const TOLD_FILES: usize = 400;
 const EDITS: &[&str] = &["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
 pub const USAGE: &str = "wisply think <step>   critical thinking without AI: finds, fixes and proves improvements
-run      start \"<name>\" [paths] [--goal \"...\"] [--quick] [--size file|feature|project]   status   runs   brief
-find     scan [--all] (own checks fitted to the project and your rules)   rules   profile [set web,rust|auto]
-ideas    crit \"<criterion>\" ... [--why]   hint \"<doubt>\"   source <url> \"<proof>\"
+run:     start \"<name>\" [paths] [--goal \"...\"] [--quick] [--size file|feature|project]   status   runs   brief
+find:    scan [--all] (own checks fitted to the project and your rules)   rules   profile [set web,rust|auto]
+ideas:   crit \"<criterion>\" ... [--why]   hint \"<doubt>\"   source <url> \"<proof>\"
          idea add \"title | lens | tool | impact | sure | effort | safe/big\" (or lines on stdin)   idea list [--all]
          idea set <ids> --status done|unchecked|dropped|suggestion [--proof|--why|--grade]   idea out \"<why>\"
-change   fix [--deep] (Wisply fixes what it safely can, proves it, reverts when worse)
+change:  fix [--deep] (Wisply fixes what it safely can, proves it, reverts when worse)
          checkpoint <id> <files>   revert <id> [--why] [--force]   restore --yes   diff [label]
-prove    measure <label> [--cmd \"...\"] [--runs 5] [--test] [--metrics]   compare [a b]   save <label> [--file f]
+prove:   measure <label> [--cmd \"...\"] [--runs 5] [--test] [--metrics]   compare [a b]   save <label> [--file f]
          blind <before> <after>   blind-result <n> 1|2|same   round [--anyway \"<reason>\"]   report
-lessons  learn \"<lesson>\" --tag <tag>   learn --list   lint-skill <folder>
+lessons: learn \"<lesson>\" --tag <tag>   learn --list   lint-skill <folder>
 any step takes --run <id> for another run";
+const GROUPS: &[(&str, &str)] = &[
+    ("run", "start \"<name>\""),
+    ("find", "scan"),
+    ("change", "fix"),
+    ("prove", "measure <label>"),
+    ("lessons", "learn --list"),
+];
 
 pub struct Env {
     pub home: PathBuf,
@@ -145,6 +152,15 @@ fn migrate(home: &run::Home, user: &Path) {
     }
 }
 
+fn unknown(step: &str) -> String {
+    match GROUPS.iter().find(|(group, _)| *group == step) {
+        Some((_, first)) => format!(
+            "'{step}' is a group of steps, not a step -> try: wisply think {first} (all steps: wisply think help)"
+        ),
+        None => format!("no step called '{step}'\n{USAGE}"),
+    }
+}
+
 pub fn command(env: &Env, c: &Call) -> Result<String, String> {
     let home = run::Home::new(&env.home, &env.sid);
     migrate(&home, &env.user);
@@ -176,7 +192,7 @@ pub fn command(env: &Env, c: &Call) -> Result<String, String> {
         "rules" => Ok(work::rules_cmd(env)),
         "lint-skill" => work::lint_skill(env, c),
         "" | "help" => Ok(USAGE.into()),
-        other => Err(format!("no step called '{other}'\n{USAGE}")),
+        other => Err(unknown(other)),
     }?;
     let notes = env.notes.borrow();
     if notes.is_empty() {
