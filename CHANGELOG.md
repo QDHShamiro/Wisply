@@ -5,6 +5,18 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [Unreleased]
+
+### Fixed
+- `tabs -f <words>` with no matching tab printed "no tab matches" and still ended with exit 0, so a script took the
+  first word "no" as a tab id and failed on `tab no` again and again (1,126 times in one log). It is an error with
+  exit 1 now and names `wisply tabs --all`.
+- `upload C:/path/file.png` without a ref uses the file field when the page has exactly one (10 calls in 4 sessions
+  failed without a ref). With more than one field it says how many there are and how to pick one.
+- `type` falls back to setting the value directly when the native value setter throws ("Illegal invocation", seen 9
+  times) and takes that setter from the field's own window, so fields inside frames work too.
+- A routine run under one second showed "0.0 s"; it shows milliseconds now (`12 ms`), from one second on as before.
+
 ## [3.5.0] - 2026-11-22
 
 ### Added
