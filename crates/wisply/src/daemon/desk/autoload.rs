@@ -14,6 +14,7 @@ use super::super::web::{browser_exe, installed_browsers};
 use super::uia::{self, El};
 use super::{input, win};
 
+const QUIET_START: &[&str] = &["--no-first-run", "--no-default-browser-check"];
 const PAGES: &[(&str, &str)] =
     &[("brave", "brave://extensions/"), ("chrome", "chrome://extensions/"), ("edge", "edge://extensions/")];
 const TITLES: &[&str] = &["erweiterungen", "extensions", "extensiones", "extensões"];
@@ -179,28 +180,7 @@ fn pick_folder(dlg: isize, folder: &Path) -> Result<(), Fail> {
     ok.act(false).map(|_| ()).ok_or_else(|| Fail::new("the dialog's select button did not react"))
 }
 
-fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail> {
-    let exe = browser_exe(name).ok_or_else(|| Fail::new(format!("{name} is not installed")))?;
-    let exe_name = exe_file(&exe);
-    let started = browser_window(&exe_name, false).is_none();
-    crate::spawn::detached(&exe, &[page(name)], exe.parent().unwrap_or(&d.home), &d.home.join("daemon.log"));
-    if started && let Some(host) = wait(HOST_WAIT, || host_for(d, name)) {
-        let _ = host.call("close-url", json!({"prefix": page(name)}), None, CLOSE_WAIT, None);
-        log.push(format!("{name} started, the extension was already installed"));
-        return Ok(host);
-    }
-    let hwnd = wait(PAGE_WAIT, || browser_window(&exe_name, true))
-        .or_else(|| {
-            browser_window(&exe_name, false)?;
-            crate::spawn::detached(&exe, &[page(name)], exe.parent().unwrap_or(&d.home), &d.home.join("daemon.log"));
-            log.push(format!("{name} opened a start page first, asked again for the extensions page"));
-            wait(PAGE_WAIT, || browser_window(&exe_name, true))
-        })
-        .or_else(|| {
-            log.push(format!("{name} ignored the page on its command line, typed it into the address bar"));
-            open_by_address_bar(&exe_name, page(name))
-        })
-        .ok_or_else(|| Fail::new(format!("the extensions page did not open in {name}")))?;
+fn developer_mode(hwnd: isize, log: &mut Vec<String>) -> Result<(), Fail> {
     let mut menu = false;
     let dev = wait(MENU_WAIT, || dev_switch(hwnd))
         .or_else(|| {
@@ -221,6 +201,33 @@ fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail
         input::key(VK_ESCAPE, true, false);
         thread::sleep(TOGGLE_SETTLE);
     }
+    Ok(())
+}
+
+fn load(d: &Daemon, name: &str, log: &mut Vec<String>) -> Result<Arc<Host>, Fail> {
+    let exe = browser_exe(name).ok_or_else(|| Fail::new(format!("{name} is not installed")))?;
+    let exe_name = exe_file(&exe);
+    let started = browser_window(&exe_name, false).is_none();
+    let args: Vec<&str> = QUIET_START.iter().copied().chain([page(name)]).collect();
+    crate::spawn::detached(&exe, &args, exe.parent().unwrap_or(&d.home), &d.home.join("daemon.log"));
+    if started && let Some(host) = wait(HOST_WAIT, || host_for(d, name)) {
+        let _ = host.call("close-url", json!({"prefix": page(name)}), None, CLOSE_WAIT, None);
+        log.push(format!("{name} started, the extension was already installed"));
+        return Ok(host);
+    }
+    let hwnd = wait(PAGE_WAIT, || browser_window(&exe_name, true))
+        .or_else(|| {
+            browser_window(&exe_name, false)?;
+            crate::spawn::detached(&exe, &args, exe.parent().unwrap_or(&d.home), &d.home.join("daemon.log"));
+            log.push(format!("{name} opened a start page first, asked again for the extensions page"));
+            wait(PAGE_WAIT, || browser_window(&exe_name, true))
+        })
+        .or_else(|| {
+            log.push(format!("{name} ignored the page on its command line, typed it into the address bar"));
+            open_by_address_bar(&exe_name, page(name))
+        })
+        .ok_or_else(|| Fail::new(format!("the extensions page did not open in {name}")))?;
+    developer_mode(hwnd, log)?;
     let button = wait(FIND_WAIT, || uia::collect(hwnd, false, None).into_iter().find(|e| matches(e, LOAD)))
         .ok_or_else(|| Fail::new(format!("'Load unpacked' button not found (saw: {})", seen(hwnd))))?;
     let pid = win::pid_of(hwnd);

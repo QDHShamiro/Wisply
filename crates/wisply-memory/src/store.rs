@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use half::f16;
 use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
@@ -21,6 +21,7 @@ const FRESH_BOOST: f64 = 0.5;
 const HALF_LIFE_S: f64 = 45.0 * 86_400.0;
 const FOLD_POOL: usize = 3;
 const BUSY: Duration = Duration::from_secs(15);
+const BUSY_PAUSE: Duration = Duration::from_millis(20);
 const TITLE_CHARS: usize = 200;
 pub(crate) const TASK_CHARS: usize = 300;
 const FILE_SOURCES: &[&str] = &["vault", "claude"];
@@ -187,17 +188,35 @@ fn floats(raw: &[u8]) -> impl Iterator<Item = f32> + '_ {
     raw.as_chunks::<2>().0.iter().map(|b| f16::from_le_bytes(*b).to_f32())
 }
 
+fn prepare(db: &Connection) -> rusqlite::Result<()> {
+    db.pragma_update(None, "journal_mode", "wal")?;
+    db.pragma_update(None, "synchronous", "normal")?;
+    db.execute_batch(SCHEMA)?;
+    for sql in MIGRATE {
+        match db.execute(sql, []) {
+            Err(e) if busy(&e) => return Err(e),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn busy(e: &rusqlite::Error) -> bool {
+    matches!(e.sqlite_error_code(), Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked))
+}
+
 impl Store {
     pub fn open(home: &Path) -> rusqlite::Result<Store> {
         let dir = home.join("memory");
         let _ = fs::create_dir_all(&dir);
         let db = Connection::open(dir.join("memory.db"))?;
         db.busy_timeout(BUSY)?;
-        db.pragma_update(None, "journal_mode", "wal")?;
-        db.pragma_update(None, "synchronous", "normal")?;
-        db.execute_batch(SCHEMA)?;
-        for sql in MIGRATE {
-            let _ = db.execute(sql, []);
+        let until = Instant::now() + BUSY;
+        while let Err(e) = prepare(&db) {
+            if !busy(&e) || Instant::now() >= until {
+                return Err(e);
+            }
+            std::thread::sleep(BUSY_PAUSE);
         }
         let key = dir.join("memory.db");
         Ok(Store { db, vecs: None, lex: shared(&key), seen: None, clock: None })

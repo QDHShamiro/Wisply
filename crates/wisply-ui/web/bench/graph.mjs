@@ -26,7 +26,7 @@ const BROWSERS = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 ].filter(Boolean);
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml" };
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; worker-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'";
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 const PULSE = JSON.stringify({ pid: 1, up: 60, working: 0, queued: 0, drafts: 0, notes: 0, problem: "" });
 const ARRANGED = "/\\d/.test(document.querySelector('.graph .info')?.textContent ?? '')";
 const PROBE = `(() => {

@@ -104,3 +104,24 @@ fn semantic_recall_ranks_by_vector_closeness() {
     drop(s);
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn many_first_opens_at_once_all_get_the_store() {
+    for round in 0..20 {
+        let dir = home(&format!("race{round}"));
+        let gate = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let opens: Vec<_> = (0..8)
+            .map(|_| {
+                let (dir, gate) = (dir.clone(), gate.clone());
+                std::thread::spawn(move || {
+                    gate.wait();
+                    Store::open(&dir).map(|_| ()).map_err(|e| e.to_string())
+                })
+            })
+            .collect();
+        for open in opens {
+            assert_eq!(open.join().unwrap(), Ok(()), "round {round}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+}
