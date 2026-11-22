@@ -147,6 +147,12 @@ impl Gemini<'_> {
         redact::hide_links(&trouble.message).chars().take(self.settings.error_text_chars).collect()
     }
 
+    fn patience(&self, estimate: &Ask) -> f64 {
+        let media = (estimate.youtube_seconds + estimate.audio_seconds).max(0.0);
+        let grown = self.settings.first_answer_seconds + self.settings.answer_seconds_per_media_second * media;
+        self.settings.request_timeout_seconds.min(grown)
+    }
+
     fn backoff(&self, tries: u32) -> f64 {
         let retry = &self.settings.retry;
         let grown = retry.first_delay_seconds * GROWTH.powf(f64::from(tries.saturating_sub(1)));
@@ -206,7 +212,7 @@ impl Gemini<'_> {
             tries += 1;
             let reservation = self.guard.reserve(&models, estimate)?;
             let scope = reservation.scope.as_str();
-            let wait = self.settings.request_timeout_seconds.min((deadline - self.clock.now()).max(SHORTEST_WAIT));
+            let wait = self.patience(estimate).min((deadline - self.clock.now()).max(SHORTEST_WAIT));
             let trouble = match self.transport.post(&with_model(body, scope), wait) {
                 Ok(sent) if (FIRST_GOOD..FIRST_BAD).contains(&sent.status) => {
                     let interaction = read(&sent.text)?;

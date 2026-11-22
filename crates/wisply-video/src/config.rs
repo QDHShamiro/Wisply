@@ -36,6 +36,8 @@ pub struct Store {
 pub struct Gemini {
     pub model_ladder: Vec<String>,
     pub request_timeout_seconds: f64,
+    pub first_answer_seconds: f64,
+    pub answer_seconds_per_media_second: f64,
     pub max_hops: usize,
     pub error_text_chars: usize,
     pub retry: Retry,
@@ -230,20 +232,38 @@ impl Config {
         Ok(())
     }
 
+    fn check_gemini(&self) -> Result<Vec<(&'static str, f64)>, String> {
+        let gemini = &self.gemini;
+        if gemini.model_ladder.is_empty() {
+            return Err("gemini.model_ladder names no model".to_string());
+        }
+        if let Some(model) = gemini.model_ladder.iter().find(|model| !self.limits.models.contains_key(*model)) {
+            return Err(format!("gemini.model_ladder names {model}, which has no [limits.models] entry"));
+        }
+        let per_second = gemini.answer_seconds_per_media_second;
+        if !(per_second >= 0.0 && per_second.is_finite()) {
+            return Err("gemini.answer_seconds_per_media_second cannot be negative".to_string());
+        }
+        Ok(vec![
+            ("gemini.request_timeout_seconds", gemini.request_timeout_seconds),
+            ("gemini.first_answer_seconds", gemini.first_answer_seconds),
+            ("gemini.error_text_chars", gemini.error_text_chars as f64),
+            ("gemini.retry.attempts", f64::from(gemini.retry.attempts)),
+            ("gemini.retry.tries_per_model", gemini.retry.tries_per_model as f64),
+            ("gemini.retry.first_delay_seconds", gemini.retry.first_delay_seconds),
+            ("gemini.retry.max_delay_seconds", gemini.retry.max_delay_seconds),
+            ("gemini.retry.total_seconds", gemini.retry.total_seconds),
+        ])
+    }
+
     fn check(&self) -> Result<(), String> {
         let limits = &self.limits;
-        let (gemini, analysis, render, tokens, watch) =
-            (&self.gemini, &self.analysis, &self.render, &self.tokens, &self.watch);
+        let (analysis, render, tokens, watch) = (&self.analysis, &self.render, &self.tokens, &self.watch);
         if !(limits.usage_share > 0.0 && limits.usage_share <= 1.0) {
             return Err("limits.usage_share has to be above 0 and at most 1".to_string());
         }
-        if self.gemini.model_ladder.is_empty() {
-            return Err("gemini.model_ladder names no model".to_string());
-        }
-        if let Some(model) = self.gemini.model_ladder.iter().find(|model| !limits.models.contains_key(*model)) {
-            return Err(format!("gemini.model_ladder names {model}, which has no [limits.models] entry"));
-        }
-        let mut positive = vec![
+        let mut positive = self.check_gemini()?;
+        positive.extend([
             ("store.busy_timeout_seconds", self.store.busy_timeout_seconds),
             ("youtube.timeout_seconds", self.youtube.timeout_seconds),
             ("youtube.download_timeout_seconds", self.youtube.download_timeout_seconds),
@@ -252,13 +272,6 @@ impl Config {
             ("transcript.segment_chars", self.transcript.segment_chars as f64),
             ("transcript.search_results", self.transcript.search_results as f64),
             ("transcript.output_chars", self.transcript.output_chars as f64),
-            ("gemini.request_timeout_seconds", gemini.request_timeout_seconds),
-            ("gemini.error_text_chars", gemini.error_text_chars as f64),
-            ("gemini.retry.attempts", f64::from(gemini.retry.attempts)),
-            ("gemini.retry.tries_per_model", gemini.retry.tries_per_model as f64),
-            ("gemini.retry.first_delay_seconds", gemini.retry.first_delay_seconds),
-            ("gemini.retry.max_delay_seconds", gemini.retry.max_delay_seconds),
-            ("gemini.retry.total_seconds", gemini.retry.total_seconds),
             ("analysis.max_steps", analysis.max_steps as f64),
             ("analysis.max_points", analysis.max_points as f64),
             ("analysis.max_sounds", analysis.max_sounds as f64),
@@ -280,7 +293,7 @@ impl Config {
             ("limits.groq.requests_per_day", limits.groq.requests_per_day),
             ("limits.groq.audio_seconds_per_hour", limits.groq.audio_seconds_per_hour),
             ("limits.groq.audio_seconds_per_day", limits.groq.audio_seconds_per_day),
-        ];
+        ]);
         for model in limits.models.values() {
             positive.push(("limits.models requests_per_minute", model.requests_per_minute));
             positive.push(("limits.models tokens_per_minute", model.tokens_per_minute));

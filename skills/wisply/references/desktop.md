@@ -48,6 +48,7 @@
 ## Watch a video
 - `wisply watch <link|file|e40>` answers in one call: title, length, chapters, 12 scenes in one image (`frames <path>`, read it with the Read tool), the text on screen and the speech as a skim with times. Start there, then zoom: `--from 4:05 --to 6:00` (denser frames, all speech of that part), `--at 1:23,2:45` (those frames large enough to read code), `--text` (screen text from the real frames when the overview used YouTube's preview images), `--full` (all speech).
 - The next call about the same video answers from the cache (24 h). Tutorials: read the chapters and the skim first, then `--at` the moments with code or settings.
+- `wisply pupil watch <YouTube link>` lets Gemini watch the whole video and write it down as text, no image to read: every step with its time, keys, menu path and code (`--mode steps`, the default), the gist (`--mode summary`) or both (`--mode full`), plus the notable sounds. `--focus "words"` narrows it, `--start 4:05 --end 6:00` watches one part. Needs a free key in `GEMINI_API_KEY`; takes seconds to a few minutes, the answer is kept. `wisply pupil info <link>` and `pupil captions <link>` read title, chapters and captions without Gemini.
 
 ## Voice in a Discord call (Windows, only when the user asks)
 - `wisply voice join "Friends"` joins that Discord call as an AI: Groq hears, Gemini answers, edge-tts speaks through VB-Cable. `voice leave`, `voice say "text"`, `voice status`, `voice watch on|off` (answer incoming calls), `voice set key=value`, `voice persona "Friends"` (where that call's persona lives).

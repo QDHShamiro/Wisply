@@ -81,13 +81,18 @@ impl Desk {
     }
 
     fn ask(&self, models: &[&str]) -> Result<Reply, Fail> {
+        self.ask_for(models, 0.0)
+    }
+
+    fn ask_for(&self, models: &[&str], youtube_seconds: f64) -> Result<Reply, Fail> {
         let config = &self.bench.config;
         let clock = &self.bench.clock;
         let guard = Guard::new(&self.bench.store, &config.limits, clock);
         let gemini = Gemini { settings: &config.gemini, guard: &guard, clock, transport: &self.line, jitter: &|| 1.0 };
         let models: Vec<String> = models.iter().map(|model| model.to_string()).collect();
         let body = bodies::request(None, "What happens?", 100, None);
-        gemini.send(&Request { body: &body, estimate: Ask { tokens: ESTIMATE, ..Ask::default() }, models: &models })
+        let estimate = Ask { tokens: ESTIMATE, youtube_seconds, ..Ask::default() };
+        gemini.send(&Request { body: &body, estimate, models: &models })
     }
 
     fn sent(&self) -> Vec<Value> {
@@ -131,8 +136,21 @@ fn an_answer_comes_back_with_its_model_and_tokens() {
     assert_eq!(sent[0]["store"], false);
     assert_eq!(sent[0]["input"][0]["text"], "What happens?");
     assert!(sent[0].get(CONTINUATION).is_none());
-    assert_eq!(*desk.line.waits.borrow(), [desk.bench.config.gemini.request_timeout_seconds]);
+    assert_eq!(*desk.line.waits.borrow(), [desk.bench.config.gemini.first_answer_seconds]);
     assert_eq!(desk.tokens_counted(), 1200);
+}
+
+#[test]
+fn a_short_video_waits_less_for_a_silent_model_than_a_long_one() {
+    let short = Desk::new(vec![answer("completed", "A cat jumps.", None)]);
+    short.ask_for(&[BEST], 20.0).unwrap();
+    let long = Desk::new(vec![answer("completed", "A cat jumps.", None)]);
+    long.ask_for(&[BEST], 3600.0).unwrap();
+    let gemini = &short.bench.config.gemini;
+    let expected = gemini.first_answer_seconds + gemini.answer_seconds_per_media_second * 20.0;
+    assert_eq!(*short.line.waits.borrow(), [expected]);
+    assert!(expected < gemini.request_timeout_seconds / 2.0, "{expected}");
+    assert_eq!(*long.line.waits.borrow(), [gemini.request_timeout_seconds]);
 }
 
 #[test]

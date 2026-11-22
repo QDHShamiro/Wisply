@@ -4,6 +4,8 @@ busy_timeout_seconds = 5
 [gemini]
 model_ladder = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
 request_timeout_seconds = 600
+first_answer_seconds = 180
+answer_seconds_per_media_second = 0.25
 max_hops = 2
 error_text_chars = 300
 
