@@ -51,6 +51,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         mobile pair [--name handy] | list | revoke <name> | status | on | off (phone API for the Wisply app, localhost and Tailscale only)
         notify event <done|waiting|ci_red|ci_green|limit|resumed|disk|bug> <title> [text] (Windows toast that never takes focus, plus the phone feed)
 code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many shell, file and wisply steps in one call, only the result comes back; wisply codemode help)
+        mcp (MCP server on stdin/stdout for any AI: one tool \"wisply\" that takes a command or code mode code)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
 Output is plain text, one line per action. Big results go to a file (path printed).
@@ -253,6 +254,7 @@ mod tests {
         assert!(about("skill").is_some_and(|row| row.starts_with("skill | skill find <words>")));
         assert!(about("wait").is_some_and(|rows| rows.contains("wait ci [--pr N") && rows.contains("wait until")));
         assert!(about("codemode").is_some_and(|row| row.starts_with("codemode \"<javascript>\" [--yes]")));
+        assert!(about("mcp").is_some_and(|row| row.starts_with("mcp (MCP server")));
         assert_eq!(help(Some("voice")).ok().as_deref(), Some(HELP));
         assert_eq!(help(None).ok().as_deref(), Some(HELP));
         assert!(help(Some("zzz")).is_err());

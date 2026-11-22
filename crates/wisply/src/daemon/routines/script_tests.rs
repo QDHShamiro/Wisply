@@ -86,6 +86,16 @@ fn an_offer_swaps_in_the_values_of_the_new_request_by_their_kind() {
 }
 
 #[test]
+fn a_later_script_that_grew_out_of_a_first_look_replaces_it() {
+    let look = "const files = (await glob(\"data/\" + args.month + \"/*.csv\")).sort();\nconst out = {};\nfor (const f of files) {\n  const t = await read(f);\n  out[f] = t.split(/\\r?\\n/).slice(0, 4);\n  out[f + \" lines\"] = t.split(/\\r?\\n/).length;\n}\nout";
+    let task = "const files = (await glob(\"data/\" + args.month + \"/*.csv\")).sort();\nconst rows = [];\nlet total = 0;\nfor (const f of files) {\n  const lines = (await read(f)).split(/\\r?\\n/).filter(l => l.trim() !== \"\");\n  const head = lines[0].split(\",\");\n  const idx = head.indexOf(\"betrag\");\n  let sum = 0;\n  lines.slice(1).forEach(l => { sum += Number(l.split(\",\")[idx]); });\n  total += sum;\n  rows.push({ datei: f, summe: sum.toFixed(2) });\n}\nawait write(\"summen-\" + args.month + \".md\", JSON.stringify(rows));\n({ rows, total })";
+    assert!(grew_from(look, task));
+    assert!(!grew_from(task, look));
+    assert!(!grew_from(look, "const s = await read(\"summen-2026-10.md\");\ns.split(\"|\").length"));
+    assert!(!grew_from("", task));
+}
+
+#[test]
 fn show_numbers_the_code_and_caps_it() {
     let code: Vec<String> = (1..=85).map(|i| format!("line {i}")).collect();
     let shown = show(&json!({"script": {"code": code.join("\n")}}));

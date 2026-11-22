@@ -159,8 +159,17 @@ fn errors_show_the_line_and_what_already_ran() {
     assert!(!ok);
     assert_eq!(
         text,
-        "step one\nerr: ShellError at line 2: exit 2 from: cargo test\n  > await $`cargo test`\nfailed\n-> try: fix line 2 and run it again (2 calls finished and stay done)"
+        "step one\nerr: ShellError at line 2: exit 2 from: cargo test\n  > await $`cargo test`\nfailed\n-> try: fix line 2 and run it again (1 call finished and stays done)"
     );
+    let own = Ran {
+        verdict: Verdict::Threw(Thrown { name: "Error".into(), message: "bad input".into(), line: Some(1) }),
+        prints: String::new(),
+        lost: Vec::new(),
+        started: 1,
+        finished: 1,
+    };
+    let (text, _) = explain(&own, "throw new Error('bad input')", 1, Duration::from_secs(600));
+    assert!(text.ends_with("(1 call finished and stays done)"), "{text}");
     let ran = Ran {
         verdict: Verdict::Value(None),
         prints: String::new(),

@@ -29,6 +29,7 @@ const CODE_MAX: u64 = 1 << 20;
 const STACK: usize = 16 << 20;
 const SETTLE: Duration = Duration::from_secs(2);
 const LINE_MAX: usize = 120;
+const CALL_ERRORS: [&str; 2] = ["ShellError", "WisplyError"];
 const AGAIN: &str = "ask the user, then run the same code again with --yes (\"yes\": true over MCP)";
 const OFF: &str = "err: code mode is turned off on this computer -> try: single wisply commands, or the user turns it on with: wisply config codemode on";
 const NESTED: &str = "err: code mode cannot start inside code mode -> try: put those steps into the outer script";
@@ -166,6 +167,7 @@ fn threw(t: &engine::Thrown, code: &str, finished: usize) -> String {
         out.push_str(rest.trim_end());
     }
     let fix = t.line.map_or("fix the code".to_string(), |n| format!("fix line {n}"));
+    let finished = if CALL_ERRORS.contains(&t.name.as_str()) { finished.saturating_sub(1) } else { finished };
     let done = match finished {
         0 => String::new(),
         1 => " (1 call finished and stays done)".to_string(),
@@ -334,7 +336,8 @@ pub fn run(home: &Path, args: &[String]) -> ExitCode {
     }
     let (ran, shared) = execute(home, &ask, cwd.clone(), rules, shell);
     let finished = shared.finished.load(Ordering::SeqCst);
-    let (text, ok) = explain(&ran, &ask.code, finished, ask.limit);
+    let worked = finished.saturating_sub(shared.failed.load(Ordering::SeqCst));
+    let (text, ok) = explain(&ran, &ask.code, worked, ask.limit);
     let mut text = for_routine(text, &ask);
     if matches!(ran.verdict, Verdict::Halted(_)) {
         return emit(home, &text, shared.seen.load(Ordering::Relaxed), 1, started);

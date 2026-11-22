@@ -76,6 +76,7 @@ pub fn indent_one(pretty: &str) -> String {
 }
 
 pub fn load(home: &Path, name: &str) -> Result<Value, Fail> {
+    let name = name.split_whitespace().next().unwrap_or(name);
     let path = file(home, name);
     if let Some(r) = fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
         return Ok(r);
@@ -351,6 +352,7 @@ mod tests {
         record(&home, &mut saved, true, 1200.0, 100, None);
         let back = load(&home, "github").unwrap();
         assert_eq!((back["stats"]["runs"].as_u64(), back["stats"]["saved"].as_u64()), (Some(1), Some(800)));
+        assert_eq!(load(&home, "github-issues page=").unwrap()["name"], "github-issues");
         assert_eq!(find(&home, "github issues bitte").unwrap()["name"], "github-issues");
         let _ = fs::remove_dir_all(&home);
     }

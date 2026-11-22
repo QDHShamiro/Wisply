@@ -57,6 +57,7 @@ pub struct Shared {
     pub busy: AtomicUsize,
     pub seen: AtomicUsize,
     pub finished: AtomicUsize,
+    pub failed: AtomicUsize,
     pub secret: AtomicBool,
     marked: AtomicBool,
 }
@@ -97,6 +98,9 @@ fn work(setup: &Setup, shared: &Shared, queue: &Mutex<Receiver<(i32, Work)>>, do
             Err(text) => (false, text, 0),
         };
         shared.seen.fetch_add(seen, Ordering::Relaxed);
+        if !ok {
+            shared.failed.fetch_add(1, Ordering::SeqCst);
+        }
         shared.finished.fetch_add(1, Ordering::SeqCst);
         shared.busy.fetch_sub(1, Ordering::SeqCst);
         if done.send(Done { id, ok, text }).is_err() {
