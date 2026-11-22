@@ -33,6 +33,10 @@ const OFFER_EVERY_S: f64 = 600.0;
 const OFFER_IGNORED: u64 = 5;
 const OFFERS: usize = 2;
 
+pub(crate) fn took(ms: f64) -> String {
+    if ms < 1000.0 { format!("{} ms", ms.round().max(0.0)) } else { format!("{:.1} s", ms / 1000.0) }
+}
+
 pub fn recorded(d: &Daemon, ctx: &Ctx, name: &str, steps: &[Value], pairs: &[String]) -> Result<String, Fail> {
     let task = learn::Task { steps, cost: 0, start: &Value::Null };
     let r = learn::from_steps(&d.home, name, pairs, "recorded", &task, &d.prompts_of(&ctx.sid))?;
@@ -146,7 +150,7 @@ fn listing(d: &Daemon, ctx: &mut Ctx, c: &Call) -> String {
                 _ => format!("{ok}/{runs} ok"),
             };
             let ms = n(r, "ms");
-            let extra = if ms > 0 { format!(" | {:.1} s", ms as f64 / 1000.0) } else { String::new() };
+            let extra = if ms > 0 { format!(" | {}", took(ms as f64)) } else { String::new() };
             let args: String = r["params"].as_object().into_iter().flatten().map(|(p, _)| format!(" {p}=")).collect();
             let flaky = if r["flaky"].as_bool() == Some(true) { " | FLAKY" } else { "" };
             let saved = n(r, "saved");
@@ -253,4 +257,14 @@ pub fn command(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         other => return Err(Fail::hint(format!("unknown routine command '{other}'"), SUBS)),
     };
     Ok(Out::Text(text_out))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn fast_runs_show_milliseconds() {
+        assert_eq!(super::took(12.4), "12 ms");
+        assert_eq!(super::took(999.4), "999 ms");
+        assert_eq!(super::took(1530.0), "1.5 s");
+    }
 }

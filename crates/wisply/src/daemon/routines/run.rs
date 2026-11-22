@@ -208,7 +208,7 @@ impl Job {
         }
         let status = if status.is_empty() { String::new() } else { format!(", {status}") };
         let shown = if w.is_some() { format!(" -> {}", place(w.as_ref())) } else { String::new() };
-        let line = format!("ok {}: {done} steps in {:.1} s{status}{shown}", self.name, ms / 1000.0);
+        let line = format!("ok {}: {done} steps in {}{status}{shown}", self.name, super::took(ms));
         let has = self.r["check"]["has"].as_array().is_some_and(|h| !h.is_empty());
         if w.is_some() && !has {
             let mut values = Pairs::new();
