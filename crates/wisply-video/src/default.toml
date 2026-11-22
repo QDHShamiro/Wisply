@@ -3,6 +3,18 @@ busy_timeout_seconds = 5
 
 [gemini]
 model_ladder = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+request_timeout_seconds = 600
+first_answer_seconds = 180
+answer_seconds_per_media_second = 0.25
+max_hops = 2
+error_text_chars = 300
+
+[gemini.retry]
+attempts = 4
+tries_per_model = 2
+first_delay_seconds = 2
+max_delay_seconds = 30
+total_seconds = 900
 
 [youtube]
 command = []
@@ -19,6 +31,61 @@ segment_seconds = 15
 segment_chars = 300
 search_results = 8
 output_chars = 12000
+
+[analysis]
+max_steps = 80
+max_points = 10
+max_sounds = 25
+max_list_items = 8
+max_focus_chars = 300
+max_chapters = 40
+max_quiet_spans = 12
+quiet_min_seconds = 8
+
+[render]
+page_chars = 8000
+sound_attach_seconds = 20
+unsure_times = 6
+
+[tokens]
+video_frame_low = 66
+video_frame_high = 264
+audio_per_second = 25
+text_chars_per_token = 3
+
+[watch]
+agentic_tokens = 15000
+coarse_sound_fps = 1
+
+[watch.output_tokens]
+summary = 3000
+steps = 8000
+full = 10000
+
+[watch.profiles.high_1]
+resolution = "high"
+fps = 1
+
+[watch.profiles.high_half]
+resolution = "high"
+fps = 0.5
+
+[watch.profiles.low_1]
+resolution = "low"
+fps = 1
+
+[watch.profiles.low_tenth]
+resolution = "low"
+fps = 0.1
+
+[watch.profiles.agentic]
+resolution = "low"
+agentic = true
+
+[watch.ladders]
+summary = ["low_tenth", "agentic"]
+steps = ["high_1", "high_half", "low_1"]
+full = ["high_1", "high_half", "low_1"]
 
 [limits]
 usage_share = 0.8

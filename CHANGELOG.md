@@ -8,6 +8,15 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply pupil watch <YouTube link>`: Wisply has Gemini watch a YouTube video and writes down what happens in it.
+  `--mode steps` (the default) lists every action with its time, keys, menu path, typed values and code,
+  `--mode summary` gives the gist with the main points, `--mode full` the gist and the steps; every mode names the
+  notable sounds. `--focus "words"` narrows it, `--start` and `--end` watch one part, `--page N` reads on in a long
+  answer. Only the link goes to Google, nothing is downloaded. The limit guard checks the free limits before
+  anything is sent, an answer is kept and read again without a new request, and a model that is busy or used up
+  hands over to the next one of the ladder, and the answer says so. Parts where nobody speaks are pointed out to the model, steps it could
+  not read clearly are marked `unsure`. A video that does not fit in one request is refused with the longest part
+  that does. Needs a free key in `GEMINI_API_KEY` or in `~/.config/watch/.env`.
 - `wisply codemode`: code mode for every AI. The AI writes one short JavaScript and Wisply runs it in a sandbox
   (QuickJS, no network, no `require`): `` $`…` `` shell commands with safe quoting, `` wisply`…` `` for every wisply
   command, `read`, `write`, `edit`, `glob`, `sleep`, loops and `Promise.all` (up to 8 calls at once, 10 minutes at
