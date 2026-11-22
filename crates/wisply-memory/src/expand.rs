@@ -1,96 +1,44 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-const GROUPS: &[&str] = &[
-    "titel title",
-    "inventar inventory",
-    "hoehe höhe height",
-    "schaden damage",
-    "gross groß size big large",
-    "klein small little",
-    "einstellung einstellungen setting settings config konfiguration",
-    "abgebrochen abbruch aborted abort cancelled canceled",
-    "loeschen löschen delete remove entfernen",
-    "neu new",
-    "datenset datensatz dataset",
-    "umweg umgehung detour bypass",
-    "sicht sight view",
-    "luft air",
-    "wasser water",
-    "notfall emergency",
-    "passwort kennwort password",
-    "zuruecksetzen zurücksetzen reset",
-    "sperren blockieren blocken block blocking blocked",
-    "unterbefehl subcommand",
-    "hintergrund background",
-    "dunkelgrau darkgray dark gray grey",
-    "schwelle schwellen threshold thresholds limit",
-    "beim bei on",
-    "start startup boot starten",
-    "fehler error failure bug",
-    "behoben behebung fix fixed fixes",
-    "erstellt erstellen created create",
-    "hinzugefuegt hinzugefügt added add",
-    "entfernt removed",
-    "umgesetzt implemented implementation",
-    "geaendert geändert changed modified change",
-    "ueberarbeitet überarbeitet redesigned rewritten",
-    "gespeichert speichern saved save store storage persist",
-    "serverstart boot startup",
-    "spieler player players",
-    "waffe waffen weapon weapons gun guns",
-    "zombie zombies",
-    "mauer wall barricade",
-    "bauen build building",
-    "fertig done complete completed finished",
-    "plan planung plans planning",
-    "ziel goal target",
-    "test tests testing",
-    "anmeldung login signin",
-    "benutzer nutzer user users",
-    "sprache voice speech language",
-    "bild image picture",
-    "ordner folder directory",
-    "datei file",
-    "schnell fast quick speed performance",
-    "langsam slow",
-    "sicherheit security safety",
-    "verschluesselung verschlüsselung encryption",
-    "abfrage query",
-    "anzeige display show ui",
-    "zeile line row",
-    "wert werte value values",
-    "geschwindigkeit speed",
-    "vorlage template",
-    "meldung nachricht message messages",
-    "befehl befehle command commands",
-    "berechtigung berechtigungen permission permissions",
-    "sicherung backup",
-    "aktualisierung update updates",
-    "fenster window",
-    "kopie copy",
-    "verbindung connection connect",
-    "absturz crash",
-    "gruppe group",
-    "zeit time",
-    "runde round",
-    "ergebnis result results",
-    "bester best",
-    "kosten cost price preis",
-    "pause break",
-    "einzigartig unique",
-    "niemals never",
-    "immer always",
-];
+const WORDS: &str = include_str!("words.txt");
+const ENDINGS: &[&str] = &["ten", "tet", "en", "er", "es", "em", "et", "te", "st", "e", "n", "t", "s"];
+const LINKS: &[&str] = &["", "s", "es", "n", "en", "e"];
+const MIN_KEY: usize = 4;
+const PART_FROM: usize = 8;
+const PART_MIN: usize = 4;
+const PART_DEPTH: usize = 1;
 
-static MAP: LazyLock<HashMap<&'static str, Vec<usize>>> = LazyLock::new(|| {
-    let mut map: HashMap<&'static str, Vec<usize>> = HashMap::new();
-    for (i, group) in GROUPS.iter().enumerate() {
-        for word in group.split_whitespace() {
-            map.entry(word).or_default().push(i);
+struct Lexicon {
+    groups: Vec<Vec<&'static str>>,
+    exact: HashMap<String, Vec<usize>>,
+    stems: HashMap<String, Vec<usize>>,
+}
+
+static LEXICON: LazyLock<Lexicon> = LazyLock::new(|| {
+    let mut lex = Lexicon { groups: Vec::new(), exact: HashMap::new(), stems: HashMap::new() };
+    for line in WORDS.lines() {
+        let group: Vec<&'static str> = line.split_whitespace().collect();
+        if group.is_empty() {
+            continue;
         }
+        let at = lex.groups.len();
+        for word in &group {
+            let exact = lex.exact.entry(fold(word)).or_default();
+            if !exact.contains(&at) {
+                exact.push(at);
+            }
+            let stem = stem_word(word);
+            if stem.chars().count() >= MIN_KEY {
+                let stems = lex.stems.entry(stem).or_default();
+                if !stems.contains(&at) {
+                    stems.push(at);
+                }
+            }
+        }
+        lex.groups.push(group);
     }
-    map
+    lex
 });
 
 const TAILS: &[&str] = &["ungen", "ung", "ing", "ed", "es", "en", "er", "s"];
@@ -150,16 +98,76 @@ pub fn stem_word(word: &str) -> String {
     w
 }
 
+fn direct(key: &str) -> Option<&'static [usize]> {
+    if let Some(found) = LEXICON.exact.get(key) {
+        return Some(found.as_slice());
+    }
+    let stem = stem_word(key);
+    if stem.chars().count() < MIN_KEY {
+        return None;
+    }
+    LEXICON.stems.get(&stem).map(Vec::as_slice)
+}
+
+fn lookup(key: &str) -> &'static [usize] {
+    direct(key)
+        .or_else(|| {
+            ENDINGS
+                .iter()
+                .filter_map(|e| key.strip_suffix(e))
+                .filter(|base| base.chars().count() >= MIN_KEY)
+                .find_map(direct)
+        })
+        .unwrap_or(&[])
+}
+
 pub fn variants(term: &str) -> Vec<&'static str> {
-    let mut out = Vec::new();
-    for g in MAP.get(term).into_iter().flatten() {
-        for w in GROUPS[*g].split_whitespace() {
-            if w != term && !out.contains(&w) {
+    let key = fold(&term.to_lowercase());
+    let mut out: Vec<&'static str> = Vec::new();
+    for g in lookup(&key) {
+        for &w in &LEXICON.groups[*g] {
+            if fold(w) != key && !out.contains(&w) {
                 out.push(w);
             }
         }
     }
     out
+}
+
+fn split(word: &str, depth: usize) -> Vec<String> {
+    let cuts: Vec<usize> = word.char_indices().map(|(i, _)| i).collect();
+    if cuts.len() < PART_FROM {
+        return Vec::new();
+    }
+    for at in (PART_MIN..=cuts.len() - PART_MIN).rev() {
+        let (left, right) = word.split_at(cuts[at]);
+        let head = LINKS
+            .iter()
+            .filter_map(|l| left.strip_suffix(l))
+            .find(|h| h.chars().count() >= PART_MIN && direct(h).is_some());
+        let Some(head) = head else { continue };
+        let tail = if direct(right).is_some() {
+            vec![right.to_string()]
+        } else if depth > 0 {
+            split(right, depth - 1)
+        } else {
+            Vec::new()
+        };
+        if !tail.is_empty() {
+            let mut out = vec![head.to_string()];
+            out.extend(tail);
+            return out;
+        }
+    }
+    Vec::new()
+}
+
+pub fn parts(term: &str) -> Vec<String> {
+    let word = fold(&term.to_lowercase());
+    if !word.chars().all(char::is_alphabetic) || !lookup(&word).is_empty() {
+        return Vec::new();
+    }
+    split(&word, PART_DEPTH)
 }
 
 pub fn near(a: &str, b: &str) -> bool {
@@ -198,5 +206,65 @@ mod tests {
         }
         assert_eq!(stem_word("Einstellungen"), stem_word("einstellung"));
         assert_ne!(stem_word("plan"), stem_word("plate"));
+    }
+
+    #[test]
+    fn word_list_is_clean() {
+        let mut lines = 0;
+        for line in WORDS.lines() {
+            let group: Vec<&str> = line.split_whitespace().collect();
+            assert!(!group.is_empty(), "empty line");
+            for (i, w) in group.iter().enumerate() {
+                assert!(w.chars().all(char::is_alphanumeric) && *w == w.to_lowercase(), "{w}");
+                assert!(!group[..i].contains(w), "{w} twice in {line}");
+            }
+            lines += 1;
+        }
+        assert!(lines > 500);
+    }
+
+    #[test]
+    fn word_forms_reach_the_other_language() {
+        for (asked, wanted) in [
+            ("lizenzen", "license"),
+            ("loeschen", "delete"),
+            ("gestoppt", "stop"),
+            ("stoppt", "stop"),
+            ("überschreibt", "overwrite"),
+            ("spätere", "later"),
+            ("licenses", "lizenz"),
+            ("villagers", "dorfbewohner"),
+        ] {
+            assert!(variants(asked).contains(&wanted), "{asked} -> {wanted}: {:?}", variants(asked));
+        }
+        assert!(!variants("löschen").contains(&"löschen"));
+    }
+
+    #[test]
+    fn senses_stay_apart() {
+        let schild = variants("schild");
+        assert!(schild.contains(&"shield") && schild.contains(&"sign"));
+        assert!(!variants("shield").contains(&"sign") && !variants("signs").contains(&"shield"));
+        for (asked, wrong) in [("tag", "day"), ("chart", "character"), ("meant", "average"), ("dark", "gray")] {
+            assert!(!variants(asked).contains(&wrong), "{asked} -> {wrong}: {:?}", variants(asked));
+        }
+        assert!(variants("laden").contains(&"load") && variants("laden").contains(&"shop"));
+    }
+
+    #[test]
+    fn compounds_split_into_known_words() {
+        for (word, want) in [
+            ("mindestgewinn", vec!["mindest", "gewinn"]),
+            ("Bildschirmtext", vec!["bildschirm", "text"]),
+            ("betäubungsschlag", vec!["betaubungs", "schlag"]),
+            ("dateiname", vec!["datei", "name"]),
+            ("mindestbestellwert", vec!["mindest", "bestell", "wert"]),
+        ] {
+            assert_eq!(parts(word), want, "{word}");
+        }
+        for whole in ["einstellung", "einstellungen", "minecraft", "bildschirm", "kurz", "abc123defgh", "zzzzyyyyxxxx"]
+        {
+            assert!(parts(whole).is_empty(), "{whole}: {:?}", parts(whole));
+        }
     }
 }

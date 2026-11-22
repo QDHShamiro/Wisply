@@ -86,6 +86,9 @@ const GUESS: &[(&str, &str)] = &[
     ("screenshot", "shot"),
     ("eval", "js <code>"),
     ("sleep", "wait <ms|\"text\">"),
+    ("key", "press <key> (keys lists the shortcuts of this page)"),
+    ("apps", "windows (open apps) or launch <app>"),
+    ("chat", "unread (waiting chats), inbox <w5|\"@Name\"> or reply <w5|\"@Name\"> \"text\""),
 ];
 
 pub const QUIET: &[&str] = &[
@@ -179,6 +182,18 @@ mod tests {
         }
         assert!(built_later("snap") && built_later("recall") && built_later("ping") && !built_later("snapp"));
         assert!(CLIENT.iter().all(|name| built_later(name)));
+    }
+
+    #[test]
+    fn words_agents_typed_for_keys_apps_and_chats_name_the_real_command() {
+        let cases = [
+            ("key", "press <key> (keys lists the shortcuts of this page)"),
+            ("apps", "windows (open apps) or launch <app>"),
+            ("chat", "unread (waiting chats), inbox <w5|\"@Name\"> or reply <w5|\"@Name\"> \"text\""),
+        ];
+        for (word, hint) in cases {
+            assert_eq!(unknown(word).text(), format!("err: unknown command '{word}' -> try: wisply {hint}"));
+        }
     }
 
     #[test]

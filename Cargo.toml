@@ -27,6 +27,13 @@ wisply-code = { path = "crates/wisply-code" }
 wisply-squeeze = { path = "crates/wisply-squeeze" }
 wisply-think = { path = "crates/wisply-think" }
 wisply-pc = { path = "crates/wisply-pc" }
+wisply-pupil = { path = "crates/wisply-pupil" }
+wisply-hear = { path = "crates/wisply-hear" }
+wisply-video = { path = "crates/wisply-video" }
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic"] }
+rustfft = "6.4"
+serde = { version = "1", features = ["derive"] }
+windows-sys = "0.59"
 proptest = { version = "1", default-features = false, features = ["std"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 roxmltree = "0.21"

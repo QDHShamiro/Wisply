@@ -124,6 +124,7 @@ pub fn emit(home: &Path, kind: &str, agent_id: Option<&str>, title: &str, body: 
     drop(store);
     append(home, &e);
     WAKE.notify_all();
+    super::push::send(home, &e);
     if toast {
         wisply_pc::notify::send(&e.title, &e.body);
     }
