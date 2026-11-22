@@ -3,6 +3,7 @@ mod blind;
 mod board;
 pub mod chat;
 mod code;
+mod early;
 mod embed;
 mod handoff;
 mod hook;

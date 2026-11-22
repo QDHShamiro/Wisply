@@ -19,6 +19,10 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   the start and the compact info say so, and three single calls within two minutes bring a tip, every time. On by
   default, `wisply config codemode off` turns it off. Measured: five checks over git, files and memory took 6 calls and ~674
   tokens one by one, and 1 call and ~155 tokens in code mode.
+- Early session notes: a session that is still running gets a short note in the memory once it has two requests and
+  enough text, so `wisply recall` finds it from another folder or AI right away instead of only after the session is
+  learned. The note names the goal and the latest request and is marked as not summarized yet; it reads the
+  transcript only and needs no model, and the learned note takes its place once the session is learned.
 - `wisply pupil info <YouTube link>` and `wisply pupil captions <YouTube link>`: Wisply reads a YouTube video without
   watching it. `info` names title, channel, length, picture size, sound, spoken language, chapters and which text the
   video has. `captions` prints its subtitles (or, without any, the automatic captions of the spoken language) as

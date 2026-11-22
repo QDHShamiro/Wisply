@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use wisply_memory::{Store, claude_dirs};
 
 use super::super::{config, game};
-use super::{embed, learner, watch};
+use super::{early, embed, learner, watch};
 
 const EVERY: Duration = Duration::from_secs(300);
 const TICK: Duration = Duration::from_secs(60);
@@ -28,6 +28,7 @@ static SOON: AtomicBool = AtomicBool::new(false);
 struct Last {
     vault: Option<Instant>,
     claude: Option<Instant>,
+    early: early::Seen,
 }
 
 fn due(last: Option<Instant>, every: Duration) -> bool {
@@ -112,6 +113,9 @@ fn pass(
     }
     if let Ok(mut p) = PROBLEM.lock() {
         p.clear();
+    }
+    if config::on(&cfg, "memory_learn") {
+        early::notes(store, &mut last.early);
     }
     learner::tick(home, store, SOON.swap(false, Ordering::Relaxed));
     store.warm();

@@ -21,8 +21,8 @@ a few words.";
 const NOTES_PER_CHUNK: usize = 6;
 const LESSONS_PER_CHUNK: usize = 2;
 const WIKI_PER_SESSION: usize = 2;
-const MIN_CHARS: usize = 600;
-const MIN_USERS: usize = 2;
+pub(super) const MIN_CHARS: usize = 600;
+pub(super) const MIN_USERS: usize = 2;
 const KNOWN: usize = 6;
 const KNOWN_CHARS: usize = 90;
 const QUIET_S: f64 = 600.0;
@@ -133,12 +133,13 @@ fn draft(home: &Path, store: &mut Store, p: &Provider, lesson: &Value, project: 
     write_draft(&inbox(home), &kind, &named, &page);
 }
 
-fn known_titles(store: &mut Store, project: &str, title: &str, part: &str) -> String {
+fn known_titles(store: &mut Store, project: &str, title: &str, part: &str, sid: &str) -> String {
+    let own = format!("s:{sid}");
     let probe = format!("{title} {}", oneline(part, 300));
     let hits = store.search(&probe, project, KNOWN, None, 0.0).unwrap_or_default();
     let lines: Vec<String> = hits
         .iter()
-        .filter(|h| h.note.kind != "draft")
+        .filter(|h| h.note.kind != "draft" && h.note.origin != own)
         .map(|h| format!("- {}", oneline(&h.note.title, KNOWN_CHARS)))
         .collect();
     if lines.is_empty() { String::new() } else { format!("Known notes:\n{}\n", lines.join("\n")) }
@@ -159,6 +160,7 @@ fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usiz
     }
     if c.text.chars().count() < MIN_CHARS || (c.users < MIN_USERS && c.edits == 0) {
         store.session_short(&row.id, c.end, began, &c.title).map_err(db)?;
+        store.session_note_gone(&row.id).map_err(db)?;
         return Ok(0);
     }
     let mut r = Record {
@@ -176,7 +178,7 @@ fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usiz
         }
         let shown = if project.is_empty() { "-" } else { project.as_str() };
         let title = if r.title.is_empty() { "-" } else { r.title.as_str() };
-        let known = known_titles(store, &project, &r.title, &part);
+        let known = known_titles(store, &project, &r.title, &part, &row.id);
         let user = format!("Project: {shown}\nSession title: {title}\n{known}\nSession log:\n{part}");
         let answer = chat::chat(p, SYSTEM, &user, &schema)?;
         let out = parse(&answer).ok_or_else(|| Stop::Fail(format!("{} sent no JSON object", p.name())))?;
@@ -231,6 +233,8 @@ fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usiz
     let started = if row.started > 0.0 { row.started } else { now() };
     if write_session(&vault(home), &row.id, &project, &r, started).is_none() {
         store.session_note(&row.id, &project, &r).map_err(db)?;
+    } else {
+        store.session_note_gone(&row.id).map_err(db)?;
     }
     Ok(added)
 }
@@ -300,5 +304,23 @@ mod tests {
         assert_eq!(waits, [60.0, 120.0, 240.0, 480.0, 600.0, 600.0]);
         WAITS.store(0, Ordering::Relaxed);
         assert_eq!(backoff(), POLL_S);
+    }
+
+    #[test]
+    fn the_model_is_not_shown_the_early_note_of_its_own_session() {
+        let dir = std::env::temp_dir().join(format!("lt-known-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = Store::open(&dir).unwrap();
+        store.session_seen("a", "web", "/work/web", "/work/a.jsonl", false).unwrap();
+        let early = Record {
+            title: "web: Cart totals".into(),
+            summary: "Latest request: fix cart totals".into(),
+            ..Record::default()
+        };
+        store.session_note("a", "web", &early).unwrap().unwrap();
+        assert_eq!(known_titles(&mut store, "web", "Cart totals", "fix cart totals", "a"), "");
+        assert!(known_titles(&mut store, "web", "Cart totals", "fix cart totals", "b").contains("web: Cart totals"));
+        drop(store);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
