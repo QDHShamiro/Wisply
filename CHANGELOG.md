@@ -15,8 +15,9 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   through the new `code`, `yes` and `timeout` arguments of the MCP tool. Errors name the line, its source and how
   many calls already finished. Every step passes the deny and ask rules of Claude Code, Codex, Gemini and Cursor and
   the four risk classes; a risky step stops the script before it runs and the same code runs again with `--yes`,
-  deleting inside the project passes. Six quick single calls bring a one-time tip. On by default,
-  `wisply config codemode off` turns it off. Measured: five checks over git, files and memory took 6 calls and ~674
+  deleting inside the project passes. Code mode is the default for every task with more than one step: the skill,
+  the start and the compact info say so, and three single calls within two minutes bring a tip, every time. On by
+  default, `wisply config codemode off` turns it off. Measured: five checks over git, files and memory took 6 calls and ~674
   tokens one by one, and 1 call and ~155 tokens in code mode.
 - `wisply pupil info <YouTube link>` and `wisply pupil captions <YouTube link>`: Wisply reads a YouTube video without
   watching it. `info` names title, channel, length, picture size, sound, spoken language, chapters and which text the

@@ -18,4 +18,5 @@ for (const f of await glob("src/**/*.rs")) if ((await read(f)).includes("todo!")
 - Safety: the deny and ask rules of Claude Code, Codex, Gemini and Cursor and the four risk classes apply to every
   step. Deleting inside the project passes; outside it, keys, rights, money or autostart stop the script before the
   step runs. Ask the user, then run the same code with `--yes` (`"yes": true` over MCP). A denied step never runs.
-- Six quick single calls in a row bring a one-time tip. Off for this PC: `wisply config codemode off`.
+- Plain form steps without logic can also be one `wisply do "fill Email=a@b.c; click Continue; expect Welcome"`.
+- Three single calls within two minutes bring a tip, every time. Off for this PC: `wisply config codemode off`.
