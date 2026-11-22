@@ -54,6 +54,38 @@ fn unused_scripts_go_after_30_days_and_often_used_ones_after_90() {
 }
 
 #[test]
+fn values_from_the_request_become_args_and_the_task_words_name_it() {
+    let typed: HashSet<String> = values_in("Monat 2026-10 in data/2026-10, PR 107, sha 27df922").into_iter().collect();
+    assert_eq!(typed, HashSet::from(["2026-10".to_string(), "107".to_string()]));
+    let code = "const f = await glob(\"data/2026-10/*.csv\");\nawait $`gh pr view 107`;\nconst n = '2026-10';\nreturn \"a\\\"2026-10\" + `${x}2026-10` + '300'";
+    let (lifted, params) = lift(code, &typed);
+    assert_eq!(params, json!({"month": "2026-10", "value": "107"}).as_object().cloned().unwrap());
+    assert!(lifted.contains("glob(\"data/\" + args.month + \"/*.csv\")"), "{lifted}");
+    assert!(lifted.contains("$`gh pr view ${args.value}`"), "{lifted}");
+    assert!(lifted.contains("const n = '' + args.month + ''"), "{lifted}");
+    assert!(lifted.contains("\"a\\\"2026-10\" + `${x}2026-10` + '300'"), "{lifted}");
+    let mut taken = Map::new();
+    assert_eq!(key_for("2026-10-05", &mut taken), "date");
+    assert_eq!(key_for("2026-11-05", &mut taken), "date2");
+    assert_eq!(key_for("2026-10-05", &mut taken), "date");
+    assert_eq!(key_for("2027", &mut taken), "year");
+    let prompt: Vec<String> =
+        ["werkzeug", "hilfe", "rechne", "spalte", "betrag", "gesamtsumme"].map(String::from).into();
+    let tags = task_words(prompt, "const i = header.indexOf(\"betrag\"); out.push('Gesamt'); 'Spalte'");
+    assert_eq!(tags, ["spalte", "betrag", "gesamtsumme", "werkzeug", "hilfe", "rechne"]);
+    assert_eq!(slug(&tags.join(" "), NAME_WORDS), "spalte-betrag-gesamtsumme");
+}
+
+#[test]
+fn an_offer_swaps_in_the_values_of_the_new_request_by_their_kind() {
+    let r = json!({"params": {"month": "2026-10", "value": "107", "word": "x", "day": "2026-10-05"}});
+    let typed: Vec<String> = ["summe", "2026-11", "112", "27df922"].map(String::from).into();
+    let want = BTreeMap::from([("month".to_string(), "2026-11".to_string()), ("value".to_string(), "112".to_string())]);
+    assert_eq!(swap(&r, &typed), want);
+    assert_eq!((kind_of("2026"), kind_of("2026-10-05"), kind_of("27df922")), (Some("year"), Some("date"), None));
+}
+
+#[test]
 fn show_numbers_the_code_and_caps_it() {
     let code: Vec<String> = (1..=85).map(|i| format!("line {i}")).collect();
     let shown = show(&json!({"script": {"code": code.join("\n")}}));
