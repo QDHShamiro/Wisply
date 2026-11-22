@@ -126,7 +126,7 @@ fn lift(code: &str, typed: &HashSet<String>) -> (String, Map<String, Value>) {
             return lit.to_string();
         }
         let q = &lit[..1];
-        VALUE
+        let done = VALUE
             .replace_all(lit, |v: &Captures| {
                 if !typed.contains(&v[0]) {
                     return v[0].to_string();
@@ -134,7 +134,13 @@ fn lift(code: &str, typed: &HashSet<String>) -> (String, Map<String, Value>) {
                 let key = key_for(&v[0], &mut params);
                 if q == "`" { format!("${{args.{key}}}") } else { format!("{q} + args.{key} + {q}") }
             })
-            .into_owned()
+            .into_owned();
+        if q == "`" || done == lit {
+            return done;
+        }
+        let (head, tail) = (format!("{q}{q} + "), format!(" + {q}{q}"));
+        let done = done.strip_prefix(&head).unwrap_or(&done);
+        done.strip_suffix(&tail).unwrap_or(done).to_string()
     });
     (out.into_owned(), params)
 }

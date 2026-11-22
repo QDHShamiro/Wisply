@@ -98,10 +98,18 @@ fn fitting(d: &Daemon, ctx: &Ctx, typed: &[String], t: f64) -> Vec<Value> {
 }
 
 fn offer_line(r: &Value, typed: &[String]) -> String {
-    let values = if script::is_script(r) { script::swap(r, typed) } else { BTreeMap::new() };
-    let all = r["params"].as_object().is_some_and(|p| !p.is_empty() && p.len() == values.len());
-    let how = if all { "one call, the values of this request are filled in" } else { "one call, swap the values" };
-    format!("Wisply routine fits this request ({how}): {}", usage(r, &values))
+    if !script::is_script(r) {
+        return format!("Wisply routine fits this request (one call, swap the values): {}", usage(r, &BTreeMap::new()));
+    }
+    let values = script::swap(r, typed);
+    let all = r["params"].as_object().is_none_or(|p| p.len() == values.len());
+    let how = if all { "the values of this request are filled in" } else { "swap the values for this request" };
+    format!(
+        "Wisply saved the script that did this task before in this project. Run it instead of doing the steps again \
+         (one call, {how}): {} (code: wisply routine show {})",
+        usage(r, &values),
+        text(&r["name"])
+    )
 }
 
 fn listing(d: &Daemon, ctx: &mut Ctx, c: &Call) -> String {
