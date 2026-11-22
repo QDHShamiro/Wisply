@@ -22,35 +22,8 @@ pub fn run(raw: &[String]) -> ExitCode {
     };
     let home = wisply_proto::home();
     let first = args.first().map(String::as_str).unwrap_or("");
-    if first == "more" {
-        return crate::more::run(&home, &args[1..]);
-    }
-    if first == "peek" {
-        return crate::peek::run(&args[1..]);
-    }
-    if first == "progress" {
-        return crate::progress::run(&home, &args[1..]);
-    }
-    if first == "kit" {
-        return crate::kit::run(&home, &args[1..]);
-    }
-    if first == "skill" {
-        return crate::skill::run(&home, &args[1..]);
-    }
-    if first == "update" {
-        return crate::update::run(&home, &args[1..]);
-    }
-    if matches!(first, "lint" | "safe") {
-        return crate::lint::run(&home, &args[1..]);
-    }
-    if matches!(first, "review" | "analyze") {
-        return crate::review::run(&home, &args[1..]);
-    }
-    if matches!(first, "setup" | "install" | "uninstall") {
-        return crate::setup::run(&home, &args);
-    }
-    if first == "pupil" {
-        return crate::pupil::run(&home, &args[1..]);
+    if let Some(code) = without_daemon(&home, first, &args) {
+        return code;
     }
     if first == "codemode" {
         return crate::codemode::run(&home, &args[1..]);
@@ -79,6 +52,26 @@ pub fn run(raw: &[String]) -> ExitCode {
         args
     };
     send(&home, &args)
+}
+
+fn without_daemon(home: &Path, first: &str, args: &[String]) -> Option<ExitCode> {
+    if crate::waitfor::wanted(args) {
+        return Some(crate::waitfor::run(args));
+    }
+    let rest = &args[1.min(args.len())..];
+    Some(match first {
+        "more" => crate::more::run(home, rest),
+        "peek" => crate::peek::run(rest),
+        "progress" => crate::progress::run(home, rest),
+        "kit" => crate::kit::run(home, rest),
+        "skill" => crate::skill::run(home, rest),
+        "update" => crate::update::run(home, rest),
+        "lint" | "safe" => crate::lint::run(home, rest),
+        "review" | "analyze" => crate::review::run(home, rest),
+        "setup" | "install" | "uninstall" => crate::setup::run(home, args),
+        "pupil" => crate::pupil::run(home, rest),
+        _ => return None,
+    })
 }
 
 fn open_ui(home: &Path) -> ExitCode {

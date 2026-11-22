@@ -82,6 +82,9 @@ fn defaults() -> Map<String, Value> {
         ("push_server", json!("")),
         ("push_topic", json!("")),
         ("secure", json!(true)),
+        ("servers", json!(true)),
+        ("servers_file", json!("")),
+        ("list_tidy", json!(true)),
         ("codemode", json!(true)),
         ("codemode_save", json!(true)),
     ];

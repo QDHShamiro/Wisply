@@ -182,47 +182,12 @@ fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usiz
         let user = format!("Project: {shown}\nSession title: {title}\n{known}\nSession log:\n{part}");
         let answer = chat::chat(p, SYSTEM, &user, &schema)?;
         let out = parse(&answer).ok_or_else(|| Stop::Fail(format!("{} sent no JSON object", p.name())))?;
-        for n in out.get("notes").and_then(Value::as_array).into_iter().flatten() {
-            let title = field(n, "title");
-            if title.trim().is_empty() {
-                continue;
-            }
-            let kind = Some(field(n, "kind")).filter(|k| KINDS.contains(&k.as_str())).unwrap_or_else(|| "fact".into());
-            let files: Vec<String> = n
-                .get("files")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|f| f.as_str().map(String::from))
-                .collect();
-            let full = titled(&project, &title);
-            let body = field(n, "body");
-            let note = NewNote {
-                project: &project,
-                kind: &kind,
-                title: &full,
-                body: &body,
-                source: "session",
-                session: &row.id,
-            };
-            if let Some((_, true)) = store.merge_note(&note, &files).map_err(db)? {
-                added += 1;
-            }
-        }
+        added += keep_notes(store, &out, &project, &row.id).map_err(db)?;
         let found = out.get("lessons").and_then(Value::as_array).into_iter().flatten();
         lessons.extend(
             found.filter(|n| WIKI_KINDS.contains(&field(n, "kind").as_str()) && !field(n, "title").is_empty()).cloned(),
         );
-        r.summary = points(&r.summary, &field(&out, "summary"));
-        r.why = points(&r.why, &field(&out, "why"));
-        r.rejected = points(&r.rejected, &field(&out, "rejected"));
-        let next = points("", &field(&out, "next"));
-        if !next.is_empty() {
-            r.next = next;
-        }
-        if r.title.is_empty() {
-            r.title = field(&out, "title");
-        }
+        absorb(&mut r, &out);
     }
     let room = if store.drafts_full().unwrap_or(true) { 0 } else { WIKI_PER_SESSION };
     for lesson in lessons.iter().take(room) {
@@ -230,13 +195,60 @@ fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usiz
     }
     let open_since = if c.more { 0.0 } else { began };
     store.session_learned(&row.id, c.end, open_since, &r).map_err(db)?;
-    let started = if row.started > 0.0 { row.started } else { now() };
-    if write_session(&vault(home), &row.id, &project, &r, started).is_none() {
-        store.session_note(&row.id, &project, &r).map_err(db)?;
-    } else {
-        store.session_note_gone(&row.id).map_err(db)?;
+    finish(home, store, row, &project, &r).map_err(db)?;
+    Ok(added)
+}
+
+fn keep_notes(store: &mut Store, out: &Value, project: &str, session: &str) -> Result<usize, wisply_memory::DbError> {
+    let mut added = 0;
+    for n in out.get("notes").and_then(Value::as_array).into_iter().flatten() {
+        let title = field(n, "title");
+        if title.trim().is_empty() {
+            continue;
+        }
+        let kind = Some(field(n, "kind")).filter(|k| KINDS.contains(&k.as_str())).unwrap_or_else(|| "fact".into());
+        let files: Vec<String> = n
+            .get("files")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|f| f.as_str().map(String::from))
+            .collect();
+        let full = titled(project, &title);
+        let body = field(n, "body");
+        let note = NewNote { project, kind: &kind, title: &full, body: &body, source: "session", session };
+        if let Some((_, true)) = store.merge_note(&note, &files)? {
+            added += 1;
+        }
     }
     Ok(added)
+}
+
+fn absorb(r: &mut Record, out: &Value) {
+    r.summary = points(&r.summary, &field(out, "summary"));
+    r.why = points(&r.why, &field(out, "why"));
+    r.rejected = points(&r.rejected, &field(out, "rejected"));
+    let next = points("", &field(out, "next"));
+    if !next.is_empty() {
+        r.next = next;
+    }
+    if r.title.is_empty() {
+        r.title = field(out, "title");
+    }
+}
+
+fn finish(home: &Path, store: &mut Store, row: &Due, project: &str, r: &Record) -> Result<(), wisply_memory::DbError> {
+    let started = if row.started > 0.0 { row.started } else { now() };
+    if write_session(&vault(home), &row.id, project, r, started).is_none() {
+        store.session_note(&row.id, project, r)?;
+    } else {
+        store.session_note_gone(&row.id)?;
+    }
+    let origin = format!("session:{}", row.id);
+    for line in r.next.lines() {
+        store.suggest(project, line, &origin)?;
+    }
+    Ok(())
 }
 
 pub fn tick(home: &Path, store: &mut Store, soon: bool) {

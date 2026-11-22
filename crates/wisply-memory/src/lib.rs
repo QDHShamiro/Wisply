@@ -2,8 +2,10 @@ mod asked;
 mod bench;
 mod board;
 mod expand;
+mod growth;
 mod learner;
 mod lessons;
+mod list;
 mod nindex;
 mod pages;
 mod project;
@@ -22,13 +24,18 @@ pub use bench::{
 };
 pub use board::{Card, Graph, Node, Run, links};
 pub use expand::{near, stem_word};
+pub use growth::DayCount;
 pub use learner::{Due, Record, Unsummarized, points, titled};
 pub use lessons::Lesson;
+pub use list::{
+    BODY_CHARS, Change, FIELDS, KINDS, LEVELS, LogHit, Mute, NewEntry, OPEN, PRIOS, STATUSES, Seen, ServerState, Todo,
+    WAITS, prio_of, valid,
+};
 pub use pages::{WIKI_KINDS, render as render_page, safe_name, template, write_draft, write_session};
 pub use project::{project_of, root_of};
 pub use rank::{mentions, snippet, terms, words};
 pub use start::{Counts, DRAFTS_MAX, Session};
-pub use store::{Hit, NewNote, Note, Store, Todo, VEC_DIM, date, day, now};
+pub use store::{Hit, NewNote, Note, Store, VEC_DIM, date, day, now};
 pub use text::{fact, fts_query, oneline, scrub, short, similar, stop_word};
 pub use transcript::{CHUNK_CHARS, Condensed, Style, chunks, condense, condense_as, project_of_files};
 pub use vault::{Page, claude_dirs, parse as parse_page};

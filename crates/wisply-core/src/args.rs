@@ -68,6 +68,8 @@ const VALUED: &[&str] = &[
     "why",
     "site",
     "with",
+    "prio",
+    "server",
 ];
 const MULTI: &[&str] = &["glob", "include", "exclude", "exclude-dir"];
 const ALIAS: &[(&str, &str)] = &[

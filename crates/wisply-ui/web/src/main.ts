@@ -5,7 +5,10 @@ import { T } from "./text";
 import { agents } from "./views/agents";
 import { blind } from "./views/blind";
 import { home } from "./views/home";
+import { intel } from "./views/intel";
+import { list, type ListTab, TABS } from "./views/list";
 import { live } from "./views/live";
+import { memory } from "./views/memory";
 import { project, type Tab } from "./views/project";
 import { search } from "./views/search";
 import { learned, settings, tokens } from "./views/side";
@@ -24,7 +27,10 @@ let cleanup: () => void = () => {};
 let turn = 0;
 
 const links: [string, string, string][] = [
-  ["#/", "projects", T.nav.projects],
+  ["#/", "todos", T.nav.todos],
+  ["#/projects", "projects", T.nav.projects],
+  ["#/memory", "memory", T.nav.memory],
+  ["#/intelligence", "intelligence", T.nav.intelligence],
   ["#/graph", "graph", T.nav.graph],
   ["#/live", "live", T.nav.live],
   ["#/agents", "agents", T.nav.agents],
@@ -88,12 +94,39 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-function mark(hash: string): void {
-  for (const a of nav.querySelectorAll("a")) {
-    const href = a.getAttribute("href") ?? "";
-    a.classList.toggle("on", href === "#/" ? hash === "#/" || hash.startsWith("#/p/") : hash.startsWith(href));
-  }
+function lit(href: string, hash: string): boolean {
+  if (href === "#/") return hash === "#/" || hash.startsWith("#/l/");
+  if (href === "#/projects") return hash === href || hash.startsWith("#/p/");
+  return hash.startsWith(href);
 }
+
+function mark(hash: string): void {
+  for (const a of nav.querySelectorAll("a")) a.classList.toggle("on", lit(a.getAttribute("href") ?? "", hash));
+}
+
+function listTab(name: string | undefined): ListTab {
+  return TABS.find((t) => t === name) ?? "open";
+}
+
+type Page = (parts: string[]) => Promise<void | (() => void)>;
+const NEEDS_ARG = new Set(["p", "n", "t", "search"]);
+const rest = (parts: string[]) => parts.slice(1).join("/");
+const PAGES: Record<string, Page> = {
+  p: (p) => project(view, p[1], ((p[2] as Tab) || "notes") as Tab, listTab(p[3])),
+  n: async (p) => (await import("./views/note")).note(view, { id: Number(p[1]) }),
+  t: async (p) => (await import("./views/note")).note(view, { title: rest(p) }),
+  search: (p) => search(view, rest(p)),
+  projects: () => home(view),
+  memory: () => memory(view),
+  intelligence: () => intel(view),
+  graph: async (p) => (await import("./views/graph")).graph(view, p[1] || undefined),
+  live: () => live(view),
+  agents: () => agents(view),
+  tokens: () => tokens(view),
+  learned: () => learned(view),
+  blind: () => blind(view),
+  settings: () => settings(view),
+};
 
 async function route(): Promise<void> {
   const hash = location.hash || "#/";
@@ -104,19 +137,9 @@ async function route(): Promise<void> {
   view.scrollTop = 0;
   const parts = hashParts(hash);
   try {
-    let done: void | (() => void);
-    if (parts[0] === "p" && parts[1]) done = await project(view, parts[1], ((parts[2] as Tab) || "notes") as Tab);
-    else if (parts[0] === "n" && parts[1]) done = await (await import("./views/note")).note(view, { id: Number(parts[1]) });
-    else if (parts[0] === "t" && parts[1]) done = await (await import("./views/note")).note(view, { title: parts.slice(1).join("/") });
-    else if (parts[0] === "graph") done = await (await import("./views/graph")).graph(view, parts[1] || undefined);
-    else if (parts[0] === "live") done = await live(view);
-    else if (parts[0] === "agents") done = await agents(view);
-    else if (parts[0] === "tokens") done = await tokens(view);
-    else if (parts[0] === "learned") done = await learned(view);
-    else if (parts[0] === "blind") done = await blind(view);
-    else if (parts[0] === "settings") done = await settings(view);
-    else if (parts[0] === "search" && parts[1]) done = await search(view, parts.slice(1).join("/"));
-    else done = await home(view);
+    const key = parts[0] ?? "";
+    const page = PAGES[key] && (parts[1] || !NEEDS_ARG.has(key)) ? PAGES[key] : null;
+    const done = page ? await page(parts) : await list(view, listTab(key === "l" ? parts[1] : undefined));
     if (mine === turn && done) cleanup = done;
     else if (done) done();
   } catch (e) {

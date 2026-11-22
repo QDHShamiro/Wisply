@@ -13,7 +13,7 @@ use super::server;
 use crate::daemon::config;
 
 pub const MOBILE_USAGE: &str = "mobile pair [--name handy] | list | revoke <name> | status | on | off";
-pub const NOTIFY_USAGE: &str = "notify event <done|waiting|ci_red|ci_green|limit|resumed|disk> <title> [text]";
+pub const NOTIFY_USAGE: &str = "notify event <done|waiting|ci_red|ci_green|limit|resumed|disk|bug> <title> [text]";
 const SHOWN: usize = 20;
 const NAME_SHOWN: usize = 28;
 

@@ -100,7 +100,7 @@ fn a_v3_home_starts_its_daemon_and_answers_like_2x() {
         assert_eq!(home.run(&["type", "o74", "hi"]), (1, screen.into()));
     }
     let (code, help) = home.run(&[]);
-    assert!(code == 0 && help.starts_with("wisply 3.0 <command>"), "{help}");
+    assert!(code == 0 && help.starts_with("wisply 3.5 <command>"), "{help}");
     assert_eq!(home.run(&["abort"]), (0, "stopped the running and queued commands".into()));
     assert_eq!(home.run(&["stop"]), (0, "wisply daemon stopped".into()));
     assert!(!home.0.join("daemon.pid").exists());
@@ -302,7 +302,12 @@ fn memory_keeps_notes_and_todos_in_memory_db() {
     assert_eq!(home.run(&["todo", "list", "release"]).1, "release:\n  #1 ship it");
     assert_eq!(home.run(&["todo", "ls", "other"]).1, "no open to-dos (wisply todo add \"task\")");
     let (code, bare) = home.run(&["todo", "1"]);
-    assert!(code == 0 && bare.starts_with("#1 2") && bare.contains(" todo [release, ") && bare.ends_with("]\nship it"));
+    let head = bare.lines().next().unwrap_or("");
+    assert!(
+        code == 0 && head.starts_with("#1 2") && head.contains(" task mid todo [") && head.ends_with(", release]"),
+        "{bare}"
+    );
+    assert_eq!(bare.lines().nth(1), Some("ship it"), "{bare}");
     assert_eq!(home.run(&["todo", "9"]), (1, "err: no to-do #9 -> try: wisply todo".into()));
     assert_eq!(home.run(&["todo", "note", "1", "first step"]).1, "#1 noted");
     assert_eq!(home.run(&["todo", "note", "1", "second step"]).1, "#1 noted");
@@ -311,7 +316,8 @@ fn memory_keeps_notes_and_todos_in_memory_db() {
         listed.starts_with("release:\n  #1 ship it (") && listed.ends_with("\n(wisply todo <id> shows one in full)")
     );
     let (_, full) = home.run(&["todo", "show", "#1"]);
-    let notes: Vec<&str> = full.split("\nnotes:\n").nth(1).unwrap_or("").split('\n').collect();
+    let after = full.split("\nnotes:\n").nth(1).unwrap_or("");
+    let notes: Vec<&str> = after.split('\n').take_while(|l| l.starts_with("  ")).collect();
     assert!(notes.len() == 2 && notes[0].ends_with("first step") && notes[1].ends_with("second step"), "{full}");
     assert_eq!(home.run(&["todo", "close", "1"]).1, "#1 is done: ship it");
     assert_eq!(home.run(&["todo", "reopen", "1"]).1, "#1 is todo: ship it");

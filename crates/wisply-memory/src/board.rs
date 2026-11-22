@@ -22,6 +22,7 @@ pub struct Card {
 #[derive(Debug, Clone, Default)]
 pub struct Run {
     pub id: String,
+    pub project: String,
     pub title: String,
     pub summary: String,
     pub next: String,
@@ -51,6 +52,7 @@ pub fn links(body: &str) -> Vec<String> {
 fn run_of(row: &Row) -> rusqlite::Result<Run> {
     Ok(Run {
         id: text(row, "id"),
+        project: text(row, "project"),
         title: text(row, "title"),
         summary: text(row, "summary"),
         next: text(row, "next"),
@@ -79,7 +81,7 @@ impl Store {
         let mut stmt = self.db.prepare(
             "with p as (select project, count(*) n, 0 t, 0 s, max(updated) last from notes where project != '' group by project \
              union all select project, 0, count(*), 0, max(updated) from todos \
-               where project != '' and status in ('todo', 'doing') group by project \
+               where project != '' and status in ('todo', 'doing', 'waiting') and source != 'log' group by project \
              union all select project, 0, 0, count(*), max(last) from sessions where project != '' group by project) \
              select project, sum(n), sum(t), sum(s), max(last) from p group by project order by max(last) desc",
         )?;
@@ -115,6 +117,66 @@ impl Store {
     pub fn runs(&self, project: &str, limit: usize) -> rusqlite::Result<Vec<Run>> {
         let mut stmt = self.db.prepare("select * from sessions where project = ?1 order by last desc limit ?2")?;
         stmt.query_map(params![project, limit as i64], run_of)?.collect()
+    }
+
+    pub fn shelves(&self) -> rusqlite::Result<Vec<(String, i64)>> {
+        let mut stmt = self.db.prepare("select source, count(*) from notes group by source order by count(*) desc")?;
+        stmt.query_map([], |r| Ok((r.get::<_, Option<String>>(0)?.unwrap_or_default(), r.get(1)?)))?.collect()
+    }
+
+    pub fn note_projects(&self) -> rusqlite::Result<Vec<(String, i64)>> {
+        let mut stmt = self.db.prepare(
+            "select project, count(*) from notes where project != '' group by project order by max(updated) desc",
+        )?;
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect()
+    }
+
+    pub fn notes_page(
+        &self,
+        source: &str,
+        project: &str,
+        words: &str,
+        limit: usize,
+        offset: usize,
+    ) -> rusqlite::Result<(Vec<Note>, i64)> {
+        let like = if words.trim().is_empty() { String::new() } else { format!("%{}%", like_escape(words.trim())) };
+        let filter = "from notes where (?1 = '' or source = ?1) and (?2 = '' or project = ?2) \
+                      and (?3 = '' or title like ?3 escape '\\' or body like ?3 escape '\\')";
+        let total = self
+            .db
+            .query_row(&format!("select count(*) {filter}"), params![source, project, like], |r| r.get::<_, i64>(0))?;
+        let mut stmt = self.db.prepare(&format!("select * {filter} order by updated desc limit ?4 offset ?5"))?;
+        let rows = stmt
+            .query_map(params![source, project, like, limit as i64, offset as i64], note_of)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((rows, total))
+    }
+
+    pub fn runs_page(
+        &self,
+        project: &str,
+        words: &str,
+        since: f64,
+        limit: usize,
+        offset: usize,
+    ) -> rusqlite::Result<Vec<Run>> {
+        let like = if words.trim().is_empty() { String::new() } else { format!("%{}%", like_escape(words.trim())) };
+        let mut stmt = self.db.prepare(
+            "select * from sessions where (?1 = '' or project = ?1) and last >= ?2 and (title != '' or summary != '') \
+             and (?5 = '' or title like ?5 escape '\\' or summary like ?5 escape '\\' or next like ?5 escape '\\') \
+             order by last desc limit ?3 offset ?4",
+        )?;
+        stmt.query_map(params![project, since, limit as i64, offset as i64, like], run_of)?.collect()
+    }
+
+    pub fn runs_total(&self, project: &str, words: &str) -> rusqlite::Result<i64> {
+        let like = if words.trim().is_empty() { String::new() } else { format!("%{}%", like_escape(words.trim())) };
+        self.db.query_row(
+            "select count(*) from sessions where (?1 = '' or project = ?1) and (title != '' or summary != '') \
+             and (?2 = '' or title like ?2 escape '\\' or summary like ?2 escape '\\' or next like ?2 escape '\\')",
+            params![project, like],
+            |r| r.get(0),
+        )
     }
 
     pub fn note_titled(&self, title: &str) -> rusqlite::Result<Option<Note>> {
@@ -268,6 +330,35 @@ mod tests {
         assert_eq!(kinds, ["note", "project", "note"]);
         assert!(g.edges.contains(&(0, 2)) && g.edges.contains(&(0, 1)), "{:?}", g.edges);
         assert_eq!(s.graph(None).unwrap().nodes.iter().filter(|n| n.kind == "project").count(), 2);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn memory_pages_filter_by_source_project_and_words() {
+        let home = std::env::temp_dir().join(format!("lt-board-pages-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let mut s = Store::open(&home).unwrap();
+        s.add_note(&note("Alpha", "Plan", "ship 50% faster")).unwrap();
+        s.add_note(&note("Beta", "Spec", "the spec")).unwrap();
+        s.add_note(&NewNote {
+            project: "Alpha",
+            kind: "fact",
+            title: "Port",
+            body: "uses 8080",
+            source: "user",
+            session: "",
+        })
+        .unwrap();
+        assert_eq!(s.shelves().unwrap(), [("vault".to_string(), 2), ("user".to_string(), 1)]);
+        assert_eq!(s.note_projects().unwrap().len(), 2);
+        let (rows, total) = s.notes_page("", "Alpha", "", 10, 0).unwrap();
+        assert_eq!((rows.len(), total), (2, 2));
+        let (rows, total) = s.notes_page("vault", "", "50%", 10, 0).unwrap();
+        assert_eq!((rows.iter().map(|n| n.title.as_str()).collect::<Vec<_>>(), total), (vec!["Plan"], 1));
+        let (rows, total) = s.notes_page("", "", "", 1, 1).unwrap();
+        assert_eq!((rows.len(), total), (1, 3));
+        s.session_seen("sid1", "Alpha", "/x", "", false).unwrap();
+        assert!(s.runs_page("", "", 0.0, 10, 0).unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&home);
     }
 }

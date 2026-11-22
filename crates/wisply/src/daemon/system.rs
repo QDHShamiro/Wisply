@@ -6,7 +6,7 @@ use wisply_core::{Call, Fail, Flag, OUT_CHARS, ago, built_later, listing, parse,
 use super::ctx::Ctx;
 use super::{Daemon, Out, VERSION, config, media, route, web};
 
-const HELP: &str = "wisply 3.0 <command> [args]   browser, desktop apps, video and memory for AI agents
+const HELP: &str = "wisply 3.5 <command> [args]   browser, desktop apps, video and memory for AI agents
 refs: e12 web element | t77 tab | w3 window | d5 app element
 
 web     open <url> [-n] [-f \"a|b\"] [--text]   snap [-f \"a|b\"] [-s css|ref] [--all] [--full] [--diff] [--links]   text [-f txt] [--links]
@@ -26,6 +26,8 @@ video   watch <link|file|e40> [\"question\"] [--from 1:00 --to 2:00] [--at 0:10,
         listen <link|file|e40> [\"question\"] [--from --to] [--live] [--lang de] [--local]   shot --ask \"question\"
 memory  recall \"words\" [--all] [--max n] | recall <id>   remember \"fact\" [--kind k]   forget <id>
         todo [--all] | todo add \"task\" [--list name] [--doing] | todo done|doing|drop|open <id> [note] | todo note <id> \"text\"
+        todo add \"task\" [--kind bug|feature|task|idea] [--prio high|mid|low] [--project p] | todo wait <id> restart|you | todo prio|kind <id> <value> | todo undo <id>
+        bug add <server> \"what is broken\" [--prio high] | bug [server]   list [--server s] [--kind k] [--warn] [--done] | list servers | list check [server] | list ignore <id> | list accept|reject <id> (one list in wisply ui: bugs, features, tasks, ideas, server logs)
         memory [learn|on|off]   memory lessons | memory unlearn <n> (fixes learned from failed commands)
         memory bench [freeze | run | compare <old> <new> | open | judge] (measures the search on a frozen copy)
         wiki | wiki accept <n> [folder] | wiki drop <n> | wiki show <n> (drafts in the vault inbox)
@@ -33,6 +35,7 @@ memory  recall \"words\" [--all] [--max n] | recall <id>   remember \"fact\" [--
 keys    keys [site] [-f x]   keys add <site> \"ctrl+k=what\"   keys rm <site> <key>
 cleanup done [--quiet]   keep [t]   config cleanup on|off
 system  status   channels   stop   abort   config [key value]   log [n] | log stats [n]   version
+        wait ci [--pr N|--branch B|--sha S] [--repo o/r] [--timeout 30m] (one green/red line)   wait until \"<command>\" [--every 5s --timeout 10m]
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
         peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
         progress [<percent> | <done>/<total>] [\"what you are doing\"] | progress show [--color] [--ascii] | progress clear (how far the task is, shown in the status line; plan tools are noted by themselves)
@@ -46,7 +49,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
         agents [--all] [--json] (every Claude session: running, waiting, done, limit, tokens, cost estimate; resumes limit-stopped background sessions once after the reset)
         mobile pair [--name handy] | list | revoke <name> | status | on | off (phone API for the Wisply app, localhost and Tailscale only)
-        notify event <done|waiting|ci_red|ci_green|limit|resumed|disk> <title> [text] (Windows toast that never takes focus, plus the phone feed)
+        notify event <done|waiting|ci_red|ci_green|limit|resumed|disk|bug> <title> [text] (Windows toast that never takes focus, plus the phone feed)
 code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many shell, file and wisply steps in one call, only the result comes back; wisply codemode help)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
@@ -248,6 +251,7 @@ mod tests {
         assert!(about("wiki").is_some_and(|row| row.starts_with("wiki | wiki accept")));
         assert!(about("kit").is_some_and(|row| row.starts_with("kit | kit add <name>")));
         assert!(about("skill").is_some_and(|row| row.starts_with("skill | skill find <words>")));
+        assert!(about("wait").is_some_and(|rows| rows.contains("wait ci [--pr N") && rows.contains("wait until")));
         assert!(about("codemode").is_some_and(|row| row.starts_with("codemode \"<javascript>\" [--yes]")));
         assert_eq!(help(Some("voice")).ok().as_deref(), Some(HELP));
         assert_eq!(help(None).ok().as_deref(), Some(HELP));
