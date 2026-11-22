@@ -288,16 +288,37 @@ pub fn restore_all(run: &Run) -> Result<(usize, usize), String> {
     Ok((orig.len(), removed))
 }
 
-fn git_diff(old: Option<&Path>, new: &Path, empty: &Path) -> String {
+fn git_diff(git: &str, old: Option<&Path>, new: &Path, empty: &Path) -> String {
     let old = old.unwrap_or(empty);
     let new_or_empty = if new.exists() { new } else { empty };
-    crate::measure::quiet(&mut Command::new("git"))
+    crate::measure::quiet(&mut Command::new(git))
         .args(["diff", "--no-index", "--no-color", "-U3", "--"])
         .arg(old)
         .arg(new_or_empty)
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-        .unwrap_or_default()
+        .unwrap_or_else(|_| plain_diff(old, new_or_empty))
+}
+
+fn plain_diff(old: &Path, new: &Path) -> String {
+    let mut out = vec![
+        format!("diff --git a/{} b/{}", files::slashed(old), files::slashed(new)),
+        "# git could not be started, so every line from the first to the last changed one is listed".to_string(),
+    ];
+    let (a, b) = (fs::read(old).unwrap_or_default(), fs::read(new).unwrap_or_default());
+    if a.contains(&0) || b.contains(&0) {
+        out.push("Binary files differ".to_string());
+        return out.join("\n") + "\n";
+    }
+    let (a, b) = (String::from_utf8_lossy(&a), String::from_utf8_lossy(&b));
+    let (a, b): (Vec<&str>, Vec<&str>) = (a.lines().collect(), b.lines().collect());
+    let head = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let tail = a[head..].iter().rev().zip(b[head..].iter().rev()).take_while(|(x, y)| x == y).count();
+    let (gone, come) = (&a[head..a.len() - tail], &b[head..b.len() - tail]);
+    out.push(format!("@@ -{0},{1} +{0},{2} @@", head + 1, gone.len(), come.len()));
+    out.extend(gone.iter().map(|l| format!("-{l}")));
+    out.extend(come.iter().map(|l| format!("+{l}")));
+    out.join("\n") + "\n"
 }
 
 fn since_commit(abs: &str) -> Option<String> {
@@ -336,6 +357,10 @@ pub struct Diff {
 }
 
 pub fn diff(run: &Run, label: &str) -> Result<Diff, String> {
+    diff_with(run, label, "git")
+}
+
+fn diff_with(run: &Run, label: &str, git: &str) -> Result<Diff, String> {
     let (orig, created) = originals(run);
     let mut chunks = Vec::new();
     let mut lost = Vec::new();
@@ -351,19 +376,19 @@ pub fn diff(run: &Run, label: &str) -> Result<Diff, String> {
             if fs::read(abs).ok() == fs::read(bak).ok() {
                 continue;
             }
-            let d = git_diff(Some(bak), Path::new(abs), &empty);
+            let d = git_diff(git, Some(bak), Path::new(abs), &empty);
             chunks.push(d.replace(&files::slashed(bak), &format!("before/{}", short(abs))));
         }
         for abs in &created {
-            chunks.push(git_diff(None, Path::new(abs), &empty));
+            chunks.push(git_diff(git, None, Path::new(abs), &empty));
         }
     } else if run.s.pointer("/git/repo").and_then(Value::as_bool) == Some(true) {
-        let out = crate::measure::quiet(&mut Command::new("git"))
+        let out = crate::measure::quiet(&mut Command::new(git))
             .arg("-C")
             .arg(run.root())
             .arg("diff")
             .output()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("git could not be started ({e}) and this run has no backup to compare with"))?;
         chunks.push(String::from_utf8_lossy(&out.stdout).to_string());
     } else {
         return Err("no backup and no git, so no diff".into());

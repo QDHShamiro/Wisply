@@ -282,6 +282,8 @@ pub fn is_test(p: &Path) -> bool {
         || s.contains(".test.")
         || s.contains("_test.")
         || s.contains(".spec.")
+        || s.ends_with("/tests.rs")
+        || s.ends_with("_tests.rs")
 }
 
 pub fn is_minified(p: &Path) -> bool {
@@ -397,6 +399,16 @@ mod tests {
         assert_eq!(Pack::from_name(" Web "), Some(Pack::Web));
         assert!(is_test(Path::new("crates/x/tests/a.rs")) && !is_test(Path::new("src/a.rs")));
         assert_eq!(rel(Path::new("/p"), Path::new("/p/src/a.rs")), "src/a.rs");
+    }
+
+    #[test]
+    fn a_rust_test_module_in_its_own_file_is_a_test() {
+        for path in ["crates/x/src/tests.rs", "crates/x/src/store/tests.rs", "crates/x/src/route_tests.rs"] {
+            assert!(is_test(Path::new(path)), "{path}");
+        }
+        for path in ["crates/x/src/contests.rs", "crates/x/src/tests_of_time.rs", "crates/x/src/protests.rs"] {
+            assert!(!is_test(Path::new(path)), "{path}");
+        }
     }
 
     #[test]

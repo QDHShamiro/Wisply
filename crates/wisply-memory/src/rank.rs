@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::expand::variants;
+use super::expand::{parts, variants};
 use super::store::{Hit, Note};
 use super::text::{oneline, similar, stop_word};
 
@@ -64,6 +64,10 @@ pub fn groups(terms: &[String]) -> Vec<Group> {
         .map(|t| {
             let mut group = vec![t.clone()];
             group.extend(variants(t).into_iter().map(String::from));
+            for p in parts(t) {
+                group.extend(variants(&p).into_iter().map(String::from));
+                group.push(p);
+            }
             group
         })
         .collect()
@@ -327,6 +331,31 @@ mod tests {
             let got = snippet(body, "", &terms(query), 200);
             assert!(got.contains(want), "query {query:?} -> snippet {got:?} is missing {want:?}");
         }
+    }
+
+    #[test]
+    fn fold_drops_exact_and_near_duplicate_notes_within_kind() {
+        let h = |id: i64, title: &str, kind: &str, score: f64| Hit {
+            note: Note { id, title: title.into(), kind: kind.into(), ..Note::default() },
+            score,
+            sim: None,
+        };
+        let hits = vec![
+            h(1, "redis crash fix", "fact", 1.0),
+            h(2, "redis crash fix", "note", 0.9),
+            h(3, "redis crash patch", "fact", 0.8),
+            h(4, "redis crash fix now", "fact", 0.7),
+            h(5, "redis crash fix now", "note", 0.6),
+            h(6, "totally other subject", "fact", 0.5),
+        ];
+        let kept: Vec<i64> = fold(hits.clone(), 10).into_iter().map(|x| x.note.id).collect();
+        assert_eq!(
+            kept,
+            [1, 3, 5, 6],
+            "exact title folds across kinds, same-kind near-dup folds, kind-guarded near-dup and sub-threshold stay"
+        );
+        let capped: Vec<i64> = fold(hits, 2).into_iter().map(|x| x.note.id).collect();
+        assert_eq!(capped, [1, 3], "limit caps the folded output");
     }
 
     #[test]

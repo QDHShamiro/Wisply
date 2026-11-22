@@ -49,6 +49,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     if matches!(first, "setup" | "install" | "uninstall") {
         return crate::setup::run(&home, &args);
     }
+    if first == "pupil" {
+        return crate::pupil::run(&home, &args[1..]);
+    }
     if !home.join(MARKER).is_file() {
         return v2(&home, raw);
     }
@@ -60,6 +63,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     }
     if first == "ui" {
         return open_ui(&home);
+    }
+    if first == "memory" && args.get(1).is_some_and(|a| a == "bench") {
+        return crate::daemon::memory_bench(&home, &args[2..]);
     }
     if first == "squeeze" {
         return crate::pipe::squeeze(&home, &args);

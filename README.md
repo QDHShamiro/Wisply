@@ -616,7 +616,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | To-dos | `todo [--all]` · `todo add "task" [--kind bug\|feature\|task\|idea] [--prio high\|mid\|low] [--list x]` · `todo doing\|done\|drop\|open 12` · `todo wait 12 restart\|you` · `todo note 12 "text"` · `todo undo 12` · `config list_tidy on\|off` (local model tidies open entries) |
 | Bugs | `bug add <server> "what is broken"` · `bug [server]` · `list [--warn] [--done]` · `list servers` · `list check [server]` · `list on\|off <server>` · `list log <server> <path>` · `list ignore 12` · `list accept\|reject 12` · `config servers_file <path>` |
 | Notes | `wiki` · `wiki show 3` · `wiki accept 3 [folder]` · `wiki drop 3` · `config vault <folder>` · `config vault_inbox Inbox` |
-| Model | `memory` · `memory model` · `memory learn` · `memory lessons` · `memory import claude-mem` · `config memory_api <url>` · `memory off` |
+| Model | `memory` · `memory model` · `memory learn` · `memory lessons` · `memory import claude-mem` · `config memory_api <url>` · `memory off` · `memory bench` |
 
 **Code map** (per project folder, kept in `~/.wisply/code`)
 

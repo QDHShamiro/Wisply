@@ -31,17 +31,24 @@ const TOLD_FILES: usize = 400;
 const EDITS: &[&str] = &["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
 pub const USAGE: &str = "wisply think <step>   critical thinking without AI: finds, fixes and proves improvements
-run      start \"<name>\" [paths] [--goal \"...\"] [--quick] [--size file|feature|project]   status   runs   brief
-find     scan [--all] (own checks fitted to the project and your rules)   rules   profile [set web,rust|auto]
-ideas    crit \"<criterion>\" ... [--why]   hint \"<doubt>\"   source <url> \"<proof>\"
+run:     start \"<name>\" [paths] [--goal \"...\"] [--quick] [--size file|feature|project]   status   runs   brief
+find:    scan [--all] (own checks fitted to the project and your rules)   rules   profile [set web,rust|auto]
+ideas:   crit \"<criterion>\" ... [--why]   hint \"<doubt>\"   source <url> \"<proof>\"
          idea add \"title | lens | tool | impact | sure | effort | safe/big\" (or lines on stdin)   idea list [--all]
          idea set <ids> --status done|unchecked|dropped|suggestion [--proof|--why|--grade]   idea out \"<why>\"
-change   fix [--deep] (Wisply fixes what it safely can, proves it, reverts when worse)
+change:  fix [--deep] (Wisply fixes what it safely can, proves it, reverts when worse)
          checkpoint <id> <files>   revert <id> [--why] [--force]   restore --yes   diff [label]
-prove    measure <label> [--cmd \"...\"] [--runs 5] [--test] [--metrics]   compare [a b]   save <label> [--file f]
+prove:   measure <label> [--cmd \"...\"] [--runs 5] [--test] [--metrics]   compare [a b]   save <label> [--file f]
          blind <before> <after>   blind-result <n> 1|2|same   round [--anyway \"<reason>\"]   report
-lessons  learn \"<lesson>\" --tag <tag>   learn --list   lint-skill <folder>
+lessons: learn \"<lesson>\" --tag <tag>   learn --list   lint-skill <folder>
 any step takes --run <id> for another run";
+const GROUPS: &[(&str, &str)] = &[
+    ("run", "start \"<name>\""),
+    ("find", "scan"),
+    ("change", "fix"),
+    ("prove", "measure <label>"),
+    ("lessons", "learn --list"),
+];
 
 pub struct Env {
     pub home: PathBuf,
@@ -145,6 +152,15 @@ fn migrate(home: &run::Home, user: &Path) {
     }
 }
 
+fn unknown(step: &str) -> String {
+    match GROUPS.iter().find(|(group, _)| *group == step) {
+        Some((_, first)) => format!(
+            "'{step}' is a group of steps, not a step -> try: wisply think {first} (all steps: wisply think help)"
+        ),
+        None => format!("no step called '{step}'\n{USAGE}"),
+    }
+}
+
 pub fn command(env: &Env, c: &Call) -> Result<String, String> {
     let home = run::Home::new(&env.home, &env.sid);
     migrate(&home, &env.user);
@@ -176,7 +192,7 @@ pub fn command(env: &Env, c: &Call) -> Result<String, String> {
         "rules" => Ok(work::rules_cmd(env)),
         "lint-skill" => work::lint_skill(env, c),
         "" | "help" => Ok(USAGE.into()),
-        other => Err(format!("no step called '{other}'\n{USAGE}")),
+        other => Err(unknown(other)),
     }?;
     let notes = env.notes.borrow();
     if notes.is_empty() {
@@ -333,6 +349,45 @@ mod tests {
             assert_eq!(env.path("/e/Wisply"), PathBuf::from("E:/Wisply"));
         }
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_group_word_from_the_help_names_a_step_of_that_group() {
+        let base = std::env::temp_dir().join(format!("wisply-think-group-{}", std::process::id()));
+        let env = Env {
+            home: base.join("wisply"),
+            user: base.join("user"),
+            sid: "s".into(),
+            cwd: base.clone(),
+            playing: String::new(),
+            cwds: Vec::new(),
+            notes: RefCell::new(Vec::new()),
+        };
+        let step = |word: &str| {
+            let call = Call { name: "think".into(), pos: vec![word.into()], flags: BTreeMap::new() };
+            command(&env, &call).unwrap_or_else(|said| said)
+        };
+        let cases = [
+            ("run", "start \"<name>\""),
+            ("find", "scan"),
+            ("change", "fix"),
+            ("prove", "measure <label>"),
+            ("lessons", "learn --list"),
+        ];
+        for (group, first) in cases {
+            assert_eq!(
+                step(group),
+                format!(
+                    "'{group}' is a group of steps, not a step -> try: wisply think {first} (all steps: wisply think help)"
+                )
+            );
+            let word = first.split(' ').next().unwrap_or_default();
+            let row = USAGE.lines().find(|line| line.starts_with(&format!("{group}: "))).unwrap_or_default();
+            assert!(row.contains(&format!(" {word} ")), "{group}: {row}");
+        }
+        assert_eq!(step("FIND"), step("find"));
+        assert_eq!(step("nope"), format!("no step called 'nope'\n{USAGE}"));
+        assert_eq!(step("help"), USAGE);
     }
 
     #[test]

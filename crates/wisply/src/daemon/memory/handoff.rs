@@ -1,15 +1,13 @@
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use serde_json::Value;
-use wisply_memory::{condense, oneline};
+use wisply_memory::{condense, oneline, typed_in};
 
 const TAIL_BYTES: u64 = 1_000_000;
 const HEAD_BYTES: u64 = 400_000;
-const USER_TAG: &str = r#""type":"user""#;
-const CONTINUED: &str = "This session is being continued";
+const BACK_BLOCKS: usize = 12;
 const TAIL_CHARS: usize = 600_000;
 const GOAL_CHARS: usize = 260;
 const LATEST_CHARS: usize = 260;
@@ -55,16 +53,17 @@ fn bullets(head: &str, items: Vec<String>, width: usize, out: &mut Vec<String>) 
     out.extend(items.iter().map(|i| format!("  - {}", oneline(i, width))));
 }
 
-pub fn compose(head: &str, tail: &str, title: &str, todos: &[String]) -> String {
-    let goal = Some(title)
-        .filter(|t| !t.is_empty())
-        .or_else(|| lines(head, USER).first().copied())
-        .or_else(|| lines(tail, USER).first().copied())
-        .unwrap_or("");
-    let latest = lines(tail, USER).last().copied().unwrap_or("");
+pub fn compose(first: &str, earlier: &str, tail: &str, title: &str, todos: &[String]) -> String {
+    let typed = lines(tail, USER);
+    let first = Some(first).filter(|f| !f.is_empty()).or_else(|| typed.first().copied()).unwrap_or("");
+    let latest = typed.last().copied().or(Some(earlier).filter(|e| !e.is_empty())).unwrap_or(first);
+    let goal = if title.is_empty() { first } else { title };
     let mut out = vec!["Wisply handoff, written before the compact from your transcript (no model):".to_string()];
     if !goal.is_empty() {
         out.push(format!("Goal: {}", oneline(goal, GOAL_CHARS)));
+    }
+    if !title.is_empty() && !first.is_empty() && first != latest {
+        out.push(format!("First request: {}", oneline(first, GOAL_CHARS)));
     }
     if !latest.is_empty() && latest != goal {
         out.push(format!("Latest request: {}", oneline(latest, LATEST_CHARS)));
@@ -94,28 +93,17 @@ fn tail_offset(path: &Path) -> std::io::Result<u64> {
     Ok(size - TAIL_BYTES + n as u64)
 }
 
-fn first_request(path: &Path) -> String {
-    let Ok(file) = File::open(path) else { return String::new() };
-    let mut reader = BufReader::new(file.take(HEAD_BYTES));
-    let mut raw = Vec::new();
-    while reader.read_until(b'\n', &mut raw).is_ok_and(|n| n > 0) {
-        let line = std::mem::take(&mut raw);
-        if !line.windows(USER_TAG.len()).any(|w| w == USER_TAG.as_bytes()) || !line.ends_with(b"\n") {
-            continue;
+fn earlier(path: &Path, at: u64) -> String {
+    let mut to = at;
+    for _ in 0..BACK_BLOCKS {
+        if to == 0 {
+            break;
         }
-        let Ok(v) = serde_json::from_slice::<Value>(&line) else { continue };
-        if ["isMeta", "isSidechain"].iter().any(|k| v.get(*k).and_then(Value::as_bool) == Some(true)) {
-            continue;
-        }
-        let content = v.get("message").and_then(|m| m.get("content"));
-        let text = match content {
-            Some(Value::String(s)) => s.as_str(),
-            Some(Value::Array(a)) => a.iter().find_map(|b| b.get("text").and_then(Value::as_str)).unwrap_or(""),
-            _ => "",
-        };
-        let text = text.trim();
-        if !text.is_empty() && !text.starts_with(['<', '[']) && !text.starts_with(CONTINUED) {
-            return oneline(text, GOAL_CHARS);
+        let from = to.saturating_sub(TAIL_BYTES);
+        match typed_in(path, from, to) {
+            Ok((_, last)) if !last.is_empty() => return last,
+            Ok(_) => to = from,
+            Err(_) => break,
         }
     }
     String::new()
@@ -124,9 +112,9 @@ fn first_request(path: &Path) -> String {
 pub fn from_transcript(path: &Path, todos: &[String]) -> String {
     let at = tail_offset(path).unwrap_or(0);
     let Ok(tail) = condense(path, at, Some(TAIL_CHARS)) else { return String::new() };
-    let first = if at == 0 { String::new() } else { first_request(path) };
-    let head = if first.is_empty() { String::new() } else { format!("{USER}{first}") };
-    compose(&head, &tail.text, &tail.title, todos)
+    let first = typed_in(path, 0, at.min(HEAD_BYTES)).map(|found| found.0).unwrap_or_default();
+    let before = if lines(&tail.text, USER).is_empty() { earlier(path, at) } else { String::new() };
+    compose(&first, &before, &tail.text, &tail.title, todos)
 }
 
 fn file_of(home: &Path, sid: &str) -> Option<PathBuf> {
@@ -168,6 +156,23 @@ pub fn take(home: &Path, sid: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TRIES: usize = 5;
+    const SHARE_OF_DEADLINE: u32 = 8;
+
+    fn timed(path: &Path) -> (String, Duration) {
+        (0..TRIES)
+            .map(|_| {
+                let t = std::time::Instant::now();
+                (from_transcript(path, &[]), t.elapsed())
+            })
+            .min_by_key(|(_, took)| *took)
+            .unwrap()
+    }
+
+    fn in_time(took: Duration) -> bool {
+        wisply_proto::hook_limit(&["hook", "compact"]).is_some_and(|limit| took < limit / SHARE_OF_DEADLINE)
+    }
 
     fn write_transcript(dir: &Path, rows: &[String]) -> PathBuf {
         let path = dir.join("t.jsonl");
@@ -234,14 +239,8 @@ mod tests {
         rows.push(user("now run the tests"));
         let path = write_transcript(&dir, &rows);
         assert!(fs::metadata(&path).unwrap().len() > TAIL_BYTES);
-        let (text, best) = (0..3)
-            .map(|_| {
-                let t = std::time::Instant::now();
-                (from_transcript(&path, &[]), t.elapsed())
-            })
-            .min_by_key(|(_, took)| *took)
-            .unwrap();
-        assert!(best < Duration::from_millis(300), "{best:?}");
+        let (text, best) = timed(&path);
+        assert!(in_time(best), "{best:?}");
         assert!(
             text.contains("Goal: Port the importer") && text.contains("Latest request: now run the tests"),
             "{text}"
@@ -251,7 +250,50 @@ mod tests {
     }
 
     #[test]
+    fn the_latest_request_is_found_before_the_tail_and_machine_rows_are_no_requests() {
+        use serde_json::json;
+        let dir = std::env::temp_dir().join(format!("lt-handoff-mid-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let work = |rows: &mut Vec<String>| {
+            for n in 0..6_000 {
+                rows.push(edit(&format!("/work/inv/src/f{}.rs", n % 50)));
+                rows.push(
+                    json!({"type": "user", "message": {"content": [{"type": "tool_result",
+                        "tool_use_id": format!("t{n}"), "content": "x".repeat(120)}]}})
+                    .to_string(),
+                );
+            }
+        };
+        let mut rows = vec![user("Move the invoices to the new layout")];
+        work(&mut rows);
+        rows.push(user("print the tax as its own line"));
+        work(&mut rows);
+        rows.push(said("Found the cause: the tax line was summed twice, so the total was wrong."));
+        rows.push(
+            json!({"type": "user", "turnOrigin": "task_notification",
+                "message": {"content": "<task-notification><status>completed</status></task-notification>"}})
+            .to_string(),
+        );
+        rows.push(
+            json!({"type": "user", "isCompactSummary": true,
+                "message": {"content": "This session is being continued from a previous conversation."}})
+            .to_string(),
+        );
+        rows.push(json!({"type": "ai-title", "aiTitle": "Invoice layout"}).to_string());
+        let path = write_transcript(&dir, &rows);
+        assert!(fs::metadata(&path).unwrap().len() > 3 * TAIL_BYTES);
+        let (text, best) = timed(&path);
+        assert!(in_time(best), "{best:?}");
+        let top = "Goal: Invoice layout\nFirst request: Move the invoices to the new layout\nLatest request: print the tax as its own line\n";
+        assert!(text.contains(top), "{text}");
+        assert!(text.contains("the tax line was summed twice"), "{text}");
+        assert!(!text.contains("completed") && !text.contains("being continued"), "{text}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn nothing_to_say_gives_nothing() {
-        assert_eq!(compose("", "", "", &[]), "");
+        assert_eq!(compose("", "", "", "", &[]), "");
     }
 }

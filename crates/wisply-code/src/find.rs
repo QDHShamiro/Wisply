@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rusqlite::Connection;
 
-use super::ask::{MEANT, Sym};
+use super::ask::{MEANT, Sym, is_test_path};
 use super::words::{near, query_terms, split_ident, stem, synonyms, words_of};
 
 const W_NAME: f32 = 3.0;
@@ -21,6 +21,8 @@ const KIND_OTHER: f32 = 0.7;
 const TEST_PENALTY: f32 = 0.08;
 const BUILT_PENALTY: f32 = 0.2;
 const SIG_WORDS: usize = 16;
+const MODULES: &[&str] = &["mod", "module", "namespace"];
+const TEST_MODULES: &[&str] = &["test", "tests"];
 
 type Postings = HashMap<String, Vec<(u32, f32, bool)>>;
 
@@ -37,14 +39,17 @@ pub struct Lex {
     avg: f32,
 }
 
+fn is_test_module(sym: &Sym) -> bool {
+    let low = sym.name.to_lowercase();
+    MODULES.contains(&sym.kind.as_str())
+        && (TEST_MODULES.contains(&low.as_str()) || low.ends_with("_test") || low.ends_with("_tests"))
+}
+
 fn is_test(sym: &Sym) -> bool {
-    let low = sym.path.to_lowercase();
-    low.contains("/test")
-        || low.starts_with("test")
-        || low.contains("_test.")
-        || low.contains(".test.")
+    is_test_path(&sym.path)
         || sym.parent.to_lowercase().contains("test")
         || sym.name.starts_with("test_")
+        || is_test_module(sym)
 }
 
 fn is_built(path: &str) -> bool {
@@ -228,6 +233,39 @@ mod tests {
         assert_eq!(first("where do we save notes").as_deref(), Some("add_note"));
         assert_eq!(first("scrubb secrets").as_deref(), Some("scrub"));
         assert!(lex.search("zzzz", 3).is_empty());
+    }
+
+    #[test]
+    fn test_files_rank_below_the_code_they_test() {
+        let code = ("src/field.rs", "set_value", "function", "typed value lands field");
+        for path in ["src/field_tests.rs", "web/field.spec.ts"] {
+            let test = (path, "a_typed_value_lands_in_the_field", "function", "typed value lands field");
+            let lex = lex_of(&[code, test]);
+            let first = lex.search("where a typed value lands in a field", 2).first().map(|s| s.name.clone());
+            assert_eq!(first.as_deref(), Some("set_value"), "{path}");
+        }
+    }
+
+    #[test]
+    fn a_module_is_test_code_by_its_whole_name() {
+        let named = |name: &str, kind: &str| Sym {
+            id: 1,
+            path: "src/field.rs".into(),
+            name: name.into(),
+            low: name.to_lowercase(),
+            kind: kind.into(),
+            line: 1,
+            end: 2,
+            parent: String::new(),
+            sig: String::new(),
+        };
+        for name in ["tests", "test", "Tests", "field_tests", "unit_test"] {
+            assert!(is_test(&named(name, "mod")), "{name}");
+        }
+        for name in ["latest", "contest", "attests", "tested"] {
+            assert!(!is_test(&named(name, "mod")), "{name}");
+        }
+        assert!(!is_test(&named("tests", "function")));
     }
 
     #[test]

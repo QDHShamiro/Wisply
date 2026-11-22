@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pupil Benchmark</title>
+<style>
+/*PUPIL_STYLE*/
+</style>
+</head>
+<body>
+<div class="top"><span class="logo"><i></i>Pupil</span><nav class="nav"><a href="#ziele">Ziele</a><a href="#karte">Karten</a><a href="#kategorien">Kategorien</a><a href="#rangliste">Rangliste</a><a href="#verlauf">Verlauf</a><a href="#messung">Messung</a><a href="#tempo">Tempo</a><a href="#tokens">Tokens</a><a href="#faelle">Fälle</a><a href="#antworten">Antworten</a></nav><span class="status" id="status"></span></div>
+<div class="live" id="live" hidden></div>
+<main id="app"></main>
+<script src="measurements.js"></script>
+<script src="card.js"></script>
+<script src="ziele.js"></script>
+<script>
+const DATA = /*PUPIL_DATA*/null;
+const CHECKS = [
+  ["complete", "Vollständig", "Antwort endet sauber, nicht abgeschnitten"],
+  ["times", "Zeiten im Ausschnitt", "Jede Zeitangabe liegt im angeschauten Teil"],
+  ["order", "Reihenfolge", "Zeiten laufen vorwärts"],
+  ["spread", "Genaue Zeiten", "Nicht alles auf derselben Sekunde"],
+  ["unique", "Keine Wiederholung", "Kein Punkt doppelt"],
+  ["coverage", "Abdeckung", "Punkte verteilen sich über das Video"],
+  ["grounded", "Passt zum Gesprochenen", "Wörter tauchen im Transkript ±45 s auf"]
+];
+const MODE = { steps:"SCHRITTE", summary:"ZUSAMMENFASSUNG", full:"ALLES" };
+const GAME = { minecraft:"Minecraft", fullscreen:"Ein Vollbild-Spiel" };
+const C = { score:"#6d4aff", speed:"#e0a400", tokens:"#e2487d", pupil:"#0e9f6e", online:"#1d1d1f", local:"#8b8fa3", base:"#6d4aff", read:"#4285f4", write:"#e2487d", scan:"#c9c9c4", load:"#8b8fa3", measure:"#0aa2c0" };
+const GOAL = { spm:6, score:90, loops:0 };
+const STORE = "pupil-report";
+const state = Object.assign({ sort:"score", dir:-1, q:"", bench:null, open:[], y:0 }, JSON.parse(sessionStorage.getItem(STORE) || "{}"));
+const save = () => sessionStorage.setItem(STORE, JSON.stringify(state));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const tc = s => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; const p = n => String(n).padStart(2,"0"); return h ? `${h}:${p(m)}:${p(x)}` : `${p(m)}:${p(x)}`; };
+const n1 = v => v == null || !isFinite(v) ? "–" : (Math.round(v*10)/10).toLocaleString("de-DE");
+const n0 = v => v == null || !isFinite(v) ? "–" : Math.round(v).toLocaleString("de-DE");
+const pct = v => v == null ? "–" : Math.round(v*100) + " %";
+const avg = list => { const xs = list.filter(v => v != null && isFinite(v)); return xs.length ? xs.reduce((a,b) => a+b, 0) / xs.length : null; };
+const sum = list => list.reduce((a,b) => a + (b || 0), 0);
+const when = t => new Date(t*1000).toLocaleString("de-DE", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+
+const mins = o => Math.max(1, o.window[1] - o.window[0]) / 60;
+const spm = o => o && o.reply ? o.reply.seconds.total / mins(o) : null;
+const loop = o => !!(o.reply && o.reply.finish === "length");
+const readS = r => r.prompt_per_second ? r.prompt_tokens / r.prompt_per_second : 0;
+const writeS = r => r.answer_per_second ? r.answer_tokens / r.answer_per_second : 0;
+const sharp = r => r.frames.length - (r.small_frames || 0);
+const key = o => `${o.model}·${o.case.name}`;
+const nameOf = o => DATA.models.length > 1 ? `${o.model} · ${o.case.name}` : o.case.name;
+const BASE = () => DATA && DATA.baseline && Array.isArray(DATA.baseline.outcomes) ? DATA.baseline.outcomes : null;
+const baseOf = o => { const b = BASE(); return b ? b.find(x => x.case.name === o.case.name && x.model === o.model && x.reply) || null : null; };
+
+function stats(list) {
+  const good = list.filter(o => o && o.reply);
+  const video = sum(good.map(o => o.window[1] - o.window[0]));
+  const spent = sum(good.map(o => o.reply.seconds.total));
+  return { good, video, spent, n:good.length, fails:list.length - good.length, score:avg(good.map(o => o.checks && o.checks.score)), spm:avg(good.map(spm)), rt:spent ? video / spent : null, tok:sum(good.map(o => o.reply.answer_tokens)), loops:good.filter(loop).length, pps:avg(good.map(o => o.reply.prompt_per_second)), aps:avg(good.map(o => o.reply.answer_per_second)), cold:Math.max(0, ...good.map(o => o.reply.seconds.server)) };
+}
+function delta(cur, prev, lowerBetter, unit, digits) {
+  if (cur == null || prev == null) return "";
+  const d = cur - prev, f = digits === 0 ? n0 : n1;
+  if (Math.abs(d) < (digits === 0 ? 0.5 : 0.05)) return `<span class="dl same">= gleich wie Basis</span>`;
+  const good = lowerBetter ? d < 0 : d > 0;
+  return `<span class="dl ${good ? "gut" : "schlecht"}">${d < 0 ? "▼" : "▲"} ${f(Math.abs(d))}${unit} ${good ? "besser" : "schlechter"}</span>`;
+}
+function compare(outs) {
+  const common = BASE() ? outs.filter(o => o.reply && baseOf(o)) : [];
+  return common.length ? { cur:stats(common), base:stats(common.map(baseOf)), n:common.length } : null;
+}
+
+function vbars(items, o) {
+  if (!items.length) return `<p class="sub">Noch keine Werte.</p>`;
+  const max = Math.max(1e-9, ...items.map(i => Math.max(i.value || 0, i.base || 0)), o.target || 0) * 1.1;
+  const h = v => Math.max(0, (v || 0) / max * 100);
+  const target = o.target != null ? `<div class="target" style="bottom:${h(o.target)}%"><span>${esc(o.targetLabel)}</span></div>` : "";
+  const cols = items.map(i => {
+    const cls = ["bar", i.hatch && "hatch", i.old && "old", i.hot && "hot", i.empty && "empty", !i.empty && h(i.value) < 14 && "low"].filter(Boolean).join(" ");
+    const style = i.empty ? `--c:${i.color || o.color}` : `height:${h(i.value)}%;--c:${i.color || o.color}`;
+    const mark = i.base != null ? `<u class="base" style="bottom:${h(i.base)}%" title="Basis: ${o.fmt(i.base)}"></u>` : "";
+    return `<div class="col" title="${esc(i.title || i.label)}"><div class="${cls}" style="${style}"><b>${i.empty ? esc(i.empty) : o.fmt(i.value)}</b></div>${mark}</div>`;
+  }).join("");
+  return `<div class="vb ${o.small ? "small" : ""}"><div class="plot">${target}${cols}</div><div class="names">${items.map(i => `<span><i class="${i.hot ? "hot" : ""}">${esc(i.label)}</i></span>`).join("")}</div></div>`;
+}
+const chart = (color, title, hint, body, extra) => `<div class="chart"><div class="head"><span class="ic" style="--c:${color}"></span><h3>${esc(title)}</h3></div><div class="hint">${hint}</div>${body}${extra || ""}</div>`;
+
+function render() {
+  const app = document.getElementById("app");
+  const status = document.getElementById("status");
+  if (!DATA) { app.innerHTML = "<h1>Pupil Benchmark</h1><p class='sub'>Keine Daten.</p>"; return; }
+  const outs = DATA.outcomes || [];
+  const running = DATA.done < DATA.planned;
+  status.className = `status ${running ? "run" : "done"}`;
+  status.innerHTML = running ? `<b>●</b> läuft · ${DATA.done} von ${DATA.planned}` : `<b>●</b> fertig · ${DATA.done} Fälle`;
+  const games = [...new Set(outs.map(o => o.game).filter(Boolean))];
+  const meta = [when(DATA.started), DATA.gpu || "GPU unbekannt", DATA.config ? `Config ${DATA.config}` : null, DATA.seed != null ? `Seed ${DATA.seed}` : null, DATA.baseline ? `Basis vom ${when(DATA.baseline.started)}` : null].filter(Boolean);
+  let html = `<h1>Pupil Benchmark</h1><div class="lead">${meta.map(esc).join(" · ")}${running ? " · Seite lädt neu, sobald neue Ergebnisse da sind" : ""}</div>`;
+  if (games.length) html += `<div class="note"><b>${esc(games.map(g => GAME[g] || g).join(", "))} lief nebenbei.</b> Pupil teilt sich dann die Grafikkarte, das Tempo liegt grob bei der Hälfte.</div>`;
+  html += goalsView() + scoreCards() + summaryCards(outs) + minis(outs);
+  html += `<div class="layout"><nav class="side">${[["ziele","Ziele",C.pupil],["karte","Karten",C.pupil],["kategorien","Kategorien",C.score],["rangliste","Rangliste",C.pupil],["verlauf","Verlauf",C.online],["messung","Messung",C.measure],["tempo","Tempo",C.speed],["tokens","Tokens",C.tokens],["faelle","Fälle",C.local],["antworten","Antworten",C.base]].map(([id,l,c]) => `<a href="#${id}"><span class="sq" style="--c:${c}"></span>${l}</a>`).join("")}</nav><div>`;
+  html += categories(outs) + ranking() + runsView() + measure() + tempo(outs) + tokens(outs);
+  html += `<section id="faelle"><h2><span class="sq" style="--c:${C.local}"></span>Alle Fälle</h2><div class="lead">Klick auf eine Spalte sortiert, die Suche filtert nach Fall, Video oder Kanal.</div><div class="tools"><input id="q" placeholder="Fall, Video oder Kanal suchen …" value="${esc(state.q)}"><button id="csv">CSV</button></div><div class="abbr"><b>P</b> Punkte · <b>S/M</b> Sekunden pro Videominute · <b>×E</b> schneller als Echtzeit · <b>TOK</b> Antwort-Tokens · <b>B</b> Bilder scharf/klein · <b>L/S</b> Lese-/Schreibtempo in Token/s · <b>Δ</b> gegenüber Basis</div><div class="tbl" id="cases"></div></section>`;
+  html += `<section id="antworten"><h2><span class="sq" style="--c:${C.base}"></span>Antworten im Detail</h2><div class="lead">Was Pupil zu jedem Video geschrieben hat, mit den Bildern, die es sah.</div>${outs.map(detail).join("")}</section>`;
+  html += `<footer>Die automatischen Prüfungen messen Form, Zeiten und den Bezug zum Gesprochenen. Gewichte: ${Object.entries(DATA.weights || {}).map(([k,v]) => `${esc(label(k))} ${v}`).join(", ")}. Bilder: lange Seite ${DATA.frames.long_side} px, höchstens ${DATA.frames.max_frames}, Kontext ${n0(DATA.frames.context)} Token${DATA.kv_type ? `, KV ${esc(DATA.kv_type)}` : ""}${DATA.cold_start ? ", Kaltstart" : ""}.</footer></div></div>`;
+  app.innerHTML = html;
+  cases(outs);
+  document.querySelectorAll("details.ans").forEach(d => { if (state.open.includes(d.dataset.id)) d.open = true; });
+}
+const label = k => (CHECKS.find(c => c[0] === k) || [k, k])[1];
+
+function summaryCards(outs) {
+  const s = stats(outs), cmp = compare(outs);
+  const scored = s.good.filter(o => o.checks).sort((a,b) => b.checks.score - a.checks.score);
+  const best = scored[0], worst = scored[scored.length - 1];
+  const fast = [...s.good].sort((a,b) => spm(a) - spm(b));
+  const lean = [...s.good].sort((a,b) => a.reply.answer_tokens - b.reply.answer_tokens);
+  const mark = (ok, wait) => wait ? `<b class="wait">offen</b>` : ok ? `<b class="ok">✓</b>` : `<b class="no">✗</b>`;
+  const cards = [
+    ["Punkte", `${n0(s.score)}<small>/ 100</small>`, cmp ? delta(cmp.cur.score, cmp.base.score, false, " P.", 1) : "", best ? `Bester Fall: <b>${esc(nameOf(best))}</b> (${n0(best.checks.score)}), schwächster: <b>${esc(nameOf(worst))}</b> (${n0(worst.checks.score)}).` : ""],
+    ["Sekunden pro Videominute", `${n1(s.spm)}<small>s</small>`, cmp ? delta(cmp.cur.spm, cmp.base.spm, true, " s", 1) : "", fast.length ? `Am schnellsten: <b>${esc(nameOf(fast[0]))}</b> (${n1(spm(fast[0]))} s). Ziel 1.0: ≤ ${GOAL.spm} s.` : ""],
+    ["Echtzeit", `${n1(s.rt)}<small>× schneller</small>`, cmp ? delta(cmp.cur.rt, cmp.base.rt, false, "×", 1) : "", `Alle ${s.n} Videos (${n1(s.video / 60)} min) in ${n0(s.spent)} s. Schreiben ${n1(s.aps)} Token/s, Lesen ${n0(s.pps)} Token/s.`],
+    ["Antwort-Tokens", `${n0(s.tok)}<small>gesamt</small>`, cmp ? delta(cmp.cur.tok, cmp.base.tok, true, "", 0) : "", lean.length ? `Am sparsamsten: <b>${esc(nameOf(lean[0]))}</b> (${n0(lean[0].reply.answer_tokens)}), am meisten: <b>${esc(nameOf(lean[lean.length-1]))}</b> (${n0(lean[lean.length-1].reply.answer_tokens)}).` : ""]
+  ].map(([t, big, d, lead]) => `<div class="card"><span class="pill">${t}</span><div class="big">${big}</div><div>${d || "&nbsp;"}</div><p class="lead">${lead}</p></div>`).join("");
+  const goal = `<div class="card"><span class="pill">Etappe 1.0</span><ul class="goal"><li><span>≤ ${GOAL.spm} s pro Videominute</span>${mark(s.spm != null && s.spm <= GOAL.spm)}</li><li><span>≥ ${GOAL.score} Punkte im Schnitt</span>${mark(s.score != null && s.score >= GOAL.score)}</li><li><span>0 Schleifen</span>${mark(s.n > 0 && s.loops === 0)}</li><li><span>Platz 1 unter lokalen Modellen</span>${mark(false, true)}</li></ul><p class="lead">${s.loops} Schleifen, ${s.fails} Fehler in ${outs.length} Fällen${cmp ? `. Vergleich über ${cmp.n} gemeinsame Fälle` : ""}.</p></div>`;
+  return `<div class="cards5">${cards}${goal}</div>`;
+}
+
+function minis(outs) {
+  const good = outs.filter(o => o.reply);
+  const item = (o, v, b) => ({ label:nameOf(o), value:v, base:b, title:`${nameOf(o)} · ${o.case.title || ""}` });
+  const score = good.filter(o => o.checks).map(o => item(o, o.checks.score, baseOf(o) && baseOf(o).checks ? baseOf(o).checks.score : null)).sort((a,b) => b.value - a.value);
+  const speed = good.map(o => item(o, spm(o), spm(baseOf(o)))).sort((a,b) => a.value - b.value);
+  const tok = good.map(o => item(o, o.reply.answer_tokens, baseOf(o) ? baseOf(o).reply.answer_tokens : null)).sort((a,b) => a.value - b.value);
+  const baseHint = BASE() ? " · Strich = Basis" : "";
+  return `<div class="minis">${chart(C.score, "Punkte", `Pro Fall · Höher ist besser${baseHint}`, vbars(score, { color:C.score, fmt:n0, small:true }))}${chart(C.speed, "Sekunden pro Videominute", `Pro Fall · Kleiner ist besser${baseHint}`, vbars(speed, { color:C.speed, fmt:n1, small:true, target:GOAL.spm, targetLabel:`Ziel ${GOAL.spm} s` }))}${chart(C.tokens, "Antwort-Tokens", `Pro Fall · Kleiner ist besser${baseHint}`, vbars(tok, { color:C.tokens, fmt:n0, small:true }))}</div>`;
+}
+
+function categories(outs) {
+  const s = stats(outs), good = s.good.filter(o => o.checks);
+  const ck = k => avg(good.map(o => k === "complete" ? (o.checks.complete ? 1 : 0) : o.checks[k]));
+  const meter = (v, c) => `<div class="meter" style="--c:${c}"><i style="width:${(v || 0) * 100}%"></i></div>`;
+  const rule = ["times","order","spread","coverage","grounded"].map(k => `<span>${label(k)}</span><span>${pct(ck(k))}</span><div style="grid-column:1/-1">${meter(ck(k), C.score)}</div>`).join("");
+  const speed = `<div class="card cat"><span class="pill">Tempo + Sparsamkeit</span><div class="big">${n1(s.spm)}<small>s pro Videominute</small></div><div class="rows"><span>Echtzeit</span><span>${n1(s.rt)}×</span><span>Schreiben</span><span>${n1(s.aps)} Token/s</span><span>Lesen</span><span>${n0(s.pps)} Token/s</span><span>Antwort-Tokens</span><span>${n0(s.tok)}</span><span>Kaltstart (Laden)</span><span>${n1(s.cold)} s</span><span>Grafikspeicher</span><span class="sub">kommt mit Schritt E</span></div></div>`;
+  const vision = `<div class="card cat wait"><span class="pill">Bilder verstehen</span><div class="big">–</div><p class="lead">Noch kein eigener Test. Kommt mit Schritt C (eigene Testvideos: Text lesen, zählen, Farben, Reihenfolge, Code) und Schritt D (Video-MME).</p></div>`;
+  const mind = `<div class="card cat"><span class="pill">Verstehen + Schreiben + Wissen</span><div class="big">${n0(s.score)}<small>Regel-Punkte</small></div><div class="rows">${rule}</div><p class="lead">Heute nur die automatischen Regeln. Fragen mit feststehender Antwort kommen mit Schritt B und D.</p></div>`;
+  return `<section id="kategorien"><h2><span class="sq" style="--c:${C.score}"></span>Kategorien</h2><div class="lead">Der Qualitäts-Index wird aus „Bilder verstehen“ und „Verstehen + Schreiben + Wissen“ gebildet, Tempo zählt getrennt. Solange Schritt B bis D fehlen, zeigt jede Karte, was schon gemessen wird.</div><div class="grid3">${speed}${vision}${mind}</div></section>`;
+}
+
+function goalsView() {
+  const data = window.PUPIL_GOALS;
+  const head = `<section id="ziele" style="margin-top:28px"><h2><span class="sq" style="--c:${C.pupil}"></span>Ziele</h2>`;
+  if (!data || !Array.isArray(data.goals) || !data.goals.length) return `${head}<div class="lead">Noch keine Ziele-Daten. „pupil card“ schreibt sie nach ziele.js.</div></section>`;
+  const num = (v, g) => v == null ? "–" : g.unit ? nd(v, Number.isInteger(v) ? 0 : 1) : v >= g.target ? "fertig" : "offen";
+  const end = d => new Date(`${d}T23:59:59`);
+  const day = d => isNaN(end(d)) ? esc(d) : end(d).toLocaleDateString("de-DE", { weekday:"short", day:"2-digit", month:"2-digit" });
+  const row = g => {
+    const tip = [g.test, g.label, g.time].filter(Boolean).join(" · ");
+    const badge = g.reached ? `<span class="badge b-ok">ERREICHT</span>` : g.hit ? `<span class="badge b-est">URTEIL OFFEN</span>` : g.now == null ? `<span class="badge b-pub">KEIN WERT</span>` : `<span class="badge b-est">OFFEN</span>`;
+    const track = g.progress == null ? `<span class="track none opt"></span>` : `<span class="track opt" style="--c:${g.reached ? C.pupil : g.hit ? C.local : C.online}"><i style="width:${Math.max(g.progress * 100, 1.5)}%"></i></span>`;
+    const late = !g.reached && end(g.due) < new Date();
+    return `<div class="zr" title="${esc(tip)}"><span class="k">${esc(g.key)}</span><span class="n"><b>${esc(g.name)}</b>${g.note ? `<span>${esc(g.note)}</span>` : ""}</span><span class="v opt">${num(g.start, g)}</span>${track}<span class="v now">${num(g.now, g)}${g.unit ? `<small>${esc(g.unit)}</small>` : ""}</span><span class="v">${num(g.target, g)}</span><span class="d opt${late ? " late" : ""}">${day(g.due)}</span>${badge}</div>`;
+  };
+  const reached = data.goals.filter(g => g.reached).length;
+  const waiting = data.goals.filter(g => g.hit && !g.reached).length;
+  const top = `<div class="zr zh"><span></span><span>Ziel</span><span class="v opt">Start</span><span class="opt">Weg vom Start zum Ziel</span><span class="v">Jetzt</span><span class="v">Ziel</span><span class="opt">Bis</span><span></span></div>`;
+  return `${head}<div class="lead">${reached} von ${data.goals.length} Zielen erreicht${waiting ? `, bei ${waiting} ist der Wert da, aber das Urteil noch offen` : ""}. Der Balken zeigt den Weg vom Startwert zum Zielwert, die Zahl „Jetzt“ kommt aus dem letzten Test. Ein Ziel gilt erst als behalten, wenn kein anderer Test dabei schlechter wird. Stand ${esc(data.time || "?")}.</div><div class="card zl">${top}${data.goals.map(row).join("")}</div></section>`;
+}
+
+function scoreCards() {
+  const card = window.PUPIL_CARD;
+  const head = `<section id="karte" style="margin-top:28px"><h2><span class="sq" style="--c:${C.pupil}"></span>Karten</h2>`;
+  if (!card || !Array.isArray(card.cards) || !card.cards.length) return `${head}<div class="lead">Noch keine Karten-Daten. „pupil card“ schreibt sie nach card.js.</div></section>`;
+  const cats = card.categories || [];
+  const counted = cats.filter(c => c.weight > 0).length;
+  const one = m => {
+    const vals = Object.fromEntries((m.values || []).map(v => [v.key, v]));
+    const mine = m.kind === "measured";
+    const rows = cats.map(c => {
+      const v = vals[c.key] || {};
+      const w = c.weight > 0 ? `×${nd(c.weight, 0)}` : "extra";
+      if (v.value == null) return `<div class="sr miss" title="${esc(c.test)}"><span>${esc(c.name)}</span><span class="w">${w}</span><span class="track"></span><span class="num">${mine ? "Test kommt" : "nicht veröffentlicht"}</span></div>`;
+      const tip = [c.test, v.label, v.n ? `n = ${nd(v.n, 0)}` : null, v.ci != null ? `± ${nd(v.ci, 1)}` : null, v.time].filter(Boolean).join(" · ");
+      const lo = Math.max(0, v.value - (v.ci || 0)), hi = Math.min(100, v.value + (v.ci || 0));
+      const band = v.ci != null ? `<em style="left:${lo}%;width:${hi - lo}%"></em>` : "";
+      return `<div class="sr" title="${esc(tip)}"><span>${esc(c.name)}</span><span class="w">${w}</span><span class="track"><i style="width:${v.value}%"></i>${band}</span><span class="num">${nd(v.value, 0)}</span></div>`;
+    }).join("");
+    const color = mine ? (m.name.startsWith("Pupil") ? C.pupil : C.base) : m.note === "online" ? C.online : C.local;
+    const badge = !mine ? `<span class="badge b-pub">VERÖFFENTLICHT</span>` : m.estimated ? `<span class="badge b-est">GESCHÄTZT</span>` : `<span class="badge b-ok">GEMESSEN</span>`;
+    const score = m.score == null ? `<b class="pend">offen</b>` : `<b>${nd(m.score, 1)}</b>`;
+    const range = m.score == null ? `${m.measured} von ${counted} Kategorien bekannt` : m.ci != null ? `Spanne ${nd(m.low, 1)} bis ${nd(m.high, 1)}` : "Spanne offen";
+    const speed = (m.speed || []).map(s => `${esc(s.name)} ${nd(s.value, s.value < 20 ? 1 : 0)} ${esc(s.unit)}`).join(" · ");
+    const foot = !mine ? `Werte der Firma · ${m.sure ? "Modellkarte" : "Sammelseite"}${m.source ? ` · <a href="${esc(m.source)}" target="_blank" rel="noreferrer">Quelle</a>` : ""}` : m.missing && m.missing.length ? `Geschätzt · fehlt noch: ${esc(m.missing.join(", "))}` : `Gemessen · Spanne ± ${nd(m.ci, 1)}`;
+    return `<div class="card sc" style="--c:${color}"><div class="sch"><div><h3>${esc(m.name)}</h3><div class="sub">${esc([m.maker, m.note].filter(Boolean).join(" · "))}</div></div>${badge}</div><div class="scs"><span>Score</span>${score}</div><div class="sub">${range}</div><div class="srs">${rows}</div>${speed ? `<div class="spd">Tempo: ${speed}</div>` : ""}<div class="scf">${foot}</div></div>`;
+  };
+  return `${head}<div class="lead">Score = Schnitt der Kategorien. Video verstehen, Hören und Lange Videos zählen doppelt, „Video + Ton“ ist eine Extra-Zeile und zählt nicht mit. Der helle Bereich am Balken zeigt, wie genau der Test bei seiner Größe ist (95 %). Andere Modelle nur mit veröffentlichten Werten, der Rest heißt „nicht veröffentlicht“. Stand ${esc(card.time || "?")}.</div><div class="grid3">${card.cards.map(one).join("")}</div></section>`;
+}
+
+function ranking() {
+  const ref = DATA.reference;
+  const head = `<section id="rangliste"><h2><span class="sq" style="--c:${C.pupil}"></span>Rangliste</h2>`;
+  if (!ref || !Array.isArray(ref.benchmarks) || !ref.benchmarks.length) return `${head}<div class="lead">Noch keine veröffentlichten Werte geladen (bench/reference.json).</div></section>`;
+  const pick = ref.benchmarks.some(b => b.key === state.bench) ? state.bench : ref.benchmarks[0].key;
+  const bench = ref.benchmarks.find(b => b.key === pick);
+  const own = (ref.pupil || {})[pick] || {};
+  const rows = ref.models.filter(m => m.scores && m.scores[pick] != null).map(m => ({ label:m.base ? `${m.name} (Grundmodell)` : m.name, value:m.scores[pick], color:m.where === "online" ? C.online : m.base ? C.base : C.local, hatch:!m.sure, title:`${m.name} · ${m.maker} · ${m.where} · ${m.sure ? "Modellkarte" : "Sammelseite"}: ${m.source}` }));
+  const pupils = (DATA.models || []).map(n => own[n] != null ? { label:`Pupil ${n.toUpperCase()}`, value:own[n], color:C.pupil, hot:true, title:"Pupil, selbst gemessen" } : { label:`Pupil ${n.toUpperCase()}`, empty:"folgt", color:C.pupil, hot:true, title:"Pupil, eigene Messung folgt mit Schritt D" });
+  const items = [...rows, ...pupils.filter(p => !p.empty)].sort((a,b) => b.value - a.value).concat(pupils.filter(p => p.empty));
+  const pills = `<div class="pills">${ref.benchmarks.map(b => `<button class="pill ${b.key === pick ? "on" : ""}" data-bench="${esc(b.key)}">${esc(b.name)}</button>`).join("")}</div>`;
+  const legend = `<div class="legend"><span><b style="--c:${C.online}"></b>online</span><span><b style="--c:${C.local}"></b>lokal</span><span><b style="--c:${C.base}"></b>Pupils Grundmodell</span><span><b class="dash" style="--c:${C.pupil}"></b>Pupil, eigene Messung</span><span><b class="hatch" style="--c:${C.online}"></b>Wert von einer Sammelseite</span></div>`;
+  const sources = [...new Set(ref.models.map(m => m.source))].map(u => `<a href="${esc(u)}" target="_blank" rel="noreferrer">${esc(u.replace(/^https?:\/\//, "").split("/").slice(0, 3).join("/"))}</a>`).join("");
+  return `${head}<div class="lead">Veröffentlichte Werte der Firmen (Stand ${esc(ref.checked || "?")}), dazu Pupil selbst gemessen. Pupil läuft ohne Denk-Modus und mit höchstens ${DATA.frames.max_frames} Bildern, die Grundmodell-Werte sind mit Denk-Modus gemessen.</div>${pills}${chart(C.pupil, bench.name, "Prozent richtig · Höher ist besser", vbars(items, { color:C.local, fmt:n1 }), legend + `<div class="src">Quellen: ${sources}</div>`)}</section>`;
+}
+
+function runsView() {
+  const runs = (Array.isArray(DATA.history) ? DATA.history : []).map(run => {
+    const model = (DATA.models || [])[0];
+    const rows = (run.rows || []).filter(r => r.model === model);
+    const timed = rows.filter(r => r.seconds != null);
+    return { run, rows, score:avg(rows.map(r => r.score)), spm:avg(timed.map(r => r.seconds / r.minutes)), tok:sum(rows.map(r => r.tokens)), loops:rows.filter(r => r.finish === "length").length, partial:(run.rows || []).length < (run.planned || 0) };
+  }).filter(r => r.rows.length);
+  const head = `<section id="verlauf"><h2><span class="sq" style="--c:${C.online}"></span>Verlauf</h2>`;
+  if (!runs.length) return `${head}<div class="lead">Der Verlauf erscheint ab dem nächsten Lauf mit dem neuen Pupil.</div></section>`;
+  const baseAt = DATA.baseline ? DATA.baseline.started : null;
+  const item = (r, v) => ({ label:`${r.run.started === DATA.started ? "▶ " : r.run.started === baseAt ? "Basis " : ""}${when(r.run.started)}${r.run.config && r.run.config !== "pupil" ? ` ${r.run.config}` : ""}`, value:v, hot:r.run.started === DATA.started || r.run.started === baseAt, hatch:r.partial, title:`${r.run.run} · ${r.rows.length} Fälle · ${r.loops} Schleifen${r.run.seed != null ? ` · Seed ${r.run.seed}` : ""}${r.partial ? " · unvollständig" : ""}` });
+  return `${head}<div class="lead">Jeder Balken ist ein Lauf von Modell ${esc((DATA.models || [])[0])}, der neueste steht rechts. Schraffiert = unvollständig, umrandet = dieser Lauf und die Basis.</div><div class="grid2">${chart(C.score, "Punkte", "Schnitt pro Lauf · Höher ist besser", vbars(runs.map(r => item(r, r.score)), { color:C.score, fmt:n0, target:GOAL.score, targetLabel:`Ziel ${GOAL.score}` }))}${chart(C.speed, "Sekunden pro Videominute", "Schnitt pro Lauf · Kleiner ist besser", vbars(runs.map(r => item(r, r.spm)), { color:C.speed, fmt:n1, target:GOAL.spm, targetLabel:`Ziel ${GOAL.spm} s` }))}</div><div style="margin-top:14px">${chart(C.tokens, "Antwort-Tokens", "Summe pro Lauf · Kleiner ist besser", vbars(runs.map(r => item(r, r.tok)), { color:C.tokens, fmt:n0, small:true }))}</div></section>`;
+}
+
+const MEASURES = () => Array.isArray(window.PUPIL_MEASUREMENTS) ? window.PUPIL_MEASUREMENTS : Array.isArray(DATA.measurements) ? DATA.measurements : [];
+const nd = (v, d) => v == null || !isFinite(v) ? "–" : v.toLocaleString("de-DE", { maximumFractionDigits:d, minimumFractionDigits:d });
+const med = x => x && typeof x === "object" ? x.median : x;
+const qv = (x, k) => x ? x[k] : null;
+const MROWS = [
+  ["Punkte", "Median über alle Läufe", m => med(m.quality), false, 1, "", m => m.quality],
+  ["Schwächster Fall", "kleinste Punktzahl eines Falls", m => m.min_case_score, false, 0, ""],
+  ["Sekunden pro Videominute", "Median, Spanne über die Läufe", m => med(m.s_per_video_min), true, 2, " s", m => m.s_per_video_min],
+  ["Zeit pro Fall P50", "die Hälfte der Fälle ist schneller", m => qv(m.latency_case_s, "p50"), true, 1, " s"],
+  ["Zeit pro Fall P95", "95 von 100 Fällen sind schneller", m => qv(m.latency_case_s, "p95"), true, 1, " s"],
+  ["Zeit pro Fall P99", "fast alle Fälle sind schneller", m => qv(m.latency_case_s, "p99"), true, 1, " s"],
+  ["Erstes Token P50", "TTFT: Bilder + Lesen bis zum ersten Wort", m => qv(m.ttft_s, "p50"), true, 1, " s"],
+  ["Erstes Token P95", "TTFT, langsame Fälle", m => qv(m.ttft_s, "p95"), true, 1, " s"],
+  ["Zeit pro Antwort-Token", "TPOT, Median", m => med(m.tpot_ms), true, 1, " ms", m => m.tpot_ms],
+  ["Schreibtempo", "Antwort-Tokens pro Sekunde", m => med(m.decode_tps), false, 1, " tok/s", m => m.decode_tps],
+  ["Lesetempo", "Prompt-Tokens pro Sekunde (Bilder + Text)", m => med(m.prefill_tps), false, 0, " tok/s", m => m.prefill_tps],
+  ["Antwort-Tokens pro Lauf", "alle 7 Fälle zusammen", m => med(m.answer_tokens_per_run), true, 0, "", m => m.answer_tokens_per_run],
+  ["Startzeit", "Modell laden (Kaltstart)", m => med(m.start_s), true, 1, " s", m => m.start_s],
+  ["VRAM Spitze", "ganze Grafikkarte", m => m.vram_peak_mib, true, 0, " MiB"],
+  ["VRAM durch Pupil", "Spitze minus Leerlauf", m => m.vram_delta_mib, true, 0, " MiB"],
+  ["RAM Spitze", "llama-server + pupil", m => m.ram_peak_mib, true, 0, " MiB"],
+  ["Größe auf Disk", "Modell + Bild-Encoder", m => m.disk_mb, true, 0, " MB"],
+  ["Strom pro Lauf", "7 Fälle, gemessen an der Grafikkarte", m => m.runs ? m.energy_wh / m.runs : null, true, 1, " Wh"],
+  ["Kosten pro Anfrage", "Strom, keine API-Kosten", m => m.cost_eur_per_request != null ? m.cost_eur_per_request * 100 : null, true, 3, " ct"],
+  ["Kosten pro 1 Mio. Antwort-Tokens", "Strom, keine API-Kosten", m => m.cost_eur_per_mtok, true, 2, " €"],
+  ["Fehlerrate", "Fälle ohne Antwort", m => m.error_rate != null ? m.error_rate * 100 : null, true, 1, " %"],
+  ["Schleifen", "abgeschnittene Antworten", m => m.loops, true, 0, ""]
+];
+function rel(cur, prev, lowerBetter) {
+  if (cur == null || prev == null || !isFinite(cur) || !isFinite(prev)) return "";
+  if (prev === 0) return cur === 0 ? `<span class="dl same">=</span>` : "";
+  const r = (cur - prev) / Math.abs(prev) * 100;
+  if (Math.abs(r) < 1) return `<span class="dl same">≈ gleich</span>`;
+  const good = lowerBetter ? r < 0 : r > 0;
+  return `<span class="dl ${good ? "gut" : "schlecht"}">${r < 0 ? "▼" : "▲"} ${nd(Math.abs(r), 1)} %</span>`;
+}
+function mcell(m, r) {
+  const sp = r[6] ? r[6](m) : null;
+  const range = sp && sp.min != null && sp.max !== sp.min ? `<div class="sub">${nd(sp.min, r[4])}–${nd(sp.max, r[4])}</div>` : "";
+  return `${nd(r[2](m), r[4])}${r[5]}${range}`;
+}
+function loadTable(cur, base, same) {
+  const load = cur.load || {}, lb = base.load || {};
+  const rows = Object.keys(load).sort((a, b) => a - b).map(k => {
+    const l = load[k], b = lb[k] || {};
+    return `<tr><td class="num"><b>${esc(k)}</b></td><td class="num">${n0(l.requests)}</td><td class="num">${nd(l.throughput_tps, 1)}${same ? "" : `<div>${rel(l.throughput_tps, b.throughput_tps, false)}</div>`}</td><td class="num">${nd(l.requests_per_s, 2)}</td><td class="num">${nd(l.latency_p50, 1)} s</td><td class="num">${nd(l.latency_p95, 1)} s</td><td class="num">${nd(l.latency_p99, 1)} s</td><td class="num">${nd(l.ttft_p50, 2)} s</td><td class="num">${nd(l.tpot_ms_p50, 1)} ms</td><td class="num">${pct(l.error_rate)}</td></tr>`;
+  }).join("");
+  if (!rows) return "";
+  return `<h3 class="mh">Lasttest</h3><div class="lead">Viele Anfragen gleichzeitig an den lokalen Server: fester Text (600 Wörter), Antwort höchstens 128 Tokens. Durchsatz = Antwort-Tokens pro Sekunde über alle Anfragen zusammen.</div><div class="tbl"><table><tr><th class="num">Gleichzeitig</th><th class="num">Anfragen</th><th class="num">Durchsatz tok/s</th><th class="num">Anfragen/s</th><th class="num">Latenz P50</th><th class="num">P95</th><th class="num">P99</th><th class="num">Erstes Token P50</th><th class="num">Pro Token</th><th class="num">Fehler</th></tr>${rows}</table></div>`;
+}
+function measureList(all, cur, label) {
+  const rows = [...all].reverse().map(m => `<tr${m === cur ? ` class="cur"` : ""}><td>${label(m)}</td><td class="num">${esc(m.time || "")}</td><td class="num">${nd(med(m.quality), 1)}</td><td class="num">${nd(med(m.s_per_video_min), 2)} s</td><td class="num">${nd(qv(m.ttft_s, "p50"), 1)} s</td><td class="num">${nd(med(m.decode_tps), 1)}</td><td class="num">${n0(m.vram_delta_mib)} MiB</td><td class="num">${n0(m.disk_mb)} MB</td><td class="num">${m.load && m.load["8"] ? nd(m.load["8"].throughput_tps, 1) : "–"}</td></tr>`).join("");
+  return `<h3 class="mh">Alle Messungen</h3><div class="tbl"><table><tr><th>Messung</th><th class="num">Zeit</th><th class="num">Punkte</th><th class="num">S/M</th><th class="num">TTFT P50</th><th class="num">Schreiben tok/s</th><th class="num">VRAM Pupil</th><th class="num">Disk</th><th class="num">Durchsatz @8</th></tr>${rows}</table></div>`;
+}
+function measure() {
+  const all = MEASURES();
+  const head = `<section id="messung"><h2><span class="sq" style="--c:${C.measure}"></span>Messung</h2>`;
+  if (!all.length) return `${head}<div class="lead">Noch keine Messung. Sie entsteht mit dem Messwerkzeug (bench/harness.py): Aufwärmen, 5 Läufe mit Kaltstart, danach Lasttest.</div></section>`;
+  const cur = all[all.length - 1];
+  const base = [...all].reverse().find(m => String(m.label || "").startsWith("baseline")) || all[0];
+  const same = base === cur;
+  const label = m => `${esc(m.label)} <span class="sub">${esc(m.commit || "")}</span>`;
+  const rows = MROWS.map(r => `<tr><td><b>${esc(r[0])}</b><div class="sub">${esc(r[1])}</div></td>${same ? "" : `<td class="num">${mcell(base, r)}</td>`}<td class="num">${mcell(cur, r)}</td>${same ? "" : `<td class="num">${rel(r[2](cur), r[2](base), r[3])}</td>`}</tr>`).join("");
+  const table = `<div class="tbl"><table><tr><th>Kennzahl</th>${same ? "" : `<th class="num">Basis: ${label(base)}</th>`}<th class="num">Jetzt: ${label(cur)}</th>${same ? "" : `<th class="num">Δ</th>`}</tr>${rows}</table></div>`;
+  const broken = base.eval_hash && cur.eval_hash !== base.eval_hash ? ` <b style="color:var(--bad)">Anders als die Basis (${esc(base.eval_hash)}), Vergleich ungültig.</b>` : "";
+  const lead = `<div class="lead">Gemessen mit dem Messwerkzeug: Aufwärmen, ${n0(cur.runs)} Läufe mit Kaltstart, danach Lasttest. Wert = Median, darunter die Spanne über die Läufe. Eine Änderung bleibt nur, wenn sie mehr als 3 % (oder doppelte Streuung) besser ist und die Punkte höchstens 1 % fallen. Eval-Set ${esc(cur.eval_hash || "")}.${broken}</div>`;
+  return `${head}${lead}${table}${loadTable(cur, base, same)}${measureList(all, cur, label)}</section>`;
+}
+
+function tempo(outs) {
+  const good = outs.filter(o => o.reply);
+  const parts = [["Szenen + Bilder", r => r.seconds.scan + r.seconds.frames, C.scan], ["Laden", r => r.seconds.server, C.load], ["Lesen", readS, C.read], ["Schreiben", writeS, C.write]];
+  const max = Math.max(1, ...good.map(o => sum(parts.map(([, f]) => f(o.reply))) / mins(o)));
+  const rows = good.map(o => `<div class="hb"><span>${esc(nameOf(o))}</span><div class="track">${parts.map(([l, f, c]) => `<i title="${l}: ${n1(f(o.reply) / mins(o))} s pro Videominute" style="--c:${c};width:${f(o.reply) / mins(o) / max * 100}%"></i>`).join("")}</div><span class="num">${n1(spm(o))} s</span></div>`).join("");
+  const legend = `<div class="legend">${parts.map(([l,,c]) => `<span><b style="--c:${c}"></b>${l}</span>`).join("")}<span>Länge = Sekunden pro Videominute. Szenensuche und Laden laufen parallel, die Summe kann größer sein als die Gesamtzeit.</span></div>`;
+  const rate = (f, c) => vbars(good.map(o => ({ label:nameOf(o), value:f(o.reply), color:c })), { color:c, fmt:n0, small:true });
+  return `<section id="tempo"><h2><span class="sq" style="--c:${C.speed}"></span>Tempo</h2><div class="lead">Wofür die Zeit draufgeht. Lesen = Bilder und Text einlesen, Schreiben = Antwort erzeugen.</div>${chart(C.speed, "Zeit pro Videominute, aufgeteilt", "Pro Fall · Kürzer ist besser", legend + rows)}<div class="grid2" style="margin-top:14px">${chart(C.read, "Lesetempo", "Token pro Sekunde · Höher ist besser", rate(r => r.prompt_per_second, C.read))}${chart(C.write, "Schreibtempo", "Token pro Sekunde · Höher ist besser", rate(r => r.answer_per_second, C.write))}</div></section>`;
+}
+
+function tokens(outs) {
+  const good = outs.filter(o => o.reply);
+  const ans = good.map(o => ({ label:nameOf(o), value:o.reply.answer_tokens, base:baseOf(o) ? baseOf(o).reply.answer_tokens : null }));
+  const read = good.map(o => ({ label:nameOf(o), value:o.reply.prompt_tokens, title:`${sharp(o.reply)} scharfe + ${o.reply.small_frames || 0} kleine Bilder` }));
+  return `<section id="tokens"><h2><span class="sq" style="--c:${C.tokens}"></span>Tokens</h2><div class="lead">Wenig Antwort-Tokens heißt kurze, dichte Antworten, das spart Zeit beim Schreiben. Gelesene Tokens kommen fast nur von den Bildern.</div><div class="grid2">${chart(C.tokens, "Antwort-Tokens", `Pro Fall · Kleiner ist besser${BASE() ? " · Strich = Basis" : ""}`, vbars(ans, { color:C.tokens, fmt:n0 }))}${chart(C.read, "Gelesene Tokens", "Pro Fall · Bilder + Text", vbars(read, { color:C.read, fmt:n0 }))}</div></section>`;
+}
+
+const COLS = [
+  ["name", "Fall", o => o.case.name, false],
+  ["score", "P", o => o.checks ? o.checks.score : -1, true],
+  ["spm", "S/M", o => spm(o) ?? 1e9, true],
+  ["rt", "×E", o => o.reply ? (o.window[1] - o.window[0]) / o.reply.seconds.total : -1, true],
+  ["tok", "TOK", o => o.reply ? o.reply.answer_tokens : 1e9, true],
+  ["frames", "B", o => o.reply ? o.reply.frames.length : -1, true],
+  ["rate", "L/S", o => o.reply ? o.reply.answer_per_second : -1, true]
+];
+function cases(outs) {
+  const box = document.getElementById("cases");
+  const q = state.q.trim().toLowerCase();
+  const col = COLS.find(c => c[0] === state.sort) || COLS[1];
+  const list = outs.filter(o => !q || [o.case.name, o.case.title, o.case.channel, o.model].join(" ").toLowerCase().includes(q)).sort((a,b) => { const x = col[2](a), y = col[2](b); return (typeof x === "string" ? x.localeCompare(y) : x - y) * state.dir; });
+  const hb = !!BASE();
+  const head = `<tr><th class="num">#</th>${COLS.map(([k, l, , num]) => `<th data-sort="${k}" class="${num ? "num" : ""} ${k === col[0] ? "on" : ""}">${l}${k === col[0] ? (state.dir < 0 ? " ↓" : " ↑") : ""}</th>`).join("")}${hb ? "<th>Δ</th>" : ""}</tr>`;
+  const rows = list.map((o, i) => {
+    const r = o.reply, b = baseOf(o), c = o.case;
+    const badge = !r ? `<span class="badge b-err">FEHLER</span>` : loop(o) ? `<span class="badge b-cut">ABGESCHNITTEN</span>` : `<span class="badge b-ok">SAUBER</span>`;
+    const who = `<b>${esc(c.name)}</b>${DATA.models.length > 1 ? ` <span class="sub">· ${esc(o.model)}</span>` : ""}<div class="sub">${esc(c.title)}${c.channel ? ` · ${esc(c.channel)}` : ""} · ${tc(o.window[0])}–${tc(o.window[1])}</div><span class="badge b-mode">${esc(MODE[c.mode] || c.mode)}</span>${badge}`;
+    if (!r) return `<tr><td class="num">${i + 1}</td><td>${who}</td><td colspan="${COLS.length - 1 + (hb ? 1 : 0)}" class="bad">${esc(o.failure ? o.failure.message : "Fehler")}</td></tr>`;
+    const sc = o.checks ? o.checks.score : null;
+    const cmp = hb ? `<td>${b ? `${delta(spm(o), spm(b), true, " s", 1)}<br>${delta(sc, b.checks && b.checks.score, false, " P", 0)}<br>${delta(r.answer_tokens, b.reply.answer_tokens, true, " Tok", 0)}` : `<span class="sub">–</span>`}</td>` : "";
+    return `<tr><td class="num sub">${i + 1}</td><td>${who}</td><td class="num"><div class="score">${n0(sc)}</div><div class="meter" style="--c:${C.score};width:70px;margin-left:auto"><i style="width:${sc || 0}%"></i></div></td><td class="num"><b>${n1(spm(o))}</b></td><td class="num">${n1((o.window[1] - o.window[0]) / r.seconds.total)}×</td><td class="num">${n0(r.answer_tokens)}</td><td class="num">${sharp(r)} / ${r.small_frames || 0}</td><td class="num">${n0(r.prompt_per_second)} / ${n1(r.answer_per_second)}</td>${cmp}</tr>`;
+  }).join("");
+  box.innerHTML = `<table>${head}${rows || `<tr><td colspan="9" class="sub">Kein Fall passt zur Suche.</td></tr>`}</table>`;
+}
+function csv() {
+  const rows = [["modell","fall","video","kanal","start","ende","punkte","s_pro_videominute","sekunden","antwort_tokens","gelesene_tokens","bilder","lesen_tps","schreiben_tps","ende_grund"]];
+  (DATA.outcomes || []).forEach(o => { const r = o.reply; rows.push([o.model, o.case.name, o.case.title, o.case.channel, o.window[0], o.window[1], o.checks ? o.checks.score : "", r ? spm(o).toFixed(2) : "", r ? r.seconds.total : "", r ? r.answer_tokens : "", r ? r.prompt_tokens : "", r ? r.frames.length : "", r ? r.prompt_per_second : "", r ? r.answer_per_second : "", r ? r.finish : (o.failure ? o.failure.error : "")]); });
+  const text = rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type:"text/csv" }));
+  a.download = `pupil-${Math.round(DATA.started)}.csv`;
+  a.click();
+}
+
+function nearest(frames, at) {
+  let best = -1, gap = Infinity;
+  frames.forEach((f, i) => { const g = Math.abs(f - at); if (g < gap) { gap = g; best = i; } });
+  return best;
+}
+function detail(o) {
+  const c = o.case, r = o.reply;
+  const head = `<summary><span><h3>${esc(c.name)} <span class="sub">· ${esc(o.model)}</span></h3><span class="sub">${esc(c.title)} · ${tc(o.window[0])}–${tc(o.window[1])}</span></span><span class="score">${o.checks ? n0(o.checks.score) : "<span class='bad'>Fehler</span>"}</span></summary>`;
+  if (!r) return `<details class="ans" data-id="${esc(key(o))}">${head}<div class="inner"><p class="bad">${esc(o.failure ? o.failure.message : "")}</p><p class="sub">${esc(o.failure ? o.failure.hint : "")}</p></div></details>`;
+  const ck = o.checks || {};
+  const checks = `<div class="checks">${CHECKS.map(([k, l, why]) => { const v = k === "complete" ? (ck.complete ? 1 : 0) : ck[k]; return `<div><b>${l}</b> · ${v == null ? "nicht prüfbar" : pct(v)}<div class="sub">${why}</div><div class="meter" style="--c:${C.score}"><i style="width:${(v || 0) * 100}%"></i></div></div>`; }).join("")}</div>`;
+  const len = Math.max(1, o.window[1] - o.window[0]);
+  const at = t => Math.min(100, Math.max(0, (t - o.window[0]) / len * 100));
+  const timeline = `<div class="timeline">${r.frames.map(f => `<span class="f" style="left:${at(f)}%"></span>`).join("")}${(o.items || []).filter(i => i.at != null).map(i => `<span class="d" title="${esc(i.time)} ${esc(i.text)}" style="left:${at(i.at)}%"></span>`).join("")}</div><div class="tl"><span>${tc(o.window[0])}</span><span>Striche = Bilder, die Pupil sah · Punkte = Zeiten in der Antwort</span><span>${tc(o.window[1])}</span></div>`;
+  const strip = `<div class="strip">${(o.thumbs || []).map((src, i) => `<figure><a href="${esc(src)}" target="_blank"><img loading="lazy" src="${esc(src)}" alt=""></a>${tc(r.frames[i])}</figure>`).join("")}</div>`;
+  const summary = o.answer && typeof o.answer.sum === "string" ? `<p class="sum">${esc(o.answer.sum)}</p>` : "";
+  const items = `<ol class="items">${(o.items || []).map(i => { const k = i.at == null ? -1 : nearest(r.frames, i.at); const out = i.at == null || i.at < o.window[0] - 1 || i.at > o.window[1] + 1; const img = k >= 0 && o.thumbs && o.thumbs[k] ? `<img loading="lazy" src="${esc(o.thumbs[k])}" alt="">` : "<span></span>"; return `<li>${img}<span class="t ${out ? "out" : ""}">${esc(i.time)}</span><span>${esc(i.text)}</span></li>`; }).join("")}</ol>`;
+  const speed = `<div class="cat"><div class="rows" style="max-width:560px"><span>Gesamt</span><span>${n1(r.seconds.total)} s</span><span>Gelesen</span><span>${n0(r.prompt_tokens)} Token mit ${n0(r.prompt_per_second)}/s</span><span>Geschrieben</span><span>${n0(r.answer_tokens)} Token mit ${n1(r.answer_per_second)}/s</span><span>Ende</span><span>${esc(r.finish)}</span>${o.paused > 0 ? `<span>Pause wegen Spiel</span><span>${n1(o.paused / 60)} min (nicht in der Zeit)</span>` : ""}</div></div>`;
+  return `<details class="ans" data-id="${esc(key(o))}">${head}<div class="inner">${speed}${checks}${timeline}${strip}${summary}${items}<details><summary class="sub">Rohe Antwort</summary><pre>${esc(r.text)}</pre></details></div></details>`;
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-bench]");
+  if (b) { state.bench = b.dataset.bench; save(); const y = scrollY; render(); scrollTo(0, y); return; }
+  const th = e.target.closest("th[data-sort]");
+  if (th) { state.dir = state.sort === th.dataset.sort ? -state.dir : (th.dataset.sort === "name" ? 1 : -1); state.sort = th.dataset.sort; save(); cases(DATA.outcomes || []); return; }
+  if (e.target.id === "csv") csv();
+});
+document.addEventListener("input", e => { if (e.target.id === "q") { state.q = e.target.value; save(); cases(DATA.outcomes || []); } });
+document.addEventListener("toggle", e => { const d = e.target; if (!d.matches || !d.matches("details.ans")) return; state.open = state.open.filter(x => x !== d.dataset.id).concat(d.open ? [d.dataset.id] : []); save(); }, true);
+addEventListener("scroll", () => { state.y = scrollY; save(); }, { passive:true });
+render();
+if (state.y) scrollTo(0, state.y);
+const LIVE = /latest\.html$/i.test(location.pathname);
+const STALE_SECONDS = 20;
+const clockAt = t => new Date(t * 1000).toLocaleTimeString("de-DE", { hour:"2-digit", minute:"2-digit" });
+const countdown = s => {
+  const x = Math.max(0, Math.round(s)), h = Math.floor(x / 3600), m = Math.floor(x % 3600 / 60), r = String(x % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`;
+};
+let liveState = null, liveMark = null;
+function livePoll() {
+  const tag = document.createElement("script");
+  tag.src = `status.js?t=${Date.now()}`;
+  tag.onload = () => { tag.remove(); liveState = window.PUPIL_STATUS || null; liveCheck(); liveView(); };
+  tag.onerror = () => tag.remove();
+  document.head.appendChild(tag);
+}
+function liveCheck() {
+  if (!liveState) return;
+  const mark = `${liveState.page}|${liveState.shown}`;
+  if (liveMark === null) liveMark = mark;
+  else if (mark !== liveMark) { save(); location.reload(); }
+}
+function liveWhat(s) {
+  if (s.state === "warm") return "Aufwärmen (Modell laden)";
+  if (s.state === "load") return "Lasttest (1, 8 und 32 Anfragen gleichzeitig)";
+  const name = s.case_name ? ` (${esc(s.case_name)})` : "";
+  return s.case ? `Lauf ${s.run} von ${s.runs} · Fall ${s.case} von ${s.cases}${name}` : `Lauf ${s.run} von ${s.runs} startet`;
+}
+function liveView() {
+  const box = document.getElementById("live");
+  const s = liveState;
+  if (!box || !s) return;
+  box.hidden = false;
+  const now = Date.now() / 1000, quiet = now - s.updated;
+  if (s.state === "done") {
+    box.className = "live done";
+    box.innerHTML = `<span><b>●</b> Messung ${esc(s.label)} fertig um ${clockAt(s.end)}</span>${s.next ? `<span>Als Nächstes: ${esc(s.next)}</span>` : ""}`;
+    return;
+  }
+  if (quiet > STALE_SECONDS) {
+    box.className = "live stale";
+    box.innerHTML = `<span><b>●</b> ${esc(s.label)}: kein Lebenszeichen seit ${countdown(quiet)}</span><span>Messung beendet oder hängt</span>`;
+    return;
+  }
+  const next = s.next_update - now, left = Math.max(0, s.end - now), total = s.end - s.since;
+  const share = total > 0 ? Math.min(1, Math.max(0, 1 - left / total)) : 0;
+  const nextText = next > 0 ? `in <b class="t">${countdown(next)}</b>` : `<b>jeden Moment</b>`;
+  const ca = s.rough ? "ca. " : "";
+  box.className = "live run";
+  box.innerHTML = `<span><b>●</b> Läuft: ${esc(s.label)} · ${liveWhat(s)}</span><span>Nächstes Update ${nextText}</span><span>Ganze Messung fertig ${ca}in <b class="t">${countdown(left)}</b> · um ${clockAt(s.end)}</span><i style="width:${(share * 100).toFixed(1)}%"></i>`;
+}
+if (LIVE) { livePoll(); setInterval(livePoll, 3000); setInterval(liveView, 1000); }
+if (DATA && DATA.done < DATA.planned) setTimeout(() => { if (!liveState) location.reload(); }, 20000);
+</script>
+</body>
+</html>

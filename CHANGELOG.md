@@ -25,6 +25,28 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - `wisply ui` has a Memory page (every shelf with counts, search, project filter, forget) and an Intelligence page:
   score, knowledge, lessons, routines and finished work over 7, 30, 90 days or all time as line and bar charts, with
   the week before and the best day.
+- `wisply pupil info <YouTube link>` and `wisply pupil captions <YouTube link>`: Wisply reads a YouTube video without
+  watching it. `info` names title, channel, length, picture size, sound, spoken language, chapters and which text the
+  video has. `captions` prints its subtitles (or, without any, the automatic captions of the spoken language) as
+  short timed lines; `--start` and `--end` read one part, `--find "words"` shows only the lines that match. A long
+  text stops at a limit and names the call that reads on. Details are kept for a day and the text for good, so a
+  second call does not ask YouTube again. Needs `yt-dlp`; private, age-restricted, members-only, blocked and not yet
+  started videos are named in plain words, with the next step where there is one. A `yt-dlp` on the PATH that ends
+  without a word (a launcher whose Python is gone) is skipped for the next one that is found.
+- `wisply pupil limits`: the first part of watching videos inside Wisply. It shows how much of the free limits is
+  used today: requests per model of the ladder, YouTube video time, the speech service and the number of cached
+  answers, with the time the day resets and any block after a rejected request. Settings live in
+  `~/.wisply/pupil/video.toml`, counters and cache in `video.db` next to it. Nothing is sent anywhere yet: links,
+  times, the cache and the limit guard are in place for the `watch` commands that follow.
+- `wisply memory bench`: measures how well the memory search answers, so a change to it can be proven instead of
+  felt. `bench freeze` copies the memory once, `bench run` asks every labelled question of
+  `~/.wisply/bench/memory/questions.jsonl` against that copy and prints hit@1, hit@3, MRR, hits on outdated notes,
+  wrong hints, answer size, time and the size of the start info, per class of question as well; `--vectors` adds the
+  cached query vectors, `--hold` asks the hold-out part and shows sums only. `bench compare <old> <new>` takes two
+  tags or result files, judges both with the labels of today on the questions both runs asked, counts won and lost
+  questions and calls it a gain only with ten won and twice as many won as lost; `bench open` lists the hits nobody judged yet and the questions still without a good note, `bench judge`
+  labels them. Runs without a model and without the daemon, the questions never
+  leave the PC, and every result carries the commit it was measured on.
 - `wisply peek <file|folder> ... [--head 10] [--outline]`: size, line count and one word of advice per file (`whole`,
   `parts`, `grep`, `skip`) for many files in one call, before any of them is read. Folders list their files and mark
   build output and dependency folders; `--outline` adds the functions and types with line numbers. Runs in the
@@ -113,6 +135,10 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   their passages without any AI model and returns a short report with links and what several sources agree on.
   Two rounds by default (the second searches with terms found in the first), `--quick`, `--deep`, `--site`.
   Reports are saved to the vault (`Research/`) and found again by `recall`.
+- `wisply pupil ...`: the local video and picture model (Pupil) and its ear now run inside Wisply. `pupil watch`, `ask`,
+  `chat`, `bench`, `status`, `game` and the rest behave as before, `pupil hear <video>` turns speech and sounds into
+  text. Settings live in `~/.wisply/pupil/pupil.toml` and `hear.toml` (or `PUPIL_CONFIG` / `PUPIL_HEAR_CONFIG`); sound
+  tagging loads the ONNX Runtime named by `runtime` in `hear.toml` instead of building it in.
 
 ### Fixed
 - A `brain.json` with a wrong shape (a page without its element list, a list where a table belongs, a short entry)
@@ -202,6 +228,10 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   is now taken as it is written.
 
 ### Changed
+- The graph in `wisply ui` no longer stutters on big graphs: focusing, hovering, dragging, zooming, the filters and
+  the time slider touch only the nodes that change instead of every node, the highlight is drawn by a small second
+  layer, and the layout runs in a worker so the window stays usable while a new graph settles. Edges and names now
+  stay visible while a big graph moves.
 - Every error for a wrong command or value says what to try: `headless`, `statusline`, `statusline set`, `update`,
   `progress`, `dialog`, `install` and the MCP answers for a blocked command, a missing setup and a busy daemon now
   end in `-> try: ...` like the rest, without the word `usage:`, and an unknown word is shown in quotes everywhere.
