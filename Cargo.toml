@@ -27,6 +27,7 @@ wisply-code = { path = "crates/wisply-code" }
 wisply-squeeze = { path = "crates/wisply-squeeze" }
 wisply-think = { path = "crates/wisply-think" }
 wisply-pc = { path = "crates/wisply-pc" }
+wisply-servers = { path = "crates/wisply-servers" }
 wisply-pupil = { path = "crates/wisply-pupil" }
 wisply-hear = { path = "crates/wisply-hear" }
 wisply-video = { path = "crates/wisply-video" }

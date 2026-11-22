@@ -8,6 +8,23 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- To-dos become one list for bugs, features, tasks and ideas (`SPEC-list.md`). `wisply ui` opens on it: table and
+  board with drag and drop, a side panel per entry (markdown text, log excerpt, notes, history with undo), filters,
+  "+ Entry", a strip with the AI sessions of the last 24 hours and a Warnings, Done and Suggestions tab. Status is
+  open, in progress (with who), waiting (for a restart or for you) or done; priority high, mid or low. Every change is
+  in the history and can be undone. `todo add --kind --prio`, `todo wait|undo`, `bug add <server> "text"` and `list`
+  work for every AI through the command and MCP; the "next" lines of session notes come in as suggestions. With a
+  local model (`memory_api`) Wisply tidies open entries every 30 minutes when no game runs: clearer titles, kind,
+  priority and project, and duplicates are set to dropped with a note. Each change is marked "tidy" in the history
+  and undoes with the entry; `config list_tidy off` turns it off.
+- Server logs: with `config servers_file <path>` Wisply reads the errors of every server in that profile file every
+  5 minutes (paused while a game runs, only new bytes). Errors and crash reports become bugs, warnings land in their
+  own tab, the same error is one entry with a counter, Ignore mutes it for good, a restart finishes what waited for
+  it and a done bug that comes back reopens. Each server can be switched off or get its own log path. Logins are read
+  from the file at connect time and never copied, printed or shown; the window only sees server names.
+- `wisply ui` has a Memory page (every shelf with counts, search, project filter, forget) and an Intelligence page:
+  score, knowledge, lessons, routines and finished work over 7, 30, 90 days or all time as line and bar charts, with
+  the week before and the best day.
 - `wisply pupil watch <YouTube link>`: Wisply has Gemini watch a YouTube video and writes down what happens in it.
   `--mode steps` (the default) lists every action with its time, keys, menu path, typed values and code,
   `--mode summary` gives the gist with the main points, `--mode full` the gist and the steps; every mode names the

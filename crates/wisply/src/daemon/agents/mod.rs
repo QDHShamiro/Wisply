@@ -16,7 +16,7 @@ mod transcript;
 mod watch;
 mod web;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use wisply_core::{Call, Fail};
 
@@ -34,6 +34,11 @@ pub fn run(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<Out, Fail> {
         "mobile" => cmd::mobile(&d.home, c).map(Out::Text),
         _ => cmd::notify(&d.home, c).map(Out::Text),
     }
+}
+
+pub fn alert(home: &Path, title: &str, body: &str) {
+    let toast = super::config::on(&super::config::load(home), "agents_notify") && super::game::running().is_empty();
+    events::emit(home, "bug", None, title, body, toast);
 }
 
 pub fn status_line(d: &Daemon) -> Option<String> {

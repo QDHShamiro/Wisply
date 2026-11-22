@@ -30,7 +30,7 @@ Secrets never inline: `type e3 --env PASS`, `fill "Password=@secret" --env PASS`
 - Chats: `reply "@Name" "text" --wait`, `inbox "@Name"`, `unread`. `references/chats.md`
 - Video, sound: `watch url|file|e40`, `pupil watch <youtube>` (as text), `listen`. `references/video.md`
 - Routines: `! routine X can finish this` = `wisply run X`; `routine save <intent-name> [k=v]` keeps the task just done. `references/routines.md`
-- Memory, code: `recall "words"` (`recall 42` full), `remember "fact"`, `todo add "task"`; from the project folder `code Name`, `code "what it does"`, `peek <files>` before reading. `references/memory.md`
+- Memory, code: `recall "words"` (`recall 42` full), `remember "fact"`, `todo add "task" [--kind bug]`, `list`; from the project folder `code Name`, `code "what it does"`, `peek <files>` before reading. `references/memory.md`
 - Snapshots, frames, tabs, page data: `references/web.md`. Settings, tokens, `kit`, skills, `secure`, trouble: `references/system.md`. Login, form, upload, dashboard, game: `references/recipes.md`.
 
 ## Rules

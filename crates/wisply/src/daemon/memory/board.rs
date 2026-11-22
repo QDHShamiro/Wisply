@@ -15,7 +15,10 @@ use super::super::{Daemon, config};
 use super::{QUERY_BUDGET, embed, index, with_store};
 
 const USAGE: &str = "wisply board home | pulse | project <name> | note <id> | save <path> --mtime <ms> | todo <id> <status> | \
-                     todo-add <project> <task> | search <words> | graph [project] | live | lessons | unlearn <sig> | settings | tokens [today|<days>|all] | blind | blind-pick <run> <n> 1|2|same";
+                     todo-add <project> <task> | search <words> | graph [project] | live | lessons | unlearn <sig> | settings | tokens [today|<days>|all] | blind | blind-pick <run> <n> 1|2|same | \
+                     memory [--source s --project p --words w --offset n] | forget <id> | intelligence [days|all] | list | entry <id> | entry-set | entry-add | entry-undo | entry-note | mute | unmute | server";
+const MEMORY_PAGE: usize = 200;
+const SNIPPET: usize = 160;
 const NOTES_SHOWN: usize = 400;
 const RUNS_SHOWN: usize = 60;
 const BACKLINKS: usize = 80;
@@ -24,7 +27,7 @@ const FILE_MAX: u64 = 4_000_000;
 const LOG_TAIL: u64 = 256 * 1024;
 const LIVE_S: f64 = 900.0;
 const WORKING_S: f64 = 60.0;
-const STATUSES: &[&str] = &["todo", "doing", "done", "dropped"];
+const STATUSES: &[&str] = &["todo", "doing", "waiting", "done", "dropped"];
 
 static TAG: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?:^|\s)#([\p{L}\d_/-]*\p{L}[\p{L}\d_/-]*)").expect("tag pattern"));
@@ -186,6 +189,52 @@ fn search(d: &Daemon, c: &Call) -> Result<Value, Fail> {
     Ok(json!({"hits": hits}))
 }
 
+fn memory(d: &Daemon, c: &Call) -> Result<Value, Fail> {
+    let arg = |k: &str| c.val(k).unwrap_or("").trim().to_string();
+    let (source, project, words) = (arg("source"), arg("project"), arg("words"));
+    let offset: usize = c.val("offset").and_then(|o| o.parse().ok()).unwrap_or(0);
+    let sessions = source == "sessions";
+    let (shelves, projects, runs_all) =
+        with_store(d, |s| Ok((s.shelves()?, s.note_projects()?, s.runs_total("", "")?)))?;
+    let mut out = json!({
+        "shelves": shelves.iter().map(|(k, n)| json!({"source": k, "count": n})).collect::<Vec<_>>(),
+        "sessions_total": runs_all,
+        "projects": projects.iter().map(|(p, n)| json!({"name": p, "count": n})).collect::<Vec<_>>(),
+        "page": MEMORY_PAGE, "offset": offset,
+    });
+    if sessions {
+        let (runs, total) = with_store(d, |s| {
+            Ok((s.runs_page(&project, &words, 0.0, MEMORY_PAGE, offset)?, s.runs_total(&project, &words)?))
+        })?;
+        out["total"] = json!(total);
+        out["sessions"] = runs
+            .iter()
+            .map(|r| json!({"id": r.id, "project": r.project, "title": r.title, "summary": r.summary, "next": r.next, "last": r.last, "status": r.status}))
+            .collect();
+        return Ok(out);
+    }
+    let (notes, total) = with_store(d, |s| s.notes_page(&source, &project, &words, MEMORY_PAGE, offset))?;
+    out["total"] = json!(total);
+    out["rows"] = notes
+        .iter()
+        .map(|n| {
+            let mut row = note_json(n);
+            row["snippet"] = json!(wisply_memory::oneline(&n.body, SNIPPET));
+            row["hits"] = json!(n.hits);
+            row
+        })
+        .collect();
+    Ok(out)
+}
+
+fn forget(d: &Daemon, c: &Call) -> Result<Value, Fail> {
+    let id: i64 = c.pos.get(1).and_then(|p| p.parse().ok()).ok_or_else(|| Fail::hint("which note?", USAGE))?;
+    match with_store(d, |s| s.forget(id))? {
+        Err(why) => Err(Fail::new(why)),
+        Ok(gone) => Ok(json!({"forgot": gone})),
+    }
+}
+
 fn graph(d: &Daemon, c: &Call) -> Result<Value, Fail> {
     let project = c.pos.get(1).map(String::as_str).filter(|p| !p.is_empty());
     let g = with_store(d, |s| s.graph(project))?;
@@ -274,8 +323,14 @@ fn unlearn(d: &Daemon, c: &Call) -> Result<Value, Fail> {
 }
 
 pub fn board(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
+    if let Some(out) = super::listview::board(d, ctx, c) {
+        return Ok(out?.to_string());
+    }
     let what = c.pos.first().map(String::as_str).unwrap_or("");
     let out = match what {
+        "memory" => memory(d, c)?,
+        "forget" => forget(d, c)?,
+        "intelligence" => super::growth::intelligence(d, c)?,
         "home" => home_view(d)?,
         "pulse" => pulse_view(d)?,
         "project" => project_view(d, &c.pos[1..].join(" "))?,

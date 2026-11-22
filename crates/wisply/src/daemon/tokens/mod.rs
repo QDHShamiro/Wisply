@@ -36,7 +36,10 @@ const GROUPS: &[(&str, &[&str])] = &[
     ),
     ("sequences and routines", &["do", "run"]),
     ("page text and data", &["text", "read", "table", "fetch", "js", "net", "console", "listen", "watch", "clip"]),
-    ("memory and code", &["recall", "remember", "forget", "todo", "wiki", "memory", "code", "hook", "grep", "squeeze"]),
+    (
+        "memory and code",
+        &["recall", "remember", "forget", "todo", "bug", "list", "wiki", "memory", "code", "hook", "grep", "squeeze"],
+    ),
 ];
 const CLAIMED: &[&str] = &["look at pages and apps", "clicks and typing", "sequences and routines"];
 const SKIP: &[&str] = &[
