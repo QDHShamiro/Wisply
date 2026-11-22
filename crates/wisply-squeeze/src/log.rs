@@ -1,8 +1,8 @@
 use crate::pat;
-use crate::text::{clip, head, is_space, rstrip, strip};
+use crate::text::{self, clip, head, is_space, rstrip, strip};
 use std::cell::OnceCell;
 use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const HEAD: (usize, usize, usize) = (5, 10, 20);
 const TAIL: (usize, usize, usize) = (10, 20, 10);
@@ -18,6 +18,8 @@ const LINES: usize = 120;
 const LINE_CHARS: usize = 300;
 const KIND_CHARS: usize = 60;
 const CUT_TAIL: usize = 20;
+const DATA_SHARE: usize = 4;
+const DATA_CHARS: usize = 6000;
 
 pub(crate) fn lines(plain: &str) -> Vec<&str> {
     let mut out: Vec<&str> = plain
@@ -221,11 +223,23 @@ enum Item<'l, 'a> {
     Gap(String),
 }
 
-fn pieces<'l, 'a>(lines: &'l [Line<'a>], keep: &[bool]) -> Vec<Item<'l, 'a>> {
+fn data(run: &[&Line]) -> bool {
+    let mut kinds: HashSet<String> = HashSet::new();
+    let (mut buf, mut real) = (String::new(), 0);
+    for line in run.iter().filter(|l| !l.noise && !strip(l.raw).is_empty()) {
+        kind_into(line.body, &mut buf);
+        kinds.insert(buf.clone());
+        real += 1;
+    }
+    real > 0 && kinds.len() * DATA_SHARE > real
+}
+
+fn pieces<'l, 'a>(lines: &'l [Line<'a>], keep: &[bool], whole: bool) -> Vec<Item<'l, 'a>> {
     let mut out = Vec::new();
     let mut run: Vec<&Line> = Vec::new();
     let flush = |run: &mut Vec<&'l Line<'a>>, out: &mut Vec<Item<'l, 'a>>| {
-        if run.len() > GAP_KEEP || (!run.is_empty() && run.iter().all(|l| l.noise)) {
+        let open = whole && data(run);
+        if (run.len() > GAP_KEEP && !open) || (!run.is_empty() && run.iter().all(|l| l.noise)) {
             out.push(Item::Gap(gap(run)));
         } else {
             out.extend(run.iter().filter(|l| !l.noise).map(|l| Item::Line(l)));
@@ -244,8 +258,13 @@ fn pieces<'l, 'a>(lines: &'l [Line<'a>], keep: &[bool]) -> Vec<Item<'l, 'a>> {
     out
 }
 
-fn assemble(lines: &[Line], keep: &[bool]) -> Vec<(String, bool)> {
-    let items = pieces(lines, keep);
+fn same(a: &Line, b: &Line, fold: bool) -> bool {
+    if fold { !b.tmpl().is_empty() && b.tmpl() == a.tmpl() } else { !strip(b.raw).is_empty() && b.raw == a.raw }
+}
+
+fn assemble(lines: &[Line], keep: &[bool], whole: bool) -> Vec<(String, bool)> {
+    let fold = !whole;
+    let items = pieces(lines, keep, whole);
     let mut out: Vec<(String, bool)> = Vec::new();
     let mut i = 0;
     while i < items.len() {
@@ -259,15 +278,14 @@ fn assemble(lines: &[Line], keep: &[bool]) -> Vec<(String, bool)> {
         };
         let mut j = i + 1;
         while let Some(Item::Line(l)) = items.get(j)
-            && !l.tmpl().is_empty()
-            && l.tmpl() == first.tmpl()
+            && same(first, l, fold)
         {
             j += 1;
         }
         let mut line = clip(first.raw, LINE_CHARS);
         if j - i > 1 {
             line.push_str(&format!(" (x{})", j - i));
-        } else if !first.hot && !first.frame && first.tmpl().contains(' ') {
+        } else if fold && !first.hot && !first.frame && first.tmpl().contains(' ') {
             while let Some(Item::Line(l)) = items.get(j)
                 && !l.hot
                 && !l.summary
@@ -288,11 +306,17 @@ fn assemble(lines: &[Line], keep: &[bool]) -> Vec<(String, bool)> {
     out
 }
 
-pub(crate) fn squeeze<S: AsRef<str>>(raw: &[S]) -> Vec<String> {
+pub(crate) fn squeeze<S: AsRef<str>>(raw: &[S], data: bool) -> Vec<String> {
     let lines: Vec<Line> = raw.iter().map(|r| Line::new(r.as_ref())).collect();
     let mut out = Vec::new();
+    if data {
+        out = assemble(&lines, &marked(&lines, AFTER, TRACE_LONG), true);
+        if out.len() <= LINES && out.iter().map(|(l, _)| text::len(l) + 1).sum::<usize>() <= DATA_CHARS {
+            return out.into_iter().map(|(l, _)| l).collect();
+        }
+    }
     for (after, trace) in [(AFTER, TRACE_LONG), (0, TRACE_TIGHT), (0, 0)] {
-        out = assemble(&lines, &marked(&lines, after, trace));
+        out = assemble(&lines, &marked(&lines, after, trace), false);
         if out.len() <= LINES {
             return out.into_iter().map(|(l, _)| l).collect();
         }
@@ -339,8 +363,20 @@ mod tests {
     #[test]
     fn repeated_kept_lines_collapse() {
         let raw: Vec<String> = (0..100).map(|i| format!("tick {i}")).collect();
-        let out = squeeze(&raw);
+        let out = squeeze(&raw, false);
         assert_eq!(out, ["tick 0 (x5)", "... 85 lines (85 x tick #)", "tick 90 (x10)"]);
+    }
+
+    #[test]
+    fn data_rows_stay_whole_but_logs_still_get_gaps() {
+        let word = |i: usize| ((b'a' + (i % 26) as u8) as char).to_string().repeat(1 + i / 26);
+        let rows: Vec<String> = (0..70).map(|i| format!("{} weight {}", word(i), i * 7)).collect();
+        assert_eq!(squeeze(&rows, true), rows);
+        assert!(squeeze(&rows, false).iter().any(|l| l.starts_with("... ")));
+        let log: Vec<String> = (0..100).map(|i| format!("tick {i}")).collect();
+        assert!(squeeze(&log, true).contains(&"... 85 lines (85 x tick #)".to_string()));
+        let wide: Vec<String> = (0..70).map(|i| format!("{} {}", word(i), "x".repeat(120))).collect();
+        assert!(squeeze(&wide, true).iter().any(|l| l.starts_with("... ")));
     }
 
     #[test]
@@ -360,7 +396,7 @@ mod tests {
         raw.push("error: could not find `alpha` in `x`".into());
         raw.push("error: could not find `beta` in `x`".into());
         raw.extend((0..20).map(|i| format!("row {i} fine")));
-        let out = squeeze(&raw);
+        let out = squeeze(&raw, false);
         assert_eq!(out[0], "   Compiling alpha v1.0.0 (+4 similar)");
         assert!(out.contains(&"error: could not find `alpha` in `x`".to_string()), "{out:#?}");
         assert!(out.contains(&"error: could not find `beta` in `x`".to_string()), "{out:#?}");
@@ -373,7 +409,7 @@ mod tests {
         raw.push("[INFO] BUILD FAILURE".into());
         raw.extend((0..60).map(|i| format!("Downloaded from central: https://repo/x{i}.pom (2 kB at 9 kB/s)")));
         raw.extend(owned(&["[ERROR] Failed to execute goal compile on project shop", "[INFO] Total time: 6 s"]));
-        let out = squeeze(&raw);
+        let out = squeeze(&raw, false);
         assert_eq!(
             out,
             [
@@ -400,7 +436,7 @@ mod tests {
         let mut log: Vec<String> = (0..80).map(|i| format!("[21:00:{i:02} INFO]: tick {i}")).collect();
         log.extend(raw);
         log.extend((0..40).map(|i| format!("[21:09:{i:02} INFO]: tock {i}")));
-        let out = squeeze(&log);
+        let out = squeeze(&log, false);
         let at = out.iter().position(|l| l.contains("ShopListener.onClick")).expect("app frame");
         assert_eq!(out[at - 1], "java.lang.NullPointerException: item is null");
         assert!(out[at + 1].contains("Method0.invoke"), "{out:#?}");
@@ -419,7 +455,7 @@ mod tests {
         }
         raw.push("test result: ok. 96 passed; 0 failed; 0 ignored; finished in 0.31s".into());
         raw.extend((0..30).map(|i| format!("   Doc-tests crate_{i}")));
-        let out = squeeze(&raw);
+        let out = squeeze(&raw, false);
         assert!(out.iter().any(|l| l.starts_with("test result: ok. 96 passed")), "{out:#?}");
         assert_eq!(out.iter().filter(|l| l.contains("Can't keep up")).count(), 2 + 1, "{out:#?}");
         assert!(out.iter().any(|l| l.contains("(4 x Can't keep up!")), "{out:#?}");

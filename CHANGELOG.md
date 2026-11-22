@@ -5,6 +5,16 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [Unreleased]
+
+### Changed
+- Headroom keeps command output that is data (script results, tables, lists where most lines differ) whole when it
+  fits in about 1,500 tokens, instead of hiding its middle behind "... N lines". Over a week of real Bash output the
+  AI had to load the full file again after 23 of 100 cuts, mostly for exactly these outputs, and every reload costs an
+  extra turn that rereads the whole context (median about 2,400 tokens' worth). Replayed on that week, reloads fall
+  from 18.6 to 8.9 per 100 squeezed outputs; Headroom saves about 21 % fewer raw tokens but clearly more once the
+  extra turns count. Logs, build output and Grep results are squeezed as before.
+
 ## [3.5.1] - 2026-11-22
 
 ### Fixed
