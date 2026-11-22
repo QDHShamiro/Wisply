@@ -1,0 +1,185 @@
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use wisply_core::{Call, Fail, local_now};
+
+use super::super::Daemon;
+use super::super::ctx::{Ctx, now};
+use super::learn::{stamp, tags_for};
+use super::store::{self, file, load_all, save, slug, text, usage};
+
+const NAME_WORDS: usize = 3;
+const REPLACE_WITHIN_S: f64 = 1800.0;
+const FEW_RUNS_DAYS: f64 = 30.0;
+const MANY_RUNS_DAYS: f64 = 90.0;
+const MANY_RUNS: u64 = 5;
+const SHOW_LINES: usize = 80;
+const DAY_S: f64 = 86_400.0;
+const FIT_WORDS: usize = 2;
+
+pub fn hash(code: &str) -> String {
+    let flat: Vec<&str> = code.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    Sha256::digest(flat.join("\n").as_bytes()).iter().take(8).map(|b| format!("{b:02x}")).collect()
+}
+
+pub fn project_of(cwd: &Path) -> PathBuf {
+    cwd.ancestors().find(|p| p.join(".git").exists()).unwrap_or(cwd).to_path_buf()
+}
+
+fn same_place(a: &str, b: &str) -> bool {
+    let flat = |p: &str| p.replace('\\', "/").trim_end_matches('/').to_lowercase();
+    !a.is_empty() && flat(a) == flat(b)
+}
+
+pub fn is_script(r: &Value) -> bool {
+    r["script"].is_object()
+}
+
+pub fn code_of(home: &Path, name: &str) -> Option<String> {
+    store::load(home, name).ok().filter(is_script).map(|r| text(&r["script"]["code"]))
+}
+
+pub fn fits(other: usize, r: &Value, cwd: &str) -> bool {
+    other >= FIT_WORDS && same_place(&text(&r["script"]["project"]), &project_of(Path::new(cwd)).display().to_string())
+}
+
+fn values(r: &Value) -> BTreeMap<String, String> {
+    r["params"].as_object().into_iter().flatten().map(|(k, v)| (k.clone(), text(v))).collect()
+}
+
+fn next_time(r: &Value) -> String {
+    format!("-> next time: {}", usage(r, &values(r)))
+}
+
+fn guess_name(code: &str) -> String {
+    let inside = code.split('`').nth(1).unwrap_or("");
+    let name = slug(inside, NAME_WORDS);
+    if name.is_empty() { "script".to_string() } else { name }
+}
+
+fn free_name(home: &Path, base: &str) -> String {
+    let (mut name, mut n) = (base.to_string(), 2);
+    while file(home, &name).exists() {
+        name = format!("{base}-{n}");
+        n += 1;
+    }
+    name
+}
+
+fn replace(d: &Daemon, ctx: &mut Ctx, body: &Value, h: &str) -> Option<String> {
+    let (name, at) = ctx.broken_script.take()?;
+    if now() - at > REPLACE_WITHIN_S {
+        return None;
+    }
+    let mut r = store::load(&d.home, &name).ok().filter(is_script)?;
+    let version = r["version"].as_u64().unwrap_or(1) + 1;
+    r["version"] = json!(version);
+    r["script"]["code"] = body["code"].clone();
+    r["script"]["hash"] = json!(h);
+    r["script"]["calls"] = body["calls"].clone();
+    r["params"] = body["args"].clone();
+    r["flaky"] = json!(false);
+    r["stats"]["recent"] = json!([]);
+    save(&d.home, &r).ok()?;
+    Some(format!("fixed routine {name} (now v{version}) {}", next_time(&r)))
+}
+
+fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
+    let code = text(&body["code"]);
+    if code.trim().is_empty() {
+        return Err(Fail::new("routine script needs the code"));
+    }
+    let h = hash(&code);
+    if let Some(mut same) = load_all(&d.home).into_iter().find(|r| r["script"]["hash"] == h.as_str()) {
+        same["stats"]["seen"] = json!(same["stats"]["seen"].as_u64().unwrap_or(1) + 1);
+        save(&d.home, &same)?;
+        return Ok(format!("this script is saved as routine {} {}", text(&same["name"]), next_time(&same)));
+    }
+    if let Some(note) = replace(d, ctx, body, &h) {
+        return Ok(note);
+    }
+    prune(&d.home);
+    let args = Value::Object(body["args"].as_object().cloned().unwrap_or_default());
+    let ms = body["ms"].as_f64().unwrap_or(0.0);
+    let tags = tags_for(&d.prompts_of(&ctx.sid), now() - ms / 1000.0, &args);
+    let said = slug(&tags.join(" "), NAME_WORDS);
+    let name = free_name(&d.home, if said.is_empty() { &guess_name(&code) } else { &said });
+    let r = json!({
+        "name": name, "version": 1, "source": "script", "created": local_now().chars().take(16).collect::<String>(),
+        "params": args, "steps": [], "check": null, "cost": code.chars().count() / 4 + 1, "tags": tags,
+        "script": {"code": code, "hash": h, "calls": body["calls"], "project": body["project"]},
+        "stats": {"runs": 0, "ok": 0, "fail": 0, "ms": 0, "saved": 0, "seen": 1, "recent": []},
+        "flaky": false
+    });
+    save(&d.home, &r)?;
+    Ok(format!("saved as routine {name} {}", next_time(&r)))
+}
+
+fn ran(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
+    let mut r = store::load(&d.home, &text(&body["routine"]))?;
+    let name = text(&r["name"]);
+    let ok = body["ok"] == true;
+    let typed = usage(&r, &BTreeMap::new()).chars().count() / 4 + 1;
+    let err = body["error"].as_str().map(str::to_string);
+    store::record(&d.home, &mut r, ok, body["ms"].as_f64().unwrap_or(0.0), typed, err);
+    if ok {
+        ctx.broken_script = None;
+        return Ok(String::new());
+    }
+    ctx.broken_script = Some((name.clone(), now()));
+    Ok(format!(
+        "routine {name} failed -> try: fix the script and run it with wisply codemode, the next working one replaces {name}"
+    ))
+}
+
+pub fn command(d: &Daemon, ctx: &mut Ctx, rest: &[String]) -> Result<String, Fail> {
+    let raw = rest.first().ok_or_else(|| Fail::new("routine script needs a report"))?;
+    let body: Value = serde_json::from_str(raw).map_err(|e| Fail::new(format!("routine script got bad json ({e})")))?;
+    if body["routine"].is_string() {
+        return ran(d, ctx, &body);
+    }
+    ctx.ep = super::Episode::default();
+    saved(d, ctx, &body)
+}
+
+pub fn handoff(ctx: &Ctx, c: &Call, name: &str, params: &BTreeMap<String, String>) -> Result<String, Fail> {
+    if !ctx.run_stack.is_empty() {
+        return Err(Fail::hint(
+            format!("{name} is a script routine and cannot run inside routine {}", ctx.run_stack.join(" > ")),
+            format!("wisply run {name} on its own"),
+        ));
+    }
+    let pairs: Vec<(String, String)> = params.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    Ok(wisply_proto::handoff_line(name, &pairs, c.on("yes")))
+}
+
+pub fn show(r: &Value) -> Vec<String> {
+    let code = text(&r["script"]["code"]);
+    let lines: Vec<&str> = code.lines().collect();
+    let mut out: Vec<String> =
+        lines.iter().take(SHOW_LINES).enumerate().map(|(i, l)| format!("{:>3} {l}", i + 1)).collect();
+    if lines.len() > SHOW_LINES {
+        out.push(format!("... {} more lines", lines.len() - SHOW_LINES));
+    }
+    out
+}
+
+pub fn prune(home: &Path) {
+    let few = stamp(now() - FEW_RUNS_DAYS * DAY_S);
+    let many = stamp(now() - MANY_RUNS_DAYS * DAY_S);
+    for r in load_all(home).into_iter().filter(is_script) {
+        let last =
+            r["stats"]["last"].as_str().filter(|l| !l.is_empty()).map_or_else(|| text(&r["created"]), str::to_string);
+        let limit = if r["stats"]["runs"].as_u64().unwrap_or(0) >= MANY_RUNS { &many } else { &few };
+        if last.len() == 16 && last < *limit {
+            let _ = fs::remove_file(file(home, &text(&r["name"])));
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "script_tests.rs"]
+mod tests;

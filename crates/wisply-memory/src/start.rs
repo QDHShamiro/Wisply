@@ -3,6 +3,10 @@ use rusqlite::{OptionalExtension, params};
 use super::store::{Store, now};
 
 pub const DRAFTS_MAX: i64 = 30;
+const SESSIONS: &str = "select s.last, coalesce(nullif(s.title, ''), n.title, ''), \
+     coalesce(nullif(s.summary, ''), substr(n.body, 1, instr(n.body || char(10), char(10)) - 1), ''), s.next \
+     from sessions s left join notes n on s.summary = '' and n.origin = 's:' || s.id \
+     where (s.summary != '' or n.id is not null)";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Counts {
@@ -55,11 +59,11 @@ impl Store {
     }
 
     pub fn sessions(&self, project: &str, limit: usize) -> rusqlite::Result<Vec<Session>> {
-        let mut sql = String::from("select last, title, summary, next from sessions where summary != ''");
+        let mut sql = String::from(SESSIONS);
         if !project.is_empty() {
-            sql.push_str(" and project = ?2");
+            sql.push_str(" and s.project = ?2");
         }
-        sql.push_str(" order by last desc limit ?1");
+        sql.push_str(" order by s.last desc limit ?1");
         let mut stmt = self.db.prepare(&sql)?;
         let map = |r: &rusqlite::Row| -> rusqlite::Result<Session> {
             Ok(Session {
@@ -163,6 +167,7 @@ impl Store {
 mod tests {
     use std::fs;
 
+    use super::super::learner::Record;
     use super::super::store::NewNote;
     use super::*;
 
@@ -204,10 +209,37 @@ mod tests {
     }
 
     #[test]
+    fn a_session_without_a_summary_is_listed_by_its_early_note() {
+        let dir = std::env::temp_dir().join(format!("ltm-start-early-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mut s = Store::open(&dir).unwrap();
+        s.session_seen("s1", "web", "C:/web", "C:/t.jsonl", false).unwrap();
+        assert!(s.sessions("web", 3).unwrap().is_empty());
+        let rec = Record {
+            title: "web: Cart".into(),
+            summary: "Latest request: add a cart\nGoal: Cart".into(),
+            ..Record::default()
+        };
+        s.session_note("s1", "web", &rec).unwrap().unwrap();
+        let got = s.sessions("web", 3).unwrap();
+        assert_eq!(
+            (got.len(), got[0].title.as_str(), got[0].summary.as_str()),
+            (1, "web: Cart", "Latest request: add a cart")
+        );
+        assert!(s.sessions("other", 3).unwrap().is_empty());
+        s.db.execute("update sessions set summary = 'built the cart', title = 'Cart' where id = 's1'", []).unwrap();
+        let got = s.sessions("", 3).unwrap();
+        assert_eq!((got.len(), got[0].title.as_str(), got[0].summary.as_str()), (1, "Cart", "built the cart"));
+        drop(s);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn start_queries_use_their_index() {
         let dir = std::env::temp_dir().join(format!("ltm-plan-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let s = Store::open(&dir).unwrap();
+        let listed = format!("{SESSIONS} order by s.last desc limit 5");
         for (sql, index) in [
             ("select count(*) from notes where source = 'vault' and kind = 'draft'", "notes_source"),
             (
@@ -218,6 +250,8 @@ mod tests {
                 "select last, title, summary, next from sessions where summary != '' order by last desc limit 5",
                 "sessions_last",
             ),
+            (listed.as_str(), "sessions_last"),
+            (listed.as_str(), "notes_origin"),
         ] {
             let mut stmt = s.db.prepare(&format!("explain query plan {sql}")).unwrap();
             let plan: Vec<String> = stmt.query_map([], |r| r.get(3)).unwrap().map(Result::unwrap).collect();

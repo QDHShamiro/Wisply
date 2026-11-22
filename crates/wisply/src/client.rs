@@ -25,6 +25,9 @@ pub fn run(raw: &[String]) -> ExitCode {
     if let Some(code) = without_daemon(&home, first, &args) {
         return code;
     }
+    if first == "codemode" {
+        return crate::codemode::run(&home, &args[1..]);
+    }
     if !home.join(MARKER).is_file() {
         return v2(&home, raw);
     }
@@ -167,6 +170,13 @@ pub fn send(home: &Path, args: &[String]) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    if let Some((argv, rest)) = wisply_proto::handoff(&reply.out) {
+        let code = crate::codemode::run(home, &argv[1..]);
+        if !rest.trim().is_empty() {
+            println!("{}", rest.trim_end());
+        }
+        return code;
+    }
     let mut out = reply.out;
     if stats {
         out.push_str(&format!("\n[{} ms, ~{} tokens]", started.elapsed().as_millis(), out.len() / 4 + 1));
@@ -185,6 +195,20 @@ pub fn ask(home: &Path, argv: &[&str]) -> Result<(i32, String), String> {
     let cwd = env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
     let argv: Vec<String> = argv.iter().map(|a| (*a).to_string()).collect();
     let req = Request { token: &token, cwd: &cwd, sid: "", secret: None, argv: &argv }.encode();
+    let reply = Reply::decode(&exchange(home, &req, None)?);
+    Ok((reply.code, reply.out))
+}
+
+pub fn ask_as(
+    home: &Path,
+    argv: &[String],
+    sid: &str,
+    secret: Option<&str>,
+    cwd: &Path,
+) -> Result<(i32, String), String> {
+    let token = wisply_proto::key_token(home).or_else(|| first_key(home)).ok_or("the daemon made no key")?;
+    let cwd = cwd.display().to_string();
+    let req = Request { token: &token, cwd: &cwd, sid, secret, argv }.encode();
     let reply = Reply::decode(&exchange(home, &req, None)?);
     Ok((reply.code, reply.out))
 }

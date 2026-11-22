@@ -337,6 +337,40 @@ uploads, and one that sets up autostart or runs code from the internet. A skill 
 scripts or hidden text, or that would overwrite a skill another tool installed, waits for you as well. What you
 agreed to is written into the tool or skill. `skill rm` removes only skills Wisply installed.
 
+## Code mode: many steps in one call
+
+Instead of ten tool calls, the AI writes one short JavaScript and Wisply runs it: shell commands, files, every
+`wisply` command, loops and `Promise.all`. Only the result comes back, so the output of every step in between never
+fills the context. It works from any AI: `wisply codemode` in a shell, or the `code` argument of the MCP tool
+(Claude Code, Codex, Gemini, Cursor, any MCP client).
+
+```
+wisply codemode --file check.js
+```
+```js
+const [st, log] = await Promise.all([$`git status --short`.lines(), $`git log --oneline -1`.text()]);
+let unwraps = 0;
+for (const f of await glob("src/**/*.rs")) unwraps += (await read(f)).split("unwrap()").length - 1;
+({ changed: st.length, last: log.trim(), unwraps, page: await wisply`snap -f "Sign in"` })
+```
+
+It runs in a sandbox (QuickJS, no network, no `require`), up to 8 calls at once, 10 minutes at most. An error names
+the line and how many calls already finished. Every step passes the same deny and ask rules as Claude Code, Codex,
+Gemini and Cursor, and the four risk classes: a risky step stops the script before it runs, the AI asks you and runs
+the same code with `--yes`. Deleting inside the project is fine. It is on by default; `wisply config codemode off`
+turns it off. `wisply codemode help` lists every call.
+
+A script that worked and made at least two calls is kept as a routine on this computer, once per script (the name
+comes from the request). Values go in as data, never into the code: `--arg pr=100` (MCP `args`) is `args.pr` in the
+script, and `wisply run <name> pr=101` replays it in one call; the hook offers it when a request in the same project
+fits. If a saved script breaks, the next working script of that session replaces it as a new version. `--yes` is
+never kept, scripts with secrets are never saved, and an unused one goes after 30 days (90 days from 5 runs on).
+`wisply routines` shows the tokens each one saved, `wisply routine show <name>` the code, and
+`wisply config codemode_save off` stops the saving.
+
+For heavy work a kit tool can be Rust: `wisply kit add <name> "what it does" --rust tool.rs` (or a Cargo folder)
+builds it once with `rustc -O` or `cargo build --release` and again only when the code changes.
+
 ## Headless
 
 `wisply headless` runs a browser with no window, with the Wisply extension loaded, for servers and CI.
@@ -439,6 +473,7 @@ Brave, Windows 11. Tokens are characters / 4.
 | See what a click did | ~2,350 (new screenshot) | **13–53** (one line) | **−98%** |
 | Find one thing on a page | ~2,350 (screenshot) | **~36–50** (`snap -f`) | **−98%** |
 | Do a known task again | ~916 (every step by hand) | **~40** (`run`, 1 call) | **−96%** |
+| Five checks over git, files and memory | ~674 (6 calls) | **~155** (`codemode`, 1 call) | **−77%** |
 | A screenshot, when you need one | ~2,350 | ~700 (1024 px JPEG) | **−70%** |
 
 A 10-step task: **~37,000 tokens with screenshots, ~890 with Wisply.**
@@ -568,8 +603,9 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Routines** | `routines` · `run <name> k=v` · `record start` … `record stop` |
 | **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
+| **Script** | `codemode "<js>"` · `codemode --file x.js --arg k=v` · `codemode help` · MCP `code` argument |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `peek <file|folder> ...` · `secure` |
-| **Own tools** | `kit add <name> "what it does" -- <program> [args]` · `kit run <name>` · `skill find <words>` · `skill new` |
+| **Own tools** | `kit add <name> "what it does" [--rust x.rs] -- <program> [args]` · `kit run <name>` · `skill find <words>` · `skill new` |
 | **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) · `config compact 250k` |
 | **Agents** | `agents` · `mobile pair` · `notify event done "title"` |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
@@ -614,8 +650,8 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | | |
 |---|---|
 | Use | `routines [-f word]` · `run <name> param=value` · `routine show <name>` |
-| Teach | learned by itself on repeat · `routine save <name> [param=value]` · `record start <name>` … `record stop [param=value]` |
-| Tidy | `routine rm\|rename <name>` · `routine forget` · `config learn off` |
+| Teach | learned by itself on repeat · working code mode scripts · `routine save <name> [param=value]` · `record start <name>` … `record stop [param=value]` |
+| Tidy | `routine rm\|rename <name>` · `routine forget` · `config learn off` · `config codemode_save off` |
 
 **Memory** (one file on your computer, `~/.wisply/memory`)
 
@@ -641,7 +677,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | Headroom | `more <hr-id> [--lines 400-440] [--grep "a\|b"]` · `~/.wisply/headroom/off` turns it off |
 | Look before reading | `peek <file\|folder> ... [--head 10] [--outline]` · `~/.wisply/headroom/junk-off` |
 | Search | `grep <pattern> [folder\|file ...] [-i] [-w] [-l] [-C 2] [--glob '*.py'] [--all]` |
-| Own tools | `kit` · `kit add <name> "what it does" [--file script] [--replace] -- <program> [args]` · `kit run <name> [args]` · `kit show\|rm <name>` |
+| Own tools | `kit` · `kit add <name> "what it does" [--file script \| --rust file.rs\|cargo-folder] [--replace] -- <program> [args]` · `kit run <name> [args]` · `kit show\|rm <name>` |
 | Skills | `skill` · `skill find <words> [--web]` · `skill new <name> "..." --file text.md` · `skill add <folder>` · `skill get <owner/repo/path>` · `skill check <folder or name>` · `skill rm <name>` |
 | Safety check | `secure [folder|site|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json]` (keys, vulnerable dependencies in Cargo/npm/pnpm/yarn/Maven/Gradle/pip/poetry, risky code, .gitignore, severity per line) · `secure allow <domain> [--remove]` (only these sites get the passive web check, 1 request/s) · `secure fix [folder] [--with claude|codex]` (FIX.md, branch `secure/fix-<date>`, AI fixes, re-check; never commits or pushes) · `config secure on|off` |
 | Numbers | `tokens` (used and saved, last 30 days) · `bench` · `selftest` · `log stats` · `channels` (the ways Wisply reads GitHub, the web, video and audio right now) |
@@ -709,8 +745,9 @@ wisply uninstall --purge  # also removes the files in ~/.wisply (memory and note
 
 ## What's new
 
-- **Next** `wisply research` (10 search engines, no AI, reports saved to your vault) and `wisply think` (finds, fixes
-  and proves improvements in code, web pages, texts and images without an AI model).
+- **Next** `wisply research` (10 search engines, no AI, reports saved to your vault), `wisply think` (finds, fixes
+  and proves improvements in code, web pages, texts and images without an AI model) and `wisply codemode` (many
+  shell, file and wisply steps in one call for every AI, only the result comes back).
 - **3.0** Lighting is now **Wisply**. One Rust program: no Python, no venv, the MCP server takes ~12 MB per session
   and answers its first call in ~30 ms. A window (`wisply ui`) with your projects, notes, to-dos and a graph of notes
   and code. Long Bash logs reach the model as their important lines. Your data moves from `~/.lighting` to

@@ -22,7 +22,7 @@ pub use bench::{
 };
 pub use board::{Card, Graph, Node, Run, links};
 pub use expand::{near, stem_word};
-pub use learner::{Due, Record, points, titled};
+pub use learner::{Due, Record, Unsummarized, points, titled};
 pub use lessons::Lesson;
 pub use pages::{WIKI_KINDS, render as render_page, safe_name, template, write_draft, write_session};
 pub use project::{project_of, root_of};

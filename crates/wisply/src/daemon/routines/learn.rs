@@ -127,7 +127,7 @@ fn compact(steps: Vec<Value>, rs: &[Value]) -> Vec<Value> {
     steps
 }
 
-fn stamp(epoch: f64) -> String {
+pub fn stamp(epoch: f64) -> String {
     let [y, mo, d, h, mi, _] = local_parts(epoch);
     format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}")
 }

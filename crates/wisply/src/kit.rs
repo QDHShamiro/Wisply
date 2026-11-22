@@ -8,8 +8,12 @@ use wisply_core::Fail;
 
 use crate::risk;
 
-const USAGE: &str = "wisply kit add <name> \"what it does\" [--file script] [--replace] -- <program> [args]";
-const HOLES: &str = "{1}..{9} = its arguments, {all} = all of them, {file} = the saved script";
+mod rust;
+
+const USAGE: &str = "wisply kit add <name> \"what it does\" [--file script | --rust file.rs|cargo-folder] [--replace] -- <program> [args]";
+const HOLES: &str =
+    "{1}..{9} = its arguments, {all} = all of them, {file} = the saved script, {exe} = the built Rust program";
+const RUST_RUN: [&str; 2] = ["{exe}", "{all}"];
 const NAME_MAX: usize = 40;
 const ABOUT_MAX: usize = 200;
 const SCRIPT_MAX: u64 = 1024 * 1024;
@@ -28,6 +32,7 @@ struct Tool {
     run: Vec<String>,
     file: Option<String>,
     agreed: bool,
+    rust: Option<rust::Source>,
 }
 
 pub fn run(home: &Path, args: &[String]) -> ExitCode {
@@ -91,6 +96,7 @@ fn load(home: &Path, name: &str) -> Result<Tool, Fail> {
         run,
         file: v["file"].as_str().map(String::from),
         agreed: v["agreed"].as_bool().unwrap_or(false),
+        rust: rust::source(&root(home).join(name), &v),
     })
 }
 
@@ -124,6 +130,12 @@ fn show(home: &Path, args: &[String]) -> Result<String, Fail> {
     if let Some(file) = &tool.file {
         lines.push(format!("script: {}", dir.join(file).to_string_lossy().replace('\\', "/")));
     }
+    if let Some(rust::Source::Cargo(krate)) = &tool.rust {
+        lines.push(format!("rust crate: {}", krate.to_string_lossy().replace('\\', "/")));
+    }
+    if tool.rust.is_some() {
+        lines.push("rust: built once, built again only when the code changes".into());
+    }
     if tool.agreed {
         lines.push("the user agreed to what it does".into());
     }
@@ -141,6 +153,7 @@ struct Order<'a> {
     name: &'a str,
     about: &'a str,
     file: Option<&'a str>,
+    rust: Option<&'a str>,
     replace: bool,
     yes: bool,
     run: &'a [String],
@@ -149,13 +162,14 @@ struct Order<'a> {
 fn order(args: &[String]) -> Result<Order<'_>, Fail> {
     let cut = args.iter().position(|a| a == "--").unwrap_or(args.len());
     let run = args.get(cut + 1..).unwrap_or_default();
-    let (mut plain, mut file, mut replace, mut yes) = (Vec::new(), None, false, false);
+    let (mut plain, mut file, mut rust, mut replace, mut yes) = (Vec::new(), None, None, false, false);
     let mut it = args[..cut].iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--replace" => replace = true,
             "--yes" | "-y" => yes = true,
             "--file" => file = it.next().map(String::as_str),
+            "--rust" => rust = it.next().map(String::as_str),
             _ if a.starts_with("--") => return Err(Fail::hint(format!("kit add does not know {a}"), USAGE)),
             _ => plain.push(a),
         }
@@ -168,10 +182,13 @@ fn order(args: &[String]) -> Result<Order<'_>, Fail> {
             USAGE,
         ));
     }
-    if run.is_empty() {
+    if file.is_some() && rust.is_some() {
+        return Err(Fail::hint("give --file or --rust, not both", USAGE));
+    }
+    if run.is_empty() && rust.is_none() {
         return Err(Fail::hint(format!("after -- comes the program '{name}' runs ({HOLES})"), USAGE));
     }
-    Ok(Order { name, about, file, replace, yes, run })
+    Ok(Order { name, about, file, rust, replace, yes, run })
 }
 
 fn script(path: &str) -> Result<(String, Vec<u8>), Fail> {
@@ -195,22 +212,58 @@ fn put(dir: &Path, name: &str, body: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
-fn add(home: &Path, args: &[String]) -> Result<String, Fail> {
-    let o = order(args)?;
-    let saved = o.file.map(script).transpose()?;
-    if saved.is_none() && o.run.iter().any(|part| part.contains("{file}")) {
+struct Parts {
+    krate: Option<PathBuf>,
+    saved: Option<(String, Vec<u8>)>,
+    run: Vec<String>,
+    code: String,
+}
+
+fn parts(o: &Order<'_>) -> Result<Parts, Fail> {
+    let krate = o.rust.map(rust::given).transpose()?.flatten();
+    let saved = if krate.is_some() { None } else { o.file.or(o.rust) }.map(script).transpose()?;
+    let run: Vec<String> = if o.run.is_empty() { RUST_RUN.map(String::from).to_vec() } else { o.run.to_vec() };
+    if saved.is_none() && run.iter().any(|part| part.contains("{file}")) {
         return Err(Fail::hint("{file} stands for a saved script, and none was given", "add --file <script>"));
     }
-    let code = saved.as_ref().map(|(_, body)| String::from_utf8_lossy(body).into_owned()).unwrap_or_default();
-    let found = risk::of(&format!("{}\n{code}", o.run.join(" ")));
+    let code = match &krate {
+        Some(k) => rust::code(&rust::Source::Cargo(k.clone())),
+        None => saved.as_ref().map(|(_, body)| String::from_utf8_lossy(body).into_owned()).unwrap_or_default(),
+    };
+    Ok(Parts { krate, saved, run, code })
+}
+
+fn add(home: &Path, args: &[String]) -> Result<String, Fail> {
+    let o = order(args)?;
+    let p = parts(&o)?;
+    let found = risk::of(&format!("{}\n{}", p.run.join(" "), p.code));
     if let Some(found) = found.as_ref().filter(|_| !o.yes) {
         return Err(risk::ask(&format!("the tool '{}'", o.name), found, "the same call with --yes"));
     }
+    let dir = root(home).join(o.name);
     let spec = json!({
-        "name": o.name, "about": o.about, "run": o.run,
-        "file": saved.as_ref().map(|(name, _)| name), "agreed": found.is_some(),
+        "name": o.name, "about": o.about, "run": p.run,
+        "file": p.saved.as_ref().map(|(name, _)| name), "agreed": found.is_some(),
+        "rust": o.rust.map(|_| if p.krate.is_some() { "cargo" } else { "file" }),
+        "crate": p.krate.as_ref().map(|k| k.to_string_lossy()),
     });
-    let spec = serde_json::to_vec_pretty(&spec).unwrap_or_default();
+    let source = rust::source(&dir, &spec);
+    keep(home, &o, p.saved.as_ref(), &serde_json::to_vec_pretty(&spec).unwrap_or_default())?;
+    let built = match &source {
+        Some(src) => {
+            rust::ready(&dir, o.name, src)?;
+            " Built with Rust, it builds again only when the code changes."
+        }
+        None => "",
+    };
+    let agreed = found.map(|f| format!(" The user agreed that it {}.", f.risk.what())).unwrap_or_default();
+    Ok(format!(
+        "ok: tool '{0}' saved for this user, every session can run it: wisply kit run {0} [args].{built}{agreed}",
+        o.name
+    ))
+}
+
+fn keep(home: &Path, o: &Order<'_>, saved: Option<&(String, Vec<u8>)>, spec: &[u8]) -> Result<(), Fail> {
     let dir = root(home).join(o.name);
     let taken = || Fail::hint(format!("a tool named '{}' is already there", o.name), "add --replace, or another name");
     let broken = |e: std::io::Error| Fail::new(format!("cannot save the tool in {}: {e}", dir.display()));
@@ -219,32 +272,28 @@ fn add(home: &Path, args: &[String]) -> Result<String, Fail> {
         return Err(taken());
     }
     let store = |into: &Path| -> std::io::Result<()> {
-        if let Some((name, body)) = &saved {
+        if let Some((name, body)) = saved {
             put(into, name, body)?;
         }
-        wisply_core::save(into.join(SPEC), &spec)
+        wisply_core::save(into.join(SPEC), spec)
     };
     if let Some(old) = old {
         store(&dir).map_err(broken)?;
-        if let Some(stale) = old.file.filter(|f| saved.as_ref().is_none_or(|(name, _)| name != f)) {
+        if let Some(stale) = old.file.filter(|f| saved.is_none_or(|(name, _)| name != f)) {
             let _ = fs::remove_file(dir.join(stale));
         }
-    } else {
-        if dir.is_dir() {
-            let _ = fs::remove_dir_all(&dir);
-        }
-        let fresh = root(home).join(format!(".new-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
-        let moved = fs::create_dir_all(&fresh).and_then(|()| store(&fresh)).and_then(|()| fs::rename(&fresh, &dir));
-        if let Err(e) = moved {
-            let _ = fs::remove_dir_all(&fresh);
-            return Err(if dir.join(SPEC).is_file() { taken() } else { broken(e) });
-        }
+        return Ok(());
     }
-    let agreed = found.map(|f| format!(" The user agreed that it {}.", f.risk.what())).unwrap_or_default();
-    Ok(format!(
-        "ok: tool '{0}' saved for this user, every session can run it: wisply kit run {0} [args].{agreed}",
-        o.name
-    ))
+    if dir.is_dir() {
+        let _ = fs::remove_dir_all(&dir);
+    }
+    let fresh = root(home).join(format!(".new-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+    let moved = fs::create_dir_all(&fresh).and_then(|()| store(&fresh)).and_then(|()| fs::rename(&fresh, &dir));
+    if let Err(e) = moved {
+        let _ = fs::remove_dir_all(&fresh);
+        return Err(if dir.join(SPEC).is_file() { taken() } else { broken(e) });
+    }
+    Ok(())
 }
 
 fn fill(part: &str, args: &[String], file: Option<&str>, used: &mut bool) -> Result<String, usize> {
@@ -292,6 +341,10 @@ fn plan(home: &Path, args: &[String]) -> Result<(Vec<String>, PathBuf), Fail> {
     }
     if !used {
         argv.extend(given.iter().cloned());
+    }
+    if let Some(src) = &tool.rust {
+        let exe = rust::ready(&dir, name, src)?.0.to_string_lossy().into_owned();
+        argv.iter_mut().filter(|a| a.as_str() == "{exe}").for_each(|a| a.clone_from(&exe));
     }
     if !tool.agreed
         && !yes

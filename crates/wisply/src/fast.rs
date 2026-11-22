@@ -59,6 +59,7 @@ const LOCAL: &[&str] = &[
     "review",
     "analyze",
     "pupil",
+    "codemode",
 ];
 
 fn runs_in_full(first: &str, raw: &[String]) -> bool {
@@ -225,6 +226,13 @@ fn send(home: &Path, raw: &[String], args: &[String]) -> ExitCode {
         Got::Reply(buf) => buf,
         Got::Full => return full(raw, pass, limit),
     };
+    if let Some((argv, rest)) = wisply_proto::handoff(&Reply::decode(&buf).out) {
+        let code = full(&argv, None, None);
+        if !rest.trim().is_empty() {
+            println!("{}", rest.trim_end());
+        }
+        return code;
+    }
     show(&buf, stats, started)
 }
 

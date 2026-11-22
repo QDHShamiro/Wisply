@@ -1,4 +1,5 @@
 mod client;
+mod codemode;
 mod daemon;
 mod headless;
 mod hook;

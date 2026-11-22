@@ -82,6 +82,8 @@ fn defaults() -> Map<String, Value> {
         ("push_server", json!("")),
         ("push_topic", json!("")),
         ("secure", json!(true)),
+        ("codemode", json!(true)),
+        ("codemode_save", json!(true)),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
