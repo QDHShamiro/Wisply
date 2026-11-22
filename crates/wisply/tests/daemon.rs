@@ -88,7 +88,10 @@ fn a_v3_home_starts_its_daemon_and_answers_like_2x() {
     let by_ref = "err: fill wants Label=value pairs -> try: wisply type e36 \"<value>\" (one field by its ref)";
     assert_eq!(home.run(&["fill", "e36", "x"]), (1, by_ref.into()));
     let (_, nothing) = home.run(&["upload"]);
-    assert!(nothing.starts_with("err: upload needs the ref of the upload button or file field first, got nothing"));
+    assert!(
+        nothing
+            .starts_with("err: upload needs the files, after the ref of the upload button or file field, got nothing")
+    );
     let (_, no_files) = home.run(&["upload", "e5"]);
     assert_eq!(no_files, "err: upload needs the files after the ref -> try: wisply upload e5 C:/path/file.png");
     if cfg!(windows) {

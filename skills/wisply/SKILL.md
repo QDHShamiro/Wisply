@@ -20,7 +20,7 @@ More than one step = one `wisply codemode --file x.js` (MCP: `code`): look, deci
 ## Web
 ```
 click e5|"Sign in" [--yes]   fill "Email=a@b.c" [--submit]   type e3|"Label" text [--enter]
-press Enter|ctrl+k   select e7 "Germany"   check e9 [off]   scroll [--until "text"]   upload e5 C:/f.png
+press Enter|ctrl+k   select e7 "Germany"   check e9 [off]   scroll [--until "text"]   upload [e5] C:/f.png
 wait "text"|url:/x   expect "text"   tabs   tab t3   close   back   dismiss   table e8   js "code"
 ```
 Secrets never inline: `type e3 --env PASS`, `fill "Password=@secret" --env PASS`. `fill`, `js`, `fetch` need an open page.

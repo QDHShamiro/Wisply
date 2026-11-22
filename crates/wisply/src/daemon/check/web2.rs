@@ -155,6 +155,7 @@ pub fn browser(r: &mut Run, srv: &Server, decoy: &str) {
     let aref = grab(r"(?m)^(e\d+) menuitem", &aout, "e0");
     r.step("upload through a label", &["upload", &aref, &script], |o, e| !e && o.contains("1 file set"));
     r.step("upload landed", &["expect", "Avatar: selftest.js"], ok);
+    r.step("upload finds the only file field", &["upload", &script], |o, e| !e && o.contains("set on the file field"));
     r.step("table as tsv", &["table", "#prices"], |o, e| !e && o.contains("Beta\t2.50"));
     r.step("type contenteditable", &["type", "Notes", "hello from wisply"], ok);
     r.step("notes text present", &["expect", "hello from wisply"], ok);
@@ -243,6 +244,7 @@ pub fn browser(r: &mut Run, srv: &Server, decoy: &str) {
     r.step("target back to decoy", &["snap"], |o, e| !e && o.contains("Second"));
     r.step("keep hands tab over", &["keep", decoy], |o, e| !e && o.contains("kept 1 tab"));
     r.step("kept tab left the group", &["tabs", "--all"], |o, _| listed(o, decoy, false));
+    r.step("no tab match is an error", &["tabs", "-f", "zzq-no-such-tab"], |o, e| e && o.contains("no tab matches"));
     let thrown = r.step("throwaway tab", &["open", &at("second"), "--new"], |o, e| !e && o.contains("Second"));
     let tref = tab_ref(&thrown);
     r.step("open a slow page", &["open", &at("slow")], |o, e| {

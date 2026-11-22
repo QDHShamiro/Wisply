@@ -89,10 +89,13 @@ async function upload(a, tab) {
   await guard(tabId, "upload");
   await C.attach(tabId);
   const id = "u" + Date.now();
-  const m = await page(tabId, "act.mark", [a.ref, id, true]);
+  const pick = 'wisply snap -f "upload|file", then wisply upload <ref> <file>';
+  const m = await page(tabId, "act.mark", [a.ref || "", id, true]);
+  if (m.many) throw new Error(m.many + " file fields on this page, so Wisply needs the one to use -> try: " + pick);
   if (m.gone) throw new Error(a.ref + " is gone -> try: wisply snap");
-  if (m.nofile) throw new Error("no file input at or near " + a.ref + " -> try: the upload button or its label");
-  const fr = /^f(\d+)\.e\d+$/.exec(a.ref);
+  if (m.nofile) throw new Error(a.ref ? "no file input at or near " + a.ref + " -> try: the upload button or its label" : "no file field on this page -> try: " + pick);
+  const at = a.ref || "the file field";
+  const fr = /^f(\d+)\.e\d+$/.exec(a.ref || "");
   if (fr) {
     if (!a.data) throw new Error("file too big for a frame upload (max 8 MB)");
     const [r] = await chrome.scripting.executeScript({ target: { tabId, frameIds: [Number(fr[1])] }, args: [id, a.data], func: (mark, data) => {
@@ -108,7 +111,7 @@ async function upload(a, tab) {
       return "";
     } });
     if (r && r.result) throw new Error(r.result);
-    return "ok (" + a.data.length + " file" + (a.data.length === 1 ? "" : "s") + " set on " + a.ref + ")";
+    return "ok (" + a.data.length + " file" + (a.data.length === 1 ? "" : "s") + " set on " + at + ")";
   }
   try {
     await C.send(tabId, "DOM.getDocument", { depth: 0 });
@@ -118,7 +121,7 @@ async function upload(a, tab) {
   } finally {
     await page(tabId, "act.unmark", []).catch(() => {});
   }
-  return "ok (" + a.files.length + " file" + (a.files.length === 1 ? "" : "s") + " set on " + a.ref + ")";
+  return "ok (" + a.files.length + " file" + (a.files.length === 1 ? "" : "s") + " set on " + at + ")";
 }
 
 async function dialog(a, tab) {

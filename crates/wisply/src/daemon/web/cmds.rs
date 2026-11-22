@@ -340,25 +340,24 @@ fn mime(path: &Path) -> &'static str {
 }
 
 pub fn upload(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
-    let Some(field) = c.pos.first().filter(|p| REF_RE.is_match(p)) else {
-        let got = match c.pos.first() {
-            None => "nothing".to_string(),
-            Some(p) if local_file(ctx, p).is_file() => "the file".to_string(),
-            Some(p) => format!("\"{p}\""),
-        };
+    let field = c.pos.first().filter(|p| REF_RE.is_match(p)).cloned();
+    let first_is_file = c.pos.first().is_some_and(|p| local_file(ctx, p).is_file());
+    if field.is_none() && !first_is_file {
+        let got = c.pos.first().map_or_else(|| "nothing".to_string(), |p| format!("\"{p}\""));
         return Err(Fail::hint(
-            format!("upload needs the ref of the upload button or file field first, got {got}"),
-            "wisply snap -f \"upload|file\", then wisply upload e5 C:/path/file.png",
+            format!("upload needs the files, after the ref of the upload button or file field, got {got}"),
+            "wisply upload C:/path/file.png (page with one file field), or wisply snap -f \"upload|file\", then wisply upload e5 C:/path/file.png",
         ));
-    };
-    if c.pos.len() < 2 {
+    }
+    let raw_files = if field.is_some() { &c.pos[1..] } else { &c.pos[..] };
+    if raw_files.is_empty() {
         return Err(Fail::hint(
             "upload needs the files after the ref",
-            format!("wisply upload {field} C:/path/file.png"),
+            format!("wisply upload {} C:/path/file.png", field.as_deref().unwrap_or("e5")),
         ));
     }
     let mut files = Vec::new();
-    for raw in &c.pos[1..] {
+    for raw in raw_files {
         let path = local_file(ctx, raw);
         if !path.exists() {
             return Err(Fail::new(format!("file not found: {}", path.display())));
@@ -366,9 +365,10 @@ pub fn upload(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
         files.push(path);
     }
     let names: Vec<String> = files.iter().map(|p| p.to_string_lossy().into_owned()).collect();
-    let mut args = obj(json!({"ref": c.pos[0], "files": names}));
+    let framed = field.as_deref().is_some_and(|f| f.starts_with('f'));
+    let mut args = obj(json!({"ref": field, "files": names}));
     let size: u64 = files.iter().map(|p| fs::metadata(p).map_or(0, |m| m.len())).sum();
-    if c.pos[0].starts_with('f') && size <= UPLOAD_INLINE {
+    if framed && size <= UPLOAD_INLINE {
         let mut inline = Vec::new();
         for p in &files {
             let bytes = fs::read(p).map_err(|e| Fail::new(format!("cannot read {}: {}", p.display(), reason(&e))))?;
@@ -394,7 +394,10 @@ pub fn tabs(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
             .filter(|(t, _)| t.iter().any(|x| *x > 0))
             .collect();
         let best = best_only(&rows);
-        text = if best.is_empty() { format!("no tab matches \"{f}\"") } else { best.join("\n") };
+        if best.is_empty() {
+            return Err(Fail::hint(format!("no tab matches \"{f}\""), "wisply tabs --all"));
+        }
+        text = best.join("\n");
     }
     Ok(capped(d, ctx, &text, "tabs", Some(80), OUT_CHARS))
 }
