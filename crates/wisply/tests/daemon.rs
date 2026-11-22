@@ -167,6 +167,7 @@ t3 a Mine - mine.com
 fn a_browser_host_gets_the_session_tab_and_done_closes_it() {
     let home = Home::new("host", true);
     assert_eq!(home.run(&["ping"]).1, "pong");
+    assert_eq!(home.run(&["config", "codemode", "off"]).0, 0);
     let Some(token) = wisply_proto::key_token(&home.0) else { panic!("no key") };
     let Ok(link) = wisply_proto::Link::connect(&home.0) else { panic!("no daemon") };
     let version = wisply_core::ext_version(env!("CARGO_PKG_VERSION"));

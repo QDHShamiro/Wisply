@@ -10,8 +10,10 @@ use super::ctx::{Contexts, Ctx, now};
 use super::{Daemon, Out, Pending, Req, Res, STOPPED, Work, config, panic_text, route, system, web};
 
 const CLOSE_RETRY_S: f64 = 1.0;
-const UNTIPPED: &[&str] =
-    &["codemode", "help", "ping", "version", "status", "stop", "abort", "keep", "config", "log", "do", "run"];
+const UNTIPPED: &[&str] = &[
+    "codemode", "help", "ping", "version", "status", "stop", "abort", "keep", "config", "log", "do", "run", "routine",
+    "routines",
+];
 const TIP: &str = "tip: code mode is the default here: a task with more than one step runs as ONE wisply codemode --file x.js (MCP: the code argument) that looks, decides and acts inside the script and returns only the result; single calls only for a one-command task (wisply codemode help)";
 
 struct Wait {
