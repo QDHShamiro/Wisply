@@ -27,6 +27,7 @@ const MANY_RUNS: u64 = 5;
 const SHOW_LINES: usize = 80;
 const DAY_S: f64 = 86_400.0;
 const FIT_WORDS: usize = 2;
+const GREW_SHARE: f64 = 0.7;
 
 pub fn hash(code: &str) -> String {
     let flat: Vec<&str> = code.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
@@ -179,6 +180,25 @@ fn recent(at: f64) -> bool {
     now() - at <= REPLACE_WITHIN_S
 }
 
+fn grew_from(old: &str, new: &str) -> bool {
+    let set = |c: &str| store::words(c).into_iter().collect::<HashSet<String>>();
+    let (a, b) = (set(old), set(new));
+    let shared = a.intersection(&b).count();
+    !a.is_empty() && b.len() > a.len() && shared as f64 >= GREW_SHARE * a.len() as f64
+}
+
+fn drop_outgrown(d: &Daemon, ctx: &Ctx, code: &str) -> Option<String> {
+    let (name, at, _) = ctx.last_script.as_ref()?;
+    let path = file(&d.home, name);
+    let old: Value = serde_json::from_str(&fs::read_to_string(&path).ok()?).ok()?;
+    let unused = old["stats"]["runs"].as_u64().unwrap_or(0) == 0;
+    if !(recent(*at) && is_script(&old) && unused && grew_from(&text(&old["script"]["code"]), code)) {
+        return None;
+    }
+    fs::remove_file(&path).ok()?;
+    Some(name.clone())
+}
+
 fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
     let code = text(&body["code"]);
     if code.trim().is_empty() {
@@ -216,6 +236,7 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
         ctx.last_script = Some((name, now(), base));
         return Ok(note);
     }
+    let replaced = drop_outgrown(d, ctx, &code);
     let name = free_name(&d.home, &base);
     ctx.last_script = Some((name.clone(), now(), base));
     let r = json!({
@@ -226,7 +247,8 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
         "flaky": false
     });
     save(&d.home, &r)?;
-    Ok(format!("saved as routine {name} {}", next_time(&r)))
+    let was = replaced.map(|old| format!(" (replaces {old}, an earlier try at this task)")).unwrap_or_default();
+    Ok(format!("saved as routine {name}{was} {}", next_time(&r)))
 }
 
 fn ran(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {

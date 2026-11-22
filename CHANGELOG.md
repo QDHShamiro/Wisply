@@ -5,7 +5,7 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
-## [Unreleased]
+## [3.5.1] - 2026-11-22
 
 ### Fixed
 - `tabs -f <words>` with no matching tab printed "no tab matches" and still ended with exit 0, so a script took the
@@ -16,6 +16,14 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - `type` falls back to setting the value directly when the native value setter throws ("Illegal invocation", seen 9
   times) and takes that setter from the field's own window, so fields inside frames work too.
 - A routine run under one second showed "0.0 s"; it shows milliseconds now (`12 ms`), from one second on as before.
+- A first look at the data (a script that only reads the files) was saved as its own routine next to the script that
+  then did the task. When a later script of the same session grows out of an unused one from the last 30 minutes, it
+  replaces it, and the save line says which one it replaced.
+- `routine show` and `routine run` take the name the way `routine list` prints it (`version word=`), not only the bare
+  name.
+- When a script stopped on a failed `$` or `wisply` call, "N calls finished and stay done" counted the failed call
+  too. It counts only the calls that worked now.
+- `wisply help` lists `wisply mcp`.
 
 ## [3.5.0] - 2026-11-22
 
