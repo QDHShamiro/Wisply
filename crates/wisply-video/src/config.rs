@@ -14,6 +14,8 @@ const DEFAULTS: &str = include_str!("default.toml");
 pub struct Config {
     pub store: Store,
     pub gemini: Gemini,
+    pub youtube: YouTube,
+    pub transcript: Transcript,
     pub limits: Limits,
 }
 
@@ -27,6 +29,28 @@ pub struct Store {
 #[serde(deny_unknown_fields)]
 pub struct Gemini {
     pub model_ladder: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct YouTube {
+    pub command: Vec<String>,
+    pub timeout_seconds: f64,
+    pub download_timeout_seconds: f64,
+    pub info_hours: f64,
+    pub frame_format: String,
+    pub frame_sort: String,
+    pub description_chars: usize,
+    pub subtitle_format: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Transcript {
+    pub segment_seconds: f64,
+    pub segment_chars: usize,
+    pub search_results: usize,
+    pub output_chars: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -118,6 +142,13 @@ impl Config {
         }
         let mut positive = vec![
             ("store.busy_timeout_seconds", self.store.busy_timeout_seconds),
+            ("youtube.timeout_seconds", self.youtube.timeout_seconds),
+            ("youtube.download_timeout_seconds", self.youtube.download_timeout_seconds),
+            ("youtube.info_hours", self.youtube.info_hours),
+            ("transcript.segment_seconds", self.transcript.segment_seconds),
+            ("transcript.segment_chars", self.transcript.segment_chars as f64),
+            ("transcript.search_results", self.transcript.search_results as f64),
+            ("transcript.output_chars", self.transcript.output_chars as f64),
             ("limits.youtube_seconds_per_day", limits.youtube_seconds_per_day),
             ("limits.rejection_block_seconds", limits.rejection_block_seconds),
             ("limits.history_days", limits.history_days),
@@ -173,6 +204,9 @@ mod tests {
         assert_eq!(config.limits.usage_share, 0.8);
         assert_eq!(config.limits.models["gemini-3.8-flash"].requests_per_day, 20.0);
         assert_eq!(config.limits.groq.audio_seconds_per_hour, 7200.0);
+        assert!(config.youtube.command.is_empty());
+        assert_eq!(config.youtube.subtitle_format, "json3/vtt");
+        assert_eq!(config.transcript.segment_chars, 300);
     }
 
     #[test]

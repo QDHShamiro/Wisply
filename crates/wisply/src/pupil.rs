@@ -7,7 +7,7 @@ const HEAR_VAR: &str = "PUPIL_HEAR_CONFIG";
 pub fn run(home: &Path, args: &[String]) -> ExitCode {
     let code = match args.first().map(String::as_str) {
         Some("hear") => wisply_hear::run(&config(home, HEAR_VAR, "hear.toml"), &args[1..]),
-        Some("limits") => wisply_video::run(&home.join("pupil"), args),
+        Some("limits" | "info" | "captions") => wisply_video::run(home, args),
         _ => wisply_pupil::run(&config(home, PUPIL_VAR, "pupil.toml"), args),
     };
     ExitCode::from(u8::try_from(code).unwrap_or(1))
