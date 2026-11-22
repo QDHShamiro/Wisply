@@ -16,7 +16,7 @@ use super::store::{self, check_of, kv, load_all, save, slug, text, usage, words}
 const NAV_ONLY: &[&str] =
     &["open", "launch", "focus", "scroll", "wait", "back", "forward", "reload", "tab", "expect", "dismiss"];
 const PRUNE_DAYS: f64 = 14.0;
-const TAGS: usize = 12;
+pub const TAGS: usize = 12;
 const PROMPT_BEFORE_S: f64 = 1800.0;
 const PROMPT_AFTER_S: f64 = 5.0;
 const NAME_WORDS: usize = 4;
@@ -155,16 +155,23 @@ fn new_routine(body: Value, source: &str, cost: usize) -> Value {
 }
 
 pub fn tags_for(prompts: &[(f64, Vec<String>)], t0: f64, params: &Value) -> Vec<String> {
-    let vals: Vec<String> = params.as_object().into_iter().flatten().flat_map(|(_, v)| words(&text(v))).collect();
+    prompt_words(prompts, t0, params, TAGS)
+}
+
+pub fn prompt_at(prompts: &[(f64, Vec<String>)], t0: f64) -> Vec<String> {
     let best = prompts.iter().rfind(|(t, _)| *t <= t0 + PROMPT_AFTER_S && t0 - t < PROMPT_BEFORE_S);
-    let Some((_, best)) = best else { return Vec::new() };
+    best.map(|(_, w)| w.clone()).unwrap_or_default()
+}
+
+pub fn prompt_words(prompts: &[(f64, Vec<String>)], t0: f64, params: &Value, max: usize) -> Vec<String> {
+    let vals: Vec<String> = params.as_object().into_iter().flatten().flat_map(|(_, v)| words(&text(v))).collect();
     let mut out: Vec<String> = Vec::new();
-    for w in best {
-        if !vals.contains(w) && !out.contains(w) {
-            out.push(w.clone());
+    for w in prompt_at(prompts, t0) {
+        if !w.starts_with(|c: char| c.is_ascii_digit()) && !vals.contains(&w) && !out.contains(&w) {
+            out.push(w);
         }
     }
-    out.truncate(TAGS);
+    out.truncate(max);
     out
 }
 
@@ -381,8 +388,9 @@ mod tests {
         assert!(match_step(&twice, &json!({"cmd": "open", "args": ["x/y"]})).unwrap().is_empty());
         let long = json!({"cmd": "type", "args": ["Box", "word ".repeat(600_000)]});
         assert!(match_step(&long, &long).is_none());
-        let prompts = vec![(100.0, vec!["order".to_string(), "green".to_string(), "pizza".to_string()])];
+        let prompts = vec![(100.0, ["order", "green", "pizza", "2026-10"].map(String::from).to_vec())];
         assert_eq!(tags_for(&prompts, 101.0, &json!({"q": "green"})), vec!["order", "pizza"]);
+        assert_eq!(prompt_at(&prompts, 101.0).len(), 4);
         assert!(tags_for(&prompts, 3000.0, &json!({})).is_empty());
     }
 

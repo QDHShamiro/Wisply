@@ -38,9 +38,11 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   tokens one by one, and 1 call and ~155 tokens in code mode.
 - Script routines: a code mode script that worked and made at least two calls is saved whole as a routine on this
   computer, once per script, named from the request. Values come as data: `--arg pr=100` (MCP `args`) is `args.pr`
-  in the script, and `wisply run <name> pr=101` replays it in one call from every client and AI. The prompt hook
-  offers it in the same project. A script routine that fails is replaced by the next working script of the session
-  as a new version. `--yes` is never saved, scripts with secrets are never saved, and unused ones go after 30 days
+  in the script, and `wisply run <name> pr=101` replays it in one call from every client and AI. Values from the
+  request that stayed in the code (a month, a PR number) are saved as args, and the name and tags come from the
+  request words the script really uses. The prompt hook offers it in the same project with the values of the new
+  request filled in. A script routine that fails, or a corrected script for the same task in the same session,
+  replaces the routine as a new version instead of a second copy. `--yes` is never saved, scripts with secrets are never saved, and unused ones go after 30 days
   (90 days from 5 runs on). `wisply routines` shows the tokens each routine saved, `wisply routine show <name>` the
   code, `wisply config codemode_save off` stops the saving.
 - `wisply kit add <name> "what it does" --rust file.rs|cargo-folder`: kit tools in Rust. A `.rs` file is built with

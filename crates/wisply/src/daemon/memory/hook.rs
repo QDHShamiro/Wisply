@@ -272,7 +272,9 @@ pub fn suggest(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
     if prompt.is_empty() || NOT_TYPED.is_match(&head) {
         return Ok(String::new());
     }
-    let mut lines = routines::offer(d, ctx, routines::words(&without_paths(&prompt)));
+    let mut typed = routines::words(&without_paths(&prompt));
+    typed.extend(routines::values_in(&prompt));
+    let mut lines = routines::offer(d, ctx, typed);
     if let Ok(tip) = memory_tip(d, ctx, prompt).map(|t| t.trim().to_string())
         && !tip.is_empty()
     {
