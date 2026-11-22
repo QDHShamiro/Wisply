@@ -107,6 +107,11 @@ jobs:
             target/release/wisply-ui.exe
             target/release/wisply-task.exe
           retention-days: 7
+      - name: Skip the Edge welcome screen
+        if: runner.os == 'Windows' && steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: MSYS_NO_PATHCONV=1 reg add 'HKLM\SOFTWARE\Policies\Microsoft\Edge' /v HideFirstRunExperience /t REG_DWORD /d 1 /f
       - name: Setup loads the extension into Edge
         id: setup
         if: runner.os == 'Windows' && steps.build.outcome == 'success'
