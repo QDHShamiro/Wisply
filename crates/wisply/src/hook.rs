@@ -10,7 +10,7 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use wisply_proto::home;
-use wisply_squeeze::{SHORT_CHARS, Squeezed, apply, commas, extract, squeeze, squeeze_tool};
+use wisply_squeeze::{SHORT_CHARS, Squeezed, apply, commas, extract, squeeze_command, squeeze_tool};
 
 const MIN_CHARS: usize = SHORT_CHARS;
 const TEXT_TOOLS: [&str; 3] = ["Grep", "WebSearch", "WebFetch"];
@@ -209,7 +209,7 @@ fn bash(
         return act(entry, "small");
     }
     let squeezed = if chars <= INLINE_MAX {
-        let done = squeeze(stdout);
+        let done = squeeze_command(stdout);
         if Instant::now() > deadline {
             return act(entry, "slow");
         }
@@ -218,7 +218,7 @@ fn bash(
         let text = stdout.to_owned();
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
-            let _ = tx.send(squeeze(&text));
+            let _ = tx.send(squeeze_command(&text));
         });
         match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
             Ok(s) => s,

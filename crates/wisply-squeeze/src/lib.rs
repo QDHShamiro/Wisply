@@ -101,6 +101,14 @@ fn size<S: AsRef<str>>(lines: &[S]) -> usize {
 }
 
 pub fn squeeze(text: &str) -> Option<Squeezed> {
+    run(text, false)
+}
+
+pub fn squeeze_command(text: &str) -> Option<Squeezed> {
+    run(text, true)
+}
+
+fn run(text: &str, data: bool) -> Option<Squeezed> {
     let stripped = pat::strip_ansi(text);
     let lines = log::lines(&stripped);
     let chars = size(&lines);
@@ -110,7 +118,7 @@ pub fn squeeze(text: &str) -> Option<Squeezed> {
         }
         let (tight, grouped) = short::tighten(&lines);
         if chars > MID_CHARS && !grouped {
-            let folded = log::squeeze(&tight);
+            let folded = log::squeeze(&tight, data);
             if size(&folded) * 100 <= chars * (100 - MID_GAIN) {
                 return finish(&lines, folded, false);
             }
@@ -123,11 +131,11 @@ pub fn squeeze(text: &str) -> Option<Squeezed> {
     );
     let (mut out, json) = match json::parse(&plain) {
         Some((obj, rows)) => (json::squeeze(&obj, rows), true),
-        None => (log::squeeze(&lines), false),
+        None => (log::squeeze(&lines, data), false),
     };
     if !json && let Some(mut grouped) = short::grep(&lines) {
         if grouped.len() > MIN_LINES {
-            grouped = log::squeeze(&grouped);
+            grouped = log::squeeze(&grouped, data);
         }
         if size(&grouped) < size(&out) {
             out = grouped;
@@ -184,6 +192,15 @@ nothing to commit"
             .is_none()
         );
         assert!(squeeze(&"ok\n".repeat(61)).is_some());
+    }
+
+    #[test]
+    fn command_tables_stay_whole_and_grep_still_squeezes() {
+        let word = |i: usize| ((b'a' + (i % 26) as u8) as char).to_string().repeat(1 + i / 26);
+        let text = (0..70).map(|i| format!("{} weight {}", word(i), i * 7)).collect::<Vec<_>>().join("\n");
+        assert!(squeeze_command(&text).is_none());
+        assert!(squeeze(&text).is_some());
+        assert!(squeeze_command(&"ok fine\n".repeat(500)).is_some());
     }
 
     #[test]
