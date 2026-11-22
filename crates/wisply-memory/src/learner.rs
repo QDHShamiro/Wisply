@@ -13,6 +13,12 @@ const FILES_JSON: usize = 2000;
 const FILE_SOURCES: &[&str] = &["vault", "claude"];
 const EMPTY: &[&str] = &["none", "nothing", "n/a", "na", "keine", "keiner", "nichts", "-", "--"];
 const STILL_OPEN: &str = "case when last > ?2 then 'open' else 'done' end";
+const SESSION_ORIGIN: &str = "s:";
+const UNSUMMARIZED: &str = "select s.id, s.project, s.transcript, s.last from sessions s \
+     left join notes n on n.origin = 's:' || s.id \
+     where s.last >= ?1 and s.status = 'open' and s.summary = '' and s.transcript != '' \
+     and (n.id is null or n.updated + ?2 < s.last or (s.ended = 1 and n.updated < s.last)) \
+     order by s.last desc";
 
 #[derive(Debug, Clone, Default)]
 pub struct Due {
@@ -26,6 +32,14 @@ pub struct Due {
     pub why: String,
     pub rejected: String,
     pub next: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Unsummarized {
+    pub id: String,
+    pub project: String,
+    pub transcript: String,
+    pub last: f64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -98,6 +112,27 @@ impl Store {
         rows.collect()
     }
 
+    pub fn unsummarized(&self, since: f64, again: f64) -> rusqlite::Result<Vec<Unsummarized>> {
+        let mut stmt = self.db.prepare(UNSUMMARIZED)?;
+        let rows = stmt.query_map(params![since, again], |r| {
+            Ok(Unsummarized {
+                id: r.get(0)?,
+                project: opt(r, 1)?,
+                transcript: opt(r, 2)?,
+                last: r.get::<_, Option<f64>>(3)?.unwrap_or(0.0),
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn session_note_gone(&mut self, sid: &str) -> rusqlite::Result<()> {
+        let origin = format!("{SESSION_ORIGIN}{sid}");
+        if self.db.execute("delete from notes where origin = ?1", [&origin])? > 0 {
+            self.vecs = None;
+        }
+        Ok(())
+    }
+
     pub fn session_project(&self, sid: &str, project: &str) -> rusqlite::Result<()> {
         self.db.execute("update sessions set project = ?2 where id = ?1", params![sid, project]).map(|_| ())
     }
@@ -142,6 +177,7 @@ impl Store {
             let r = hit.note;
             if r.project == n.project
                 && !FILE_SOURCES.contains(&r.source.as_str())
+                && !r.origin.starts_with(SESSION_ORIGIN)
                 && similar(&r.title, n.title) >= DUP_SIM
             {
                 let body = if n.body.chars().count() > r.body.chars().count() { n.body } else { r.body.as_str() };
@@ -162,7 +198,7 @@ impl Store {
     }
 
     pub fn session_note(&mut self, sid: &str, project: &str, r: &Record) -> rusqlite::Result<Option<i64>> {
-        let origin = format!("s:{sid}");
+        let origin = format!("{SESSION_ORIGIN}{sid}");
         let body = if r.next.is_empty() { r.summary.clone() } else { format!("{}\nNext: {}", r.summary, r.next) };
         let title = if r.title.is_empty() { "session" } else { r.title.as_str() };
         let old: Option<i64> =
@@ -217,6 +253,50 @@ mod tests {
         assert_eq!(got, "alpha one\nbeta two\ngamma three\ndelta four");
         assert_eq!(titled("web", "Cart"), "web: Cart");
         assert_eq!(titled("web", "Web: Cart"), "Web: Cart");
+        drop(s);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_session_without_a_summary_is_due_for_a_note_until_the_note_is_fresh() {
+        let dir = std::env::temp_dir().join(format!("ltm-early-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mut s = Store::open(&dir).unwrap();
+        s.session_seen("a", "web", "C:/web", "C:/a.jsonl", false).unwrap();
+        s.session_seen("b", "web", "C:/web", "", false).unwrap();
+        s.session_seen("c", "web", "C:/web", "C:/c.jsonl", false).unwrap();
+        s.db.execute("update sessions set summary = 'done before' where id = 'c'", []).unwrap();
+        let due =
+            |s: &Store| -> Vec<String> { s.unsummarized(0.0, 600.0).unwrap().into_iter().map(|u| u.id).collect() };
+        assert_eq!(due(&s), ["a"]);
+        let rec =
+            Record { title: "web: cart".into(), summary: "Latest request: add a cart".into(), ..Record::default() };
+        let id = s.session_note("a", "web", &rec).unwrap().unwrap();
+        assert!(due(&s).is_empty());
+        s.db.execute("update sessions set last = last + 601 where id = 'a'", []).unwrap();
+        assert_eq!(due(&s), ["a"]);
+        s.db.execute("update notes set updated = updated + 700 where id = ?1", [id]).unwrap();
+        assert!(due(&s).is_empty());
+        s.db.execute("update sessions set ended = 1, last = last + 200 where id = 'a'", []).unwrap();
+        assert_eq!(due(&s), ["a"]);
+        assert!(s.unsummarized(now() + 10_000.0, 600.0).unwrap().is_empty());
+        let fact = NewNote {
+            project: "web",
+            kind: "fact",
+            title: "web: cart",
+            body: "the cart is a table",
+            source: "session",
+            session: "a",
+        };
+        let (other, new) = s.merge_note(&fact, &[]).unwrap().unwrap();
+        assert!(new && other != id);
+        s.session_note_gone("a").unwrap();
+        assert!(s.note(id).unwrap().is_none() && s.note(other).unwrap().is_some());
+        let mut stmt = s.db.prepare(&format!("explain query plan {UNSUMMARIZED}")).unwrap();
+        let plan: Vec<String> = stmt.query_map([0.0, 600.0], |r| r.get(3)).unwrap().map(Result::unwrap).collect();
+        let used = |index: &str| plan.iter().any(|p| p.contains(index));
+        assert!(used("sessions_last") && used("notes_origin"), "{plan:?}");
+        drop(stmt);
         drop(s);
         let _ = fs::remove_dir_all(&dir);
     }
