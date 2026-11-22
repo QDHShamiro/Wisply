@@ -4,6 +4,7 @@ mod episode;
 mod learn;
 mod run;
 mod schedule;
+mod script;
 mod store;
 
 use std::collections::{BTreeMap, HashSet};
@@ -21,11 +22,12 @@ use store::{file, load, save, score, slug, stem, text, usage};
 pub use align::{align, build, truthy};
 pub use episode::{close, observe};
 pub use run::run;
+pub use script::{code_of as script_code, project_of as script_project, values_in};
 pub use store::{load_all, step_line, words};
 
 const LIST_LINES: usize = 60;
 const NAME_WORDS: usize = 6;
-const SUBS: &str = "wisply routine list|show|save|rm|rename|forget|schedule|schedules";
+const SUBS: &str = "wisply routine list|show|save|rm|rename|forget|schedule|schedules|script";
 const PROMPTS: usize = 5;
 const OFFER_EVERY_S: f64 = 600.0;
 const OFFER_IGNORED: u64 = 5;
@@ -61,6 +63,23 @@ pub fn offer(d: &Daemon, ctx: &mut Ctx, typed: Vec<String>) -> Vec<String> {
     if typed.iter().map(|w| stem(w)).collect::<HashSet<_>>().len() < 2 {
         return Vec::new();
     }
+    let mut lines = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for mut r in fitting(d, ctx, &typed, t) {
+        let name = text(&r["name"]);
+        if lines.len() == OFFERS || !seen.insert(name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '-').into())
+        {
+            continue;
+        }
+        ctx.told.insert(format!("r:{name}"), t);
+        r["stats"]["offered"] = json!(r["stats"]["offered"].as_u64().unwrap_or(0) + 1);
+        let _ = save(&d.home, &r);
+        lines.push(offer_line(&r, &typed));
+    }
+    lines
+}
+
+fn fitting(d: &Daemon, ctx: &Ctx, typed: &[String], t: f64) -> Vec<Value> {
     let mut hits: Vec<(bool, usize, u64, Value)> = Vec::new();
     for r in load_all(&d.home) {
         let key = format!("r:{}", text(&r["name"]));
@@ -68,27 +87,34 @@ pub fn offer(d: &Daemon, ctx: &mut Ctx, typed: Vec<String>) -> Vec<String> {
         if r["flaky"] == true || ignored || t - ctx.told.get(&key).copied().unwrap_or(0.0) < OFFER_EVERY_S {
             continue;
         }
-        let (app_hit, other) = score(&typed, &r);
-        if app_hit && other >= 1 {
+        let (app_hit, other) = score(typed, &r);
+        let hit = if script::is_script(&r) { script::fits(other, &r, &ctx.cwd) } else { app_hit && other >= 1 };
+        if hit {
             hits.push((app_hit, other, r["stats"]["ok"].as_u64().unwrap_or(0), r));
         }
     }
     hits.sort_by_key(|h| std::cmp::Reverse((h.0, h.1, h.2)));
-    let mut lines = Vec::new();
-    for (_, _, _, mut r) in hits.into_iter().take(OFFERS) {
-        ctx.told.insert(format!("r:{}", text(&r["name"])), t);
-        r["stats"]["offered"] = json!(r["stats"]["offered"].as_u64().unwrap_or(0) + 1);
-        let _ = save(&d.home, &r);
-        lines.push(format!(
-            "Wisply routine fits this request (one call, swap the values): {}",
-            usage(&r, &BTreeMap::new())
-        ));
+    hits.into_iter().map(|h| h.3).collect()
+}
+
+fn offer_line(r: &Value, typed: &[String]) -> String {
+    if !script::is_script(r) {
+        return format!("Wisply routine fits this request (one call, swap the values): {}", usage(r, &BTreeMap::new()));
     }
-    lines
+    let values = script::swap(r, typed);
+    let all = r["params"].as_object().is_none_or(|p| p.len() == values.len());
+    let how = if all { "the values of this request are filled in" } else { "swap the values for this request" };
+    format!(
+        "Wisply saved the script that did this task before in this project. Run it instead of doing the steps again \
+         (one call, {how}): {} (code: wisply routine show {})",
+        usage(r, &values),
+        text(&r["name"])
+    )
 }
 
 fn listing(d: &Daemon, ctx: &mut Ctx, c: &Call) -> String {
     learn::prune(&d.home);
+    script::prune(&d.home);
     let mut rs = load_all(&d.home);
     if let Some(f) = c.val("f").filter(|f| !f.is_empty()) {
         let ws = terms(f);
@@ -123,7 +149,10 @@ fn listing(d: &Daemon, ctx: &mut Ctx, c: &Call) -> String {
             let extra = if ms > 0 { format!(" | {:.1} s", ms as f64 / 1000.0) } else { String::new() };
             let args: String = r["params"].as_object().into_iter().flatten().map(|(p, _)| format!(" {p}=")).collect();
             let flaky = if r["flaky"].as_bool() == Some(true) { " | FLAKY" } else { "" };
-            format!("{}{args} | {rate}{extra}{flaky}", text(&r["name"]))
+            let saved = n(r, "saved");
+            let saved = if saved > 0 { format!(" | ~{saved} tokens saved") } else { String::new() };
+            let kind = if script::is_script(r) { " | script" } else { "" };
+            format!("{}{args} | {rate}{extra}{saved}{kind}{flaky}", text(&r["name"]))
         })
         .collect();
     let body = format!("{}\n(steps: wisply routine show <name>)", lines.join("\n"));
@@ -148,6 +177,9 @@ fn show(r: &Value) -> String {
     }
     for (i, s) in r["steps"].as_array().into_iter().flatten().enumerate() {
         out.push(format!("{} {}", i + 1, step_line(s, None)));
+    }
+    if script::is_script(r) {
+        out.extend(script::show(r));
     }
     let err = st["last_error"].as_str().map(|e| format!(", last error: {e}")).unwrap_or_default();
     out.push(format!(
@@ -214,6 +246,7 @@ pub fn command(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
             Some(r) => format!("learned {}", text(&r["name"])),
             None => "nothing new to learn".into(),
         },
+        "script" => script::command(d, ctx, rest)?,
         "schedules" => schedule::listing(&d.home),
         "unschedule" => schedule::remove(&d.home, need(rest, "unschedule")?)?,
         "schedule" => schedule::add(&d.home, need(rest, "schedule")?, &rest[1..])?,

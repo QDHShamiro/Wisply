@@ -1,6 +1,8 @@
 wisply codemode "<javascript>"      many steps in one call; only the result comes back
   wisply codemode - < script.js      code from stdin    --file script.js   code from a file
   --yes / -y   the user said yes to a risky step     --timeout 2m   (default and max 10m)
+  --arg pr=100   a value the code reads as args.pr (data, never pasted into the code)
+  --routine <name>   run a saved script routine (same as wisply run <name> k=v)
 
 The last expression is the result (or use return). Top-level await works.
 Nothing printed, nothing returned -> "ok". console.log lines come first.
@@ -25,3 +27,7 @@ Safety: the same deny and ask rules as Claude Code, Codex, Gemini and Cursor, pl
 risk classes (delete outside the project, loosening AI rights, money/keys/upload, autostart).
 A risky step stops the script before it runs, finished calls stay done; ask the user, then
 run the same code again with --yes. A denied step never runs. Off switch: wisply config codemode off
+
+Saved: a working script with 2+ calls becomes a routine on this PC (once per script, no secrets,
+--yes is never kept): wisply run <name> k=v replays it, wisply routine show <name> shows the code.
+A broken one is replaced by the next working script of the session. Off: wisply config codemode_save off

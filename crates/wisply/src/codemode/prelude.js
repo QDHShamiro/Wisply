@@ -293,7 +293,8 @@
     }
   };
 
-  Object.assign(g, { $, wisply, read, write, edit, glob, sleep, shell: info.shell, os: info.os, cwd: info.cwd });
+  const args = Object.freeze(Object.assign({}, info.args || {}));
+  Object.assign(g, { $, wisply, read, write, edit, glob, sleep, args, shell: info.shell, os: info.os, cwd: info.cwd });
 
   return {
     settle,

@@ -138,7 +138,8 @@ fn tool() -> Value {
                 "cmd": {"type": "string", "description": "one wisply command line, e.g. snap -f price"},
                 "code": {"type": "string", "description": "code mode instead of cmd: JavaScript that runs many steps in one call, e.g. const [s, r] = await Promise.all([$`git status --short`, wisply`recall build`]); ({s, r}). Only the result comes back"},
                 "yes": {"type": "boolean", "description": "code mode: the user said yes to the risky step it stopped at"},
-                "timeout": {"type": "string", "description": "code mode time limit like 90s or 5m (default and max 10m)"}
+                "timeout": {"type": "string", "description": "code mode time limit like 90s or 5m (default and max 10m)"},
+                "args": {"type": "object", "additionalProperties": {"type": "string"}, "description": "code mode values the script reads as args.name, e.g. {\"pr\": \"101\"}"}
             },
             "additionalProperties": false
         },
@@ -372,6 +373,13 @@ fn delegate(exe: &Path, argv: &[String], secret: Option<&str>, input: Option<&st
 }
 
 fn reply_content(reply: Reply) -> Value {
+    if let Some((argv, rest)) = wisply_proto::handoff(&reply.out) {
+        let mut done = run_code(Code { argv, input: None });
+        if let Some(text) = done["content"][0]["text"].as_str().filter(|_| !rest.trim().is_empty()) {
+            done["content"][0]["text"] = json!(format!("{text}\n{}", rest.trim_end()));
+        }
+        return done;
+    }
     let mut content = vec![json!({"type": "text", "text": reply.out})];
     if !reply.image.is_empty()
         && let Ok(bytes) = fs::read(&reply.image)

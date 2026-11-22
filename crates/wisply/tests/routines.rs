@@ -122,3 +122,57 @@ fn a_failed_routine_is_repaired_from_the_steps_done_by_hand() {
     let (_, shown) = home.run(&["routine", "show", "fixme"]);
     assert!(shown.starts_with("fixme v2 (saved, ") && shown.contains("\n1 wait 20\n2 wait 30\n3 wait 40\n"), "{shown}");
 }
+
+#[test]
+fn a_code_mode_script_is_saved_once_replayed_with_values_and_replaced_after_it_breaks() {
+    let home = Home::new("scripts");
+    let code = "await wisply`ping`;\nif (args.word === 'boom') throw new Error('boom');\nawait wisply`ping`;\nreturn 'word ' + args.word";
+    let (c, out) = home.run(&["codemode", code, "--arg", "word=alpha"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("word alpha\nsaved as routine ping -> next time: wisply run ping word=alpha"), "{out}");
+    let (_, out) = home.run(&["codemode", code, "--arg", "word=alpha"]);
+    assert!(out.contains("this script is saved as routine ping"), "{out}");
+    let (c, out) = home.run(&["run", "ping", "word=beta"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("word beta"), "{out}");
+    assert!(!out.contains("codemode-routine"), "{out}");
+    let (_, out) = home.run(&["routine", "show", "ping"]);
+    assert!(out.contains("  2 if (args.word === 'boom')"), "{out}");
+    let (_, out) = home.run(&["routines"]);
+    assert!(out.contains("ping") && out.contains("| script"), "{out}");
+    let (c, out) = home.run(&["run", "ping", "word=boom"]);
+    assert_eq!(c, 1, "{out}");
+    assert!(out.contains("routine ping failed -> try: fix the script"), "{out}");
+    let fixed = "await wisply`ping`;\nawait wisply`ping`;\nreturn 'fixed ' + args.word";
+    let (c, out) = home.run(&["codemode", fixed, "--arg", "word=gamma"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("fixed routine ping (now v2) -> next time: wisply run ping word=gamma"), "{out}");
+    let (_, out) = home.run(&["run", "ping", "word=delta"]);
+    assert!(out.contains("fixed delta"), "{out}");
+    let ask = json!({"prompt": "Rechne die Summe der Spalte betrag fuer Monat 2026-10"}).to_string();
+    home.run(&["suggest", &ask]);
+    let monthly = "await wisply`ping`;\nawait wisply`ping`;\nreturn 'summe spalte betrag ' + \"2026-10\"";
+    let (_, out) = home.run(&["codemode", monthly]);
+    let line = "saved as routine summe-spalte-betrag -> next time: wisply run summe-spalte-betrag month=2026-10";
+    assert!(out.contains(line), "{out}");
+    let (_, out) = home.run(&["run", "summe-spalte-betrag", "month=2026-11"]);
+    assert!(out.contains("summe spalte betrag 2026-11"), "{out}");
+    let better = "await wisply`ping`;\nawait wisply`ping`;\nreturn 'summe der spalte betrag: ' + \"2026-10\"";
+    let (_, out) = home.run(&["codemode", better]);
+    assert!(out.contains("updated routine summe-spalte-betrag (now v2)"), "{out}");
+    let ask = json!({"prompt": "Rechne die Summe der Spalte betrag fuer Monat 2026-12"}).to_string();
+    let (_, offered) = home.run(&["suggest", &ask]);
+    let line = "Wisply saved the script that did this task before in this project. Run it instead of doing the steps \
+                again (one call, the values of this request are filled in): wisply run summe-spalte-betrag \
+                month=2026-12 (code: wisply routine show summe-spalte-betrag)";
+    assert!(offered.contains(line), "{offered}");
+    let (_, out) = home.run(&["run", "summe-spalte-betrag", "month=2026-12"]);
+    assert!(out.contains("summe der spalte betrag: 2026-12"), "{out}");
+    assert!(!home.run(&["routines"]).1.contains("summe-spalte-betrag-2"));
+    let single = "await wisply`ping`;\nreturn 1";
+    let (_, out) = home.run(&["codemode", single]);
+    assert!(!out.contains("routine"), "{out}");
+    assert_eq!(home.run(&["config", "codemode_save", "off"]).0, 0);
+    let (_, out) = home.run(&["codemode", "await wisply`ping`;\nawait wisply`ping`;\nreturn 2"]);
+    assert!(!out.contains("saved as routine"), "{out}");
+}

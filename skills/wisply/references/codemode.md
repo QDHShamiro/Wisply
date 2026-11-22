@@ -20,3 +20,14 @@ for (const f of await glob("src/**/*.rs")) if ((await read(f)).includes("todo!")
   step runs. Ask the user, then run the same code with `--yes` (`"yes": true` over MCP). A denied step never runs.
 - Plain form steps without logic can also be one `wisply do "fill Email=a@b.c; click Continue; expect Welcome"`.
 - Three single calls within two minutes bring a tip, every time. Off for this PC: `wisply config codemode off`.
+- Values: `--arg pr=100` (MCP `args: {"pr": "100"}`) is `args.pr` in the code. Pass changing values this way, never
+  paste them into the code, so the same script can be saved and replayed.
+- Saved: a working script with 2+ calls becomes a local routine, once per script, named from the request (never
+  with secrets, `--yes` never kept). A value from the request left in the code (e.g. `2026-10`) is saved as
+  `args.month`. The reply names it: `wisply run <name> pr=101` replays it in one call,
+  `wisply routine show <name>` prints the code. When a saved script fails, fix it and run the fixed one with
+  `wisply codemode`; it replaces the routine as a new version (so does a corrected script for the same task in the
+  same session). Unused: gone after 30 days (90 from 5 runs).
+  Off: `wisply config codemode_save off`.
+- Heavy or hot work as a Rust tool: `wisply kit add <name> "what it does" --rust tool.rs` (or a Cargo folder),
+  built once, rebuilt only when the code changes; `wisply kit run <name> [args]`.

@@ -119,7 +119,17 @@ fn the_command_line_is_read() {
     let args = |w: &[&str]| w.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
     let none = || Err("no stdin".to_string());
     let ask = parse(&args(&["--yes", "--timeout", "90s", "1 +", "1"]), none).unwrap().unwrap();
-    assert_eq!(ask, Ask { yes: true, limit: Duration::from_secs(90), code: "1 + 1".into() });
+    assert_eq!(ask, Ask { yes: true, limit: Duration::from_secs(90), code: "1 + 1".into(), ..Ask::default() });
+    let ask = parse(&args(&["--arg", "pr=101", "--arg=note=a=b", "args.pr"]), none).unwrap().unwrap();
+    assert_eq!((ask.args["pr"].as_str(), ask.args["note"].as_str(), ask.code.as_str()), ("101", "a=b", "args.pr"));
+    assert_eq!(parse(&args(&["--arg", "1x=2", "x"]), none), Err("--arg takes name=value, got '1x=2'".into()));
+    assert_eq!(parse(&args(&["--arg", "x"]), none), Err("--arg takes name=value, got 'x'".into()));
+    let replay = parse(&args(&["--routine", "ship-pr", "--arg", "pr=7"]), none).unwrap().unwrap();
+    assert_eq!((replay.routine.as_deref(), replay.code.as_str(), replay.args.len()), (Some("ship-pr"), "", 1));
+    assert_eq!(
+        parse(&args(&["--routine=ship-pr", "1"]), none),
+        Err("--routine runs saved code, so leave the code out".into())
+    );
     assert_eq!(
         parse(&args(&["--timeout=1h", "x"]), none).map(|a| a.map(|a| a.limit)),
         Err("--timeout takes a time like 90s or 5m".into())
@@ -180,6 +190,7 @@ fn real_shell_and_files_run_through_the_workers() {
         shell: shell::find(),
         rules: gate::Rules::default(),
         deadline,
+        args: std::collections::BTreeMap::from([("pr".to_string(), "101".to_string())]),
     };
     let (tx, rx) = mpsc::channel();
     let (runner, shared) = host::start(setup, tx);
@@ -189,12 +200,15 @@ await write("notes/a.txt", "one\ntwo\n");
 const n = await edit("notes/a.txt", "two", "three");
 const [said, list, text] = await Promise.all([$`echo ${name}`.text(), glob("notes/*.txt"), read("notes/a.txt")]);
 const bad = await $`exit 4`.nothrow();
-({ said: said.trim(), list, n, text, bad: bad.exitCode })
+({ said: said.trim(), list, n, text, bad: bad.exitCode, pr: args.pr, frozen: Object.isFrozen(args) })
 "#;
     let ran = engine::run(code, Rc::new(runner), &rx, deadline);
     assert_eq!(
         ran.verdict,
-        Verdict::Value(Some(r#"{"said":"it's","list":["notes/a.txt"],"n":1,"text":"one\nthree\n","bad":4}"#.into()))
+        Verdict::Value(Some(
+            r#"{"said":"it's","list":["notes/a.txt"],"n":1,"text":"one\nthree\n","bad":4,"pr":"101","frozen":true}"#
+                .into()
+        ))
     );
     assert_eq!(shared.finished.load(std::sync::atomic::Ordering::SeqCst), 6);
     let _ = std::fs::remove_dir_all(&dir);

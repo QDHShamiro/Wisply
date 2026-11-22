@@ -23,6 +23,10 @@ pub fn from_args(args: &Value) -> Option<Code> {
     if let Some(limit) = limit {
         argv.push(format!("--timeout={limit}"));
     }
+    for (k, v) in args.get("args").and_then(Value::as_object).into_iter().flatten() {
+        let v = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+        argv.push(format!("--arg={k}={v}"));
+    }
     Some(finish(argv, code.trim()))
 }
 
