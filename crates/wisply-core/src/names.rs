@@ -40,7 +40,7 @@ const SYSTEM: &[&str] = &[
     "mobile",
     "notify",
 ];
-const MEMORY: &[&str] = &["remember", "recall", "forget", "todo", "memory", "hook", "wiki", "code"];
+const MEMORY: &[&str] = &["remember", "recall", "forget", "todo", "bug", "list", "memory", "hook", "wiki", "code"];
 const MEMORY_LANE: &[&str] = &["suggest", "tokens", "grep", "squeeze", "board", "pc", "agents", "mobile", "notify"];
 const HOOK_LANE: &[&str] = &["suggest", "hook"];
 pub const SHARED: &[&str] = &["snap", "click", "type", "press", "shot", "scroll", "hover", "drag"];
@@ -183,9 +183,9 @@ mod tests {
 
     #[test]
     fn the_known_names_are_the_2x_list_secure_and_the_window() {
-        let want = "agents back bench brain call channels check claude click clip close code config console demo desktop dialog \
+        let want = "agents back bench brain bug call channels check claude click clip close code config console demo desktop dialog \
                     dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames grep headless help \
-                    hover improve inbox js keep keys kit launch listen log memory mobile more net notify open pc peek phone press progress read recall record \
+                    hover improve inbox js keep keys kit launch list listen log memory mobile more net notify open pc peek phone press progress read recall record \
                     reload remember reply research routine routines run scroll search secure select selftest shot skill snap squeeze \
                     status stop tab table tabs text think todo tokens tools type ui unread update upload version viewport voice wait watch \
                     wiki windows";

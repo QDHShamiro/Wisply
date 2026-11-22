@@ -50,6 +50,80 @@ export async function plain(...argv: string[]): Promise<string> {
   return r.out;
 }
 
+export async function boardWith<T>(body: string, ...args: string[]): Promise<T> {
+  const r = await call(["board", ...args], body);
+  if (r.code !== 0) throw new Error(clean(r.out));
+  return JSON.parse(r.out) as T;
+}
+
+export type Entry = {
+  id: number;
+  task: string;
+  kind: string;
+  priority: string;
+  status: string;
+  wait: string;
+  project: string;
+  list: string;
+  assignee: string;
+  who: string;
+  source: string;
+  server: string;
+  level: string;
+  count: number;
+  origin: string;
+  first_seen: number;
+  last_seen: number;
+  created: number;
+  updated: number;
+  has_body: boolean;
+  has_log: boolean;
+  last_note: string;
+};
+export type Change = { id: number; at: number; who: string; field: string; old: string; new: string; batch: string; undone: boolean | number };
+export type EntryFull = Entry & { body: string; excerpt: string; note: string; fingerprint: string; muted: boolean; history: Change[] };
+export type ServerRow = { name: string; enabled: boolean; log: string; checked: number; ok: number; error: string; started: number; bugs: number; warns: number; usable: boolean };
+export type Servers = { rows: ServerRow[]; problem: string; on: boolean };
+export type Mute = { fingerprint: string; server: string; title: string; at: number };
+export type ListRun = Run & { project: string };
+export type ListData = {
+  rows: Entry[];
+  mutes: Mute[];
+  sessions: ListRun[];
+  servers: Servers;
+  projects: string[];
+  kinds: string[];
+  prios: string[];
+  statuses: string[];
+  waits: string[];
+  now: number;
+};
+export type MemoryRow = NoteRow & { snippet: string; hits: number };
+export type MemoryData = {
+  shelves: { source: string; count: number }[];
+  sessions_total: number;
+  projects: { name: string; count: number }[];
+  page: number;
+  offset: number;
+  total: number;
+  rows?: MemoryRow[];
+  sessions?: ListRun[];
+};
+export type IntelData = {
+  days: string[];
+  daily: Record<string, number[]>;
+  score: number[];
+  gain: number[];
+  knowledge: number[];
+  points: [string, number][];
+  weeks: Record<string, [number, number]>;
+  totals: Record<string, number>;
+  best: number;
+  best_day: string | null;
+  first: number;
+  now: number;
+};
+
 export type Card = { name: string; notes: number; todos: number; sessions: number; last: number; title: string };
 export type Pulse = { pid: number; up: number; working: number; queued: number; drafts: number; notes: number; problem: string };
 export type Home = Pulse & { projects: Card[] };

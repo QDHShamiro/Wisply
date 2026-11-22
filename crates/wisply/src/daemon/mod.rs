@@ -23,6 +23,7 @@ mod research;
 mod route;
 mod routines;
 mod secure;
+mod servers;
 mod squeeze;
 mod system;
 mod think;
@@ -229,6 +230,7 @@ pub fn serve() -> ExitCode {
     memory::index::start(d.home.clone());
     pc::start(d.home.clone());
     agents::start(d.home.clone());
+    servers::start(d.home.clone());
     {
         let quiet = Arc::clone(&d);
         let gate = crate::update::Gate {

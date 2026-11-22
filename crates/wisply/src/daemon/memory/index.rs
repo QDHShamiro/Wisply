@@ -114,6 +114,7 @@ fn pass(
         p.clear();
     }
     learner::tick(home, store, SOON.swap(false, Ordering::Relaxed));
+    super::tidy::tick(home, store);
     store.warm();
     embed_some(home, store);
     super::code::background(home);

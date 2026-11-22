@@ -25,6 +25,8 @@ video   watch <link|file|e40> [\"question\"] [--from 1:00 --to 2:00] [--at 0:10,
         listen <link|file|e40> [\"question\"] [--from --to] [--live] [--lang de] [--local]   shot --ask \"question\"
 memory  recall \"words\" [--all] [--max n] | recall <id>   remember \"fact\" [--kind k]   forget <id>
         todo [--all] | todo add \"task\" [--list name] [--doing] | todo done|doing|drop|open <id> [note] | todo note <id> \"text\"
+        todo add \"task\" [--kind bug|feature|task|idea] [--prio high|mid|low] [--project p] | todo wait <id> restart|you | todo prio|kind <id> <value> | todo undo <id>
+        bug add <server> \"what is broken\" [--prio high] | bug [server]   list [--server s] [--kind k] [--warn] [--done] | list servers | list check [server] | list ignore <id> | list accept|reject <id> (one list in wisply ui: bugs, features, tasks, ideas, server logs)
         memory [learn|on|off]   memory lessons | memory unlearn <n> (fixes learned from failed commands)
         wiki | wiki accept <n> [folder] | wiki drop <n> | wiki show <n> (drafts in the vault inbox)
         ui (a window: projects, notes, to-dos, graph, what each session does)
@@ -44,7 +46,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
         agents [--all] [--json] (every Claude session: running, waiting, done, limit, tokens, cost estimate; resumes limit-stopped background sessions once after the reset)
         mobile pair [--name handy] | list | revoke <name> | status | on | off (phone API for the Wisply app, localhost and Tailscale only)
-        notify event <done|waiting|ci_red|ci_green|limit|resumed|disk> <title> [text] (Windows toast that never takes focus, plus the phone feed)
+        notify event <done|waiting|ci_red|ci_green|limit|resumed|disk|bug> <title> [text] (Windows toast that never takes focus, plus the phone feed)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
 Output is plain text, one line per action. Big results go to a file (path printed).

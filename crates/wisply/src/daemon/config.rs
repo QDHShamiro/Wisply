@@ -82,6 +82,9 @@ fn defaults() -> Map<String, Value> {
         ("push_server", json!("")),
         ("push_topic", json!("")),
         ("secure", json!(true)),
+        ("servers", json!(true)),
+        ("servers_file", json!("")),
+        ("list_tidy", json!(true)),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }

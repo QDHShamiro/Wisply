@@ -30,6 +30,7 @@ wisply-proto.workspace = true
 wisply-squeeze.workspace = true
 wisply-think.workspace = true
 wisply-pc.workspace = true
+wisply-servers.workspace = true
 pdf-extract.workspace = true
 regex.workspace = true
 roxmltree.workspace = true

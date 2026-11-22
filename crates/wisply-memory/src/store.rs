@@ -98,18 +98,6 @@ struct Cand {
     lex: Option<Lexical>,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct Todo {
-    pub id: i64,
-    pub project: String,
-    pub list: String,
-    pub task: String,
-    pub status: String,
-    pub note: String,
-    pub created: f64,
-    pub updated: f64,
-}
-
 pub struct NewNote<'a> {
     pub project: &'a str,
     pub kind: &'a str,
@@ -165,19 +153,6 @@ pub(crate) fn note_of(row: &Row) -> rusqlite::Result<Note> {
     })
 }
 
-pub(crate) fn todo_of(row: &Row) -> rusqlite::Result<Todo> {
-    Ok(Todo {
-        id: row.get("id")?,
-        project: text(row, "project"),
-        list: text(row, "list"),
-        task: text(row, "task"),
-        status: text(row, "status"),
-        note: text(row, "note"),
-        created: real(row, "created"),
-        updated: real(row, "updated"),
-    })
-}
-
 pub fn halves(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|x| f16::from_f32(*x).to_le_bytes()).collect()
 }
@@ -198,6 +173,7 @@ impl Store {
         for sql in MIGRATE {
             let _ = db.execute(sql, []);
         }
+        super::list::migrate(&db);
         let key = dir.join("memory.db");
         Ok(Store { db, vecs: None, lex: shared(&key), seen: None })
     }
@@ -417,55 +393,6 @@ impl Store {
             .filter_map(|(id, score, sim)| notes.remove(&id).map(|note| Hit { note, score, sim }))
             .collect();
         Ok(super::rank::fold(out, limit))
-    }
-
-    pub fn todo(&self, id: i64) -> rusqlite::Result<Option<Todo>> {
-        self.db.query_row("select * from todos where id = ?1", [id], todo_of).optional()
-    }
-
-    pub fn todo_add(&self, project: &str, task: &str, list: &str, status: &str) -> rusqlite::Result<i64> {
-        let t = now();
-        self.db.execute(
-            "insert into todos(project, list, task, status, note, created, updated, origin) \
-             values (?1, ?2, ?3, ?4, '', ?5, ?5, '')",
-            params![project, list, oneline(task, TASK_CHARS), status, t],
-        )?;
-        Ok(self.db.last_insert_rowid())
-    }
-
-    pub fn todo_set(&self, id: i64, status: Option<&str>, note: Option<&str>) -> rusqlite::Result<Option<Todo>> {
-        let Some(old) = self.todo(id)? else { return Ok(None) };
-        let mut text = old.note.clone();
-        if let Some(add) = note.map(str::trim).filter(|n| !n.is_empty()) {
-            let [_, m, d, h, mi, _] = local_parts(now());
-            let words = add.split_whitespace().collect::<Vec<_>>().join(" ");
-            if !text.is_empty() {
-                text.push('\n');
-            }
-            text.push_str(&format!("{m:02}-{d:02} {h:02}:{mi:02} {words}"));
-        }
-        self.db.execute(
-            "update todos set status = ?1, note = ?2, updated = ?3 where id = ?4",
-            params![status.unwrap_or(&old.status), text, now(), id],
-        )?;
-        self.todo(id)
-    }
-
-    pub fn todos(&self, project: Option<&str>, open_only: bool) -> rusqlite::Result<Vec<Todo>> {
-        let mut sql = String::from("select * from todos where 1 = 1");
-        if project.is_some() {
-            sql.push_str(" and project = ?1");
-        }
-        if open_only {
-            sql.push_str(" and status in ('todo', 'doing')");
-        }
-        sql.push_str(" order by list, status = 'doing' desc, id");
-        let mut stmt = self.db.prepare(&sql)?;
-        let rows = match project {
-            Some(p) => stmt.query_map([p], todo_of)?.collect::<Result<Vec<_>, _>>()?,
-            None => stmt.query_map([], todo_of)?.collect::<Result<Vec<_>, _>>()?,
-        };
-        Ok(rows)
     }
 }
 
