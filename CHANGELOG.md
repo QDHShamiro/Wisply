@@ -8,6 +8,16 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply codemode`: code mode for every AI. The AI writes one short JavaScript and Wisply runs it in a sandbox
+  (QuickJS, no network, no `require`): `` $`…` `` shell commands with safe quoting, `` wisply`…` `` for every wisply
+  command, `read`, `write`, `edit`, `glob`, `sleep`, loops and `Promise.all` (up to 8 calls at once, 10 minutes at
+  most). Only the result and `console.log` lines come back. Code comes as an argument, from `--file`, from stdin or
+  through the new `code`, `yes` and `timeout` arguments of the MCP tool. Errors name the line, its source and how
+  many calls already finished. Every step passes the deny and ask rules of Claude Code, Codex, Gemini and Cursor and
+  the four risk classes; a risky step stops the script before it runs and the same code runs again with `--yes`,
+  deleting inside the project passes. Six quick single calls bring a one-time tip. On by default,
+  `wisply config codemode off` turns it off. Measured: five checks over git, files and memory took 6 calls and ~674
+  tokens one by one, and 1 call and ~155 tokens in code mode.
 - `wisply pupil info <YouTube link>` and `wisply pupil captions <YouTube link>`: Wisply reads a YouTube video without
   watching it. `info` names title, channel, length, picture size, sound, spoken language, chapters and which text the
   video has. `captions` prints its subtitles (or, without any, the automatic captions of the spoken language) as

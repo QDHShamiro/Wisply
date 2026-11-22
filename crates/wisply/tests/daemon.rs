@@ -428,3 +428,22 @@ fn do_runs_steps_in_order_waits_and_stops_at_the_first_error() {
     let (_, out) = home.run(&["do", "do ping"]);
     assert!(out.starts_with("err: do cannot run inside do"), "{out}");
 }
+
+#[test]
+fn quick_single_calls_bring_the_code_mode_tip_once() {
+    let home = Home::new("tip", true);
+    let tip = "! tip: many single wisply calls in a row -> wisply codemode";
+    let said: Vec<bool> = (1..=8).map(|i| home.run(&[&format!("zz{i}")]).1.contains(tip)).collect();
+    assert_eq!(said, vec![false, false, false, false, false, true, false, false]);
+    let Some(token) = wisply_proto::key_token(&home.0) else { panic!("no key") };
+    let mark = json!({"token": token, "argv": ["codemode", "mark"], "sid": "cm"}).to_string();
+    let Ok(reply) = wisply_proto::exchange_once(&home.0, mark.as_bytes()) else { panic!("no daemon") };
+    let reply: Value = serde_json::from_slice(&reply).unwrap();
+    assert_eq!(reply["out"], "ok");
+    assert!(!(1..=8).any(|i| home.run_as("cm", &[&format!("zz{i}")]).1.contains(tip)));
+    assert_eq!(home.run(&["config", "codemode", "off"]).0, 0);
+    assert!(!(1..=8).any(|i| home.run_as("off", &[&format!("zz{i}")]).1.contains(tip)));
+    for _ in 0..6 {
+        assert!(!home.run_as("ui", &["snap"]).1.contains(tip));
+    }
+}

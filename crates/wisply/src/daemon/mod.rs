@@ -163,6 +163,7 @@ enum Msg {
     Hello(Map<String, Value>),
 }
 
+pub use config::{load as load_config, on as config_on};
 pub(crate) use doctor::install as net;
 pub use doctor::run as doctor;
 #[cfg(windows)]
