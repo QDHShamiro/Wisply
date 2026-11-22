@@ -130,7 +130,7 @@ fn build(dir: &Path, name: &str, src: &Source) -> Result<PathBuf, Fail> {
                 .lines()
                 .filter_map(|l| serde_json::from_str::<Value>(l).ok())
                 .filter_map(|v| v["executable"].as_str().map(PathBuf::from))
-                .last()
+                .next_back()
                 .ok_or_else(|| Fail::hint(format!("{} builds no program", krate.display()), "give it a src/main.rs"))
         }
     }
