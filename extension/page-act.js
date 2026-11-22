@@ -126,9 +126,13 @@
     if (field.isContentEditable) {
       field.innerText = text;
     } else {
-      const proto = field.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
-      setter.call(field, text);
+      const win = (field.ownerDocument && field.ownerDocument.defaultView) || window;
+      const proto = field.tagName === "TEXTAREA" ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
+      try {
+        Object.getOwnPropertyDescriptor(proto, "value").set.call(field, text);
+      } catch (e) {
+        field.value = text;
+      }
     }
     field.dispatchEvent(new Event("input", { bubbles: true }));
     field.dispatchEvent(new Event("change", { bubbles: true }));
@@ -317,6 +321,13 @@
   }
 
   function mark(r, id, file) {
+    if (!r && file) {
+      const all = document.querySelectorAll("input[type=file]");
+      if (all.length > 1) return { many: all.length };
+      if (!all.length) return { nofile: true };
+      all[0].setAttribute("data-lt-mark", id);
+      return { ok: true, tag: "INPUT", type: "file" };
+    }
     const found = get(r);
     if (!found) return { gone: true };
     const el = file ? fileInput(found) : found;

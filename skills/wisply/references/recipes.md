@@ -21,7 +21,8 @@ wisply do "fill Name=Max Street=Main 1 City=Berlin; select e9 Germany; check e12
 
 ## Upload and download
 ```
-wisply upload e5 C:/Users/me/Desktop/logo.png
+wisply upload C:/Users/me/Desktop/logo.png        (page with one file field)
+wisply upload e5 C:/Users/me/Desktop/logo.png     (the upload button or file field e5)
 wisply click "Export CSV"
 wisply downloads            (done 0.2 MB C:\Users\me\Downloads\export.csv)
 ```
