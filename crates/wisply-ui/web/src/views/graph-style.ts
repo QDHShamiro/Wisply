@@ -5,8 +5,12 @@ import { EDGE_FLAGS, GLOW_FLAGS, NODE_FLAGS, type Glow } from "./graph-light";
 
 export const LABEL_MIN = 7;
 const LIFT_MAX = 4;
-const LABEL_SIZE = 13;
+export const LABEL_SIZE = 13;
 const LIT_EDGE = 1.6;
+const EDGE = 0.3;
+const GROW = 0.5;
+const ZOOM_IN = 0.004;
+const ZOOM_OUT = 3;
 const FONT = "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif";
 const VERTEX = "#version 300 es\nvoid main(){gl_Position=vec4(float((gl_VertexID<<1)&2)*2.0-1.0,float(gl_VertexID&2)*2.0-1.0,0.0,1.0);}";
 const FRAGMENT = "#version 300 es\nprecision mediump float;uniform vec4 u_tint;out vec4 o_color;void main(){o_color=u_tint;}";
@@ -69,6 +73,10 @@ export function veil(tint: Rgba, doubles: number, on: () => boolean) {
   };
 }
 
+export function grow(ratio: number): number {
+  return Math.max(ZOOM_IN, Math.min(1, ratio)) ** GROW;
+}
+
 function text(t: Tones) {
   return { labelColor: t.label, labelFont: FONT, labelSize: LABEL_SIZE } as const;
 }
@@ -79,7 +87,9 @@ function settings() {
     labelDensity: 0.35,
     labelGridCellSize: 110,
     minEdgeThickness: 0.8,
-    zoomToSizeRatioFunction: () => 1,
+    minCameraRatio: ZOOM_IN,
+    maxCameraRatio: ZOOM_OUT,
+    zoomToSizeRatioFunction: grow,
   };
 }
 
@@ -91,7 +101,7 @@ export function rules(t: Tones) {
     { whenState: "mute", then: { labelVisibility: "hidden" } } as const,
     { whenState: "off", then: { visibility: "hidden" } } as const,
   ];
-  const edges = [DEPTHLESS_STYLES.edges, { color: t.edge, depth: "edges" } as const, { whenState: "off", then: { visibility: "hidden" } } as const];
+  const edges = [DEPTHLESS_STYLES.edges, { color: { attribute: "color", defaultValue: t.edge }, size: EDGE, depth: "edges" } as const, { whenState: "off", then: { visibility: "hidden" } } as const];
   return { nodes, edges };
 }
 
@@ -100,8 +110,7 @@ export function glowRules(t: Tones) {
     DEPTHLESS_STYLES.nodes,
     {
       ...text(t),
-      labelVisibility: "visible",
-      backdropVisibility: "visible",
+      label: { attribute: "tag" },
       backdropColor: t.back,
       backdropBorderColor: t.backLine,
       backdropBorderWidth: 1,
@@ -109,6 +118,7 @@ export function glowRules(t: Tones) {
       backdropShadowColor: t.shadow,
       depth: "nodes",
     } as const,
+    { whenData: "plate", then: { labelVisibility: "visible", backdropVisibility: "visible" } } as const,
     { whenData: "pin", then: { depth: "pin" } } as const,
     { whenState: "hush", then: { labelVisibility: "hidden", backdropVisibility: "hidden" } } as const,
   ];

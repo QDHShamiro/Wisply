@@ -118,3 +118,54 @@ fn wrong_calls_say_what_is_missing() {
     assert!(!root(&home).join("x").exists());
     let _ = fs::remove_dir_all(&home);
 }
+
+#[test]
+fn a_rust_tool_is_built_once_and_again_only_after_a_change() {
+    let home = home("rust");
+    let given = home.join("hi.rs");
+    fs::write(&given, "fn main() { println!(\"hi {}\", std::env::args().nth(1).unwrap_or_default()); }\n").unwrap();
+    let made = say(&home, &["add", "hi", "Says hi", "--rust", &given.to_string_lossy()]);
+    assert!(made.ends_with("Built with Rust, it builds again only when the code changes."), "{made}");
+    let dir = root(&home).join("hi");
+    let src = load(&home, "hi").unwrap().rust.unwrap();
+    let (exe, again) = rust::ready(&dir, "hi", &src).unwrap();
+    assert!(!again && exe.is_file());
+    let line = argv(&home, &["hi", "Ada"]).unwrap();
+    assert_eq!(line, [exe.to_string_lossy().as_ref(), "Ada"]);
+    let out = Command::new(&line[0]).args(&line[1..]).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "hi Ada");
+    fs::write(dir.join("hi.rs"), "fn main() { println!(\"yo\"); }\n").unwrap();
+    assert!(rust::ready(&dir, "hi", &src).unwrap().1);
+    fs::write(dir.join("hi.rs"), "fn main() { nope }\n").unwrap();
+    let broke = rust::ready(&dir, "hi", &src).unwrap_err().text();
+    assert!(broke.contains("the Rust tool 'hi' did not build:") && broke.contains("-> try: fix the code"), "{broke}");
+    let other = home.join("note.txt");
+    fs::write(&other, "x").unwrap();
+    let wrong = say(&home, &["add", "x", "Does things", "--rust", &other.to_string_lossy()]);
+    assert!(wrong.contains("is neither a .rs file nor a Cargo folder"), "{wrong}");
+    let both = say(&home, &["add", "x", "Does things", "--rust", "a.rs", "--file", "b.py"]);
+    assert!(both.starts_with("err: give --file or --rust, not both"), "{both}");
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_cargo_folder_tool_is_built_from_where_it_lives() {
+    let home = home("cargo");
+    let krate = home.join("greet");
+    fs::create_dir_all(krate.join("src")).unwrap();
+    fs::write(
+        krate.join("Cargo.toml"),
+        "[package]\nname = \"greet\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+    )
+    .unwrap();
+    fs::write(krate.join("src").join("main.rs"), "fn main() { println!(\"hello\"); }\n").unwrap();
+    let made = say(&home, &["add", "greet", "Greets", "--rust", &krate.to_string_lossy()]);
+    assert!(made.ends_with("Built with Rust, it builds again only when the code changes."), "{made}");
+    assert!(say(&home, &["show", "greet"]).contains("rust crate: "));
+    let line = argv(&home, &["greet"]).unwrap();
+    let out = Command::new(&line[0]).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "hello");
+    let src = load(&home, "greet").unwrap().rust.unwrap();
+    assert!(!rust::ready(&root(&home).join("greet"), "greet", &src).unwrap().1);
+    let _ = fs::remove_dir_all(&home);
+}

@@ -301,14 +301,14 @@ section + section { margin-top: 4px; }
 .editor .cm-editor { min-height: 60vh; font-size: 14.5px; background: var(--panel); }
 .editor .cm-editor.cm-focused { outline: none; }
 
-.graph { position: relative; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 290px; }
-.graph .stage { position: relative; min-height: 0; background: var(--bg); }
-.graph .canvas { position: absolute; inset: 0; }
-.graph .tools { position: absolute; top: 14px; left: 14px; display: flex; gap: 10px; align-items: center; z-index: 2; }
-.graph .tools .info { color: var(--muted); font-size: 12.5px; background: var(--panel); border: 1px solid var(--line); padding: 5px 11px; border-radius: 8px; }
+.graph { position: relative; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) clamp(200px, 24vw, 290px); }
+.graph .stage { position: relative; min-height: 0; background: var(--bg); container-type: size; }
+.graph .canvas { position: absolute; inset: 0 0 62px; }
+.graph .tools { position: absolute; top: 14px; left: 14px; max-width: calc(100% - 28px); display: flex; gap: 10px; align-items: center; z-index: 2; }
+.graph .tools .info { flex: none; white-space: nowrap; color: var(--muted); font-size: 12.5px; background: var(--panel); border: 1px solid var(--line); padding: 5px 11px; border-radius: 8px; }
 .graph .time { position: absolute; bottom: 16px; left: 16px; right: 16px; display: flex; gap: 12px; align-items: center; z-index: 2; color: var(--muted); font-size: 12.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; }
 .graph .time input { flex: 1; }
-.graph .find { width: 220px; }
+.graph .find { flex: 0 1 220px; min-width: 90px; }
 .graph aside { border-left: 1px solid var(--line); overflow: auto; padding: 18px; background: var(--side); }
 .graph aside a { display: block; padding: 4px 0; color: var(--muted); }
 .graph aside a:hover { color: var(--accent); }
@@ -368,6 +368,7 @@ section + section { margin-top: 4px; }
 .graph .detail .back:hover { color: var(--text); background: transparent; }
 .graph aside a .swatch { margin-right: 8px; }
 .graph .hint-box { position: absolute; bottom: 70px; left: 16px; z-index: 2; color: var(--muted); font-size: 12.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; }
+@container (max-width: 560px) or (max-height: 520px) { .graph .hint-box { display: none; } }
 .state:empty { display: none; }
 
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }

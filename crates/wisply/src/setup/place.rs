@@ -12,6 +12,7 @@ pub const ALIAS: &str = "lighting";
 pub const FULL: &str = "wisply-full";
 pub const EXES: &[&str] = &[MAIN, FULL, "wisply-ui", "wisply-task"];
 const SOURCE_DEPTH: usize = 4;
+const REFERENCES: &str = "references";
 const BLOCKLIST: &str = "paypal.com\npaypal.me\nstripe.com\ncheckout.stripe.com\nklarna.com\nsofort.com\ngiropay.de\n\
 paysafecard.com\nwise.com\nrevolut.com\nn26.com\nbunq.com\nsparkasse.de\ndkb.de\ning.de\ncomdirect.de\ncommerzbank.de\n\
 deutsche-bank.de\npostbank.de\nconsorsbank.de\nvolksbank.de\nvr.de\ntargobank.de\nsantander.de\nhypovereinsbank.de\n\
@@ -94,8 +95,25 @@ pub fn copy_extension(home: &Path, root: Option<&Path>) -> io::Result<Option<Str
 
 pub fn copy_skill(root: Option<&Path>, dst: &Path) -> io::Result<()> {
     match root.map(|r| r.join("skills").join("wisply")).filter(|s| s.is_dir()) {
-        Some(src) => copy_tree(&src, dst),
+        Some(src) => {
+            copy_tree(&src, dst)?;
+            drop_old_references(&src.join(REFERENCES), &dst.join(REFERENCES));
+            Ok(())
+        }
         None => Err(io::Error::other("the skill files are missing next to wisply")),
+    }
+}
+
+fn drop_old_references(src: &Path, dst: &Path) {
+    if !src.is_dir() {
+        return;
+    }
+    let Ok(list) = fs::read_dir(dst) else { return };
+    for path in list.flatten().map(|e| e.path()) {
+        let ours = path.is_file() && path.extension().is_some_and(|e| e == "md");
+        if ours && path.file_name().is_some_and(|n| !src.join(n).exists()) {
+            let _ = fs::remove_file(&path);
+        }
     }
 }
 
@@ -262,6 +280,29 @@ mod tests {
         assert!(host["path"].as_str().unwrap().ends_with(&exe_name(MAIN)));
         blocklist(&dir).unwrap();
         assert!(fs::read_to_string(dir.join("blocklist.txt")).unwrap().contains("paypal.com"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_skill_copy_drops_reference_files_the_new_skill_no_longer_has() {
+        let dir = std::env::temp_dir().join(format!("lt-skillcopy-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let src = dir.join("root/skills/wisply");
+        let dst = dir.join("app/skills/wisply");
+        fs::create_dir_all(src.join("references")).unwrap();
+        fs::write(src.join("SKILL.md"), "new").unwrap();
+        fs::write(src.join("references/web.md"), "web").unwrap();
+        fs::create_dir_all(dst.join("references")).unwrap();
+        fs::write(dst.join("references/advanced.md"), "old").unwrap();
+        fs::write(dst.join("references/notes.txt"), "mine").unwrap();
+        fs::write(dst.join("own.md"), "mine").unwrap();
+        copy_skill(Some(&dir.join("root")), &dst).unwrap();
+        assert!(!dst.join("references/advanced.md").exists());
+        assert_eq!(fs::read_to_string(dst.join("references/web.md")).unwrap(), "web");
+        assert_eq!(fs::read_to_string(dst.join("SKILL.md")).unwrap(), "new");
+        assert!(dst.join("references/notes.txt").exists() && dst.join("own.md").exists());
+        assert!(copy_skill(Some(&dir.join("none")), &dst).is_err());
+        assert!(dst.join("references/web.md").exists());
         let _ = fs::remove_dir_all(&dir);
     }
 }
