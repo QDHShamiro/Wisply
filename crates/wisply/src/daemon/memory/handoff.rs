@@ -1,4 +1,5 @@
 use std::fs::{self, File};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -20,7 +21,11 @@ const ERROR_CHARS: usize = 160;
 const TODOS: usize = 8;
 const HARD_CAP: usize = 3_500;
 const KEEP: Duration = Duration::from_secs(172_800);
+const FRESH: Duration = Duration::from_secs(120);
 const DIR: &str = "handoff";
+const CLEAR_SLOT: &str = "clear-";
+const HEAD: &str = "Wisply handoff, written before the compact from your transcript (no model):";
+const CLEAR_HEAD: &str = "Wisply handoff, written at /clear from the transcript of the session before (no model):";
 const USER: &str = "USER: ";
 const CLAUDE: &str = "CLAUDE: ";
 const EDIT: &str = "EDIT ";
@@ -65,7 +70,7 @@ pub fn compose(first: &str, earlier: &str, tail: &str, title: &str, todos: &[Str
     let first = Some(first).filter(|f| !f.is_empty()).or_else(|| typed.first().copied()).unwrap_or("");
     let latest = typed.last().copied().or(Some(earlier).filter(|e| !e.is_empty())).unwrap_or(first);
     let goal = if title.is_empty() { first } else { title };
-    let mut out = vec!["Wisply handoff, written before the compact from your transcript (no model):".to_string()];
+    let mut out = vec![HEAD.to_string()];
     if !goal.is_empty() {
         out.push(format!("Goal: {}", oneline(goal, GOAL_CHARS)));
     }
@@ -177,6 +182,25 @@ pub fn take(home: &Path, sid: &str) -> Option<String> {
     let text = fs::read_to_string(&file).ok()?;
     let _ = fs::remove_file(&file);
     Some(text).filter(|t| !t.trim().is_empty())
+}
+
+fn slot(cwd: &str) -> String {
+    let mut hash = DefaultHasher::new();
+    cwd.replace('\\', "/").trim_end_matches('/').to_lowercase().hash(&mut hash);
+    format!("{CLEAR_SLOT}{:016x}", hash.finish())
+}
+
+pub fn save_cleared(home: &Path, cwd: &str, transcript: &Path) {
+    save(home, &slot(cwd), &from_transcript(transcript, &[]).replacen(HEAD, CLEAR_HEAD, 1));
+}
+
+pub fn take_cleared(home: &Path, cwd: &str) -> Option<String> {
+    let name = slot(cwd);
+    let fresh = file_of(home, &name)
+        .and_then(|file| fs::metadata(file).ok())
+        .and_then(|meta| meta.modified().ok())
+        .is_some_and(|at| SystemTime::now().duration_since(at).unwrap_or_default() <= FRESH);
+    take(home, &name).filter(|_| fresh)
 }
 
 #[cfg(test)]
@@ -315,6 +339,35 @@ mod tests {
         assert!(text.contains(top), "{text}");
         assert!(text.contains("the tax line was summed twice"), "{text}");
         assert!(!text.contains("completed") && !text.contains("being continued"), "{text}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_clear_hands_the_last_session_to_the_next_one_in_the_same_folder() {
+        let dir = std::env::temp_dir().join(format!("lt-handoff-clear-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let rows = vec![
+            user("Build a cache for the shop prices so the page loads faster"),
+            said("Root cause: the price query runs once per item, so I chose one batched query instead."),
+            edit("/work/shop/src/prices.rs"),
+            user("also keep the cache for five minutes only"),
+        ];
+        let path = write_transcript(&dir, &rows);
+        assert_eq!(slot("C:\\Work\\Shop\\"), slot("c:/work/shop"));
+        assert_ne!(slot("C:/work/shop"), slot("C:/work/bakery"));
+        save_cleared(&dir, "C:\\Work\\Shop", &path);
+        assert_eq!(take_cleared(&dir, "C:/work/bakery"), None);
+        let text = take_cleared(&dir, "c:/work/shop/").unwrap();
+        assert!(text.starts_with(CLEAR_HEAD), "{text}");
+        assert!(text.contains("Latest request: also keep the cache for five minutes only"), "{text}");
+        assert_eq!(take_cleared(&dir, "c:/work/shop"), None);
+        save_cleared(&dir, "C:/work/shop", &path);
+        let file = file_of(&dir, &slot("C:/work/shop")).unwrap();
+        let old = SystemTime::now() - FRESH - Duration::from_secs(5);
+        File::options().write(true).open(&file).unwrap().set_modified(old).unwrap();
+        assert_eq!(take_cleared(&dir, "C:/work/shop"), None);
+        assert!(!file.exists());
         let _ = fs::remove_dir_all(&dir);
     }
 
