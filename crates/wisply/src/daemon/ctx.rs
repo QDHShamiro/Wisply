@@ -96,6 +96,7 @@ pub struct Ctx {
     pub retried: Option<Vec<String>>,
     pub singles: Vec<f64>,
     pub broken_script: Option<(String, f64)>,
+    pub last_script: Option<(String, f64, String)>,
 }
 
 impl Ctx {
@@ -131,6 +132,7 @@ impl Ctx {
             retried: None,
             singles: Vec::new(),
             broken_script: None,
+            last_script: None,
         }
     }
 
