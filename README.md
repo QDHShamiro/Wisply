@@ -354,7 +354,7 @@ A script that worked and made at least two calls is kept as a routine on this co
 comes from the request). Values go in as data, never into the code: `--arg pr=100` (MCP `args`) is `args.pr` in the
 script, and `wisply run <name> pr=101` replays it in one call; the hook offers it when a request in the same project
 fits. A value from the request that the script still has in the code (a month like `2026-10`, a PR number) is saved as
-an arg (`args.month`), so the replay takes the next one. If a saved script breaks, the next working script of that session replaces it as a new version. `--yes` is
+an arg (`args.month`), so the replay takes the next one. If a saved script breaks, or the AI corrects it for the same task in that session, the next working script replaces it as a new version. The prompt hook offers it with the values of the new request filled in. `--yes` is
 never kept, scripts with secrets are never saved, and an unused one goes after 30 days (90 days from 5 runs on).
 `wisply routines` shows the tokens each one saved, `wisply routine show <name>` the code, and
 `wisply config codemode_save off` stops the saving.

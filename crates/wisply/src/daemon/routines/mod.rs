@@ -63,6 +63,23 @@ pub fn offer(d: &Daemon, ctx: &mut Ctx, typed: Vec<String>) -> Vec<String> {
     if typed.iter().map(|w| stem(w)).collect::<HashSet<_>>().len() < 2 {
         return Vec::new();
     }
+    let mut lines = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for mut r in fitting(d, ctx, &typed, t) {
+        let name = text(&r["name"]);
+        if lines.len() == OFFERS || !seen.insert(name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '-').into())
+        {
+            continue;
+        }
+        ctx.told.insert(format!("r:{name}"), t);
+        r["stats"]["offered"] = json!(r["stats"]["offered"].as_u64().unwrap_or(0) + 1);
+        let _ = save(&d.home, &r);
+        lines.push(offer_line(&r, &typed));
+    }
+    lines
+}
+
+fn fitting(d: &Daemon, ctx: &Ctx, typed: &[String], t: f64) -> Vec<Value> {
     let mut hits: Vec<(bool, usize, u64, Value)> = Vec::new();
     for r in load_all(&d.home) {
         let key = format!("r:{}", text(&r["name"]));
@@ -70,24 +87,21 @@ pub fn offer(d: &Daemon, ctx: &mut Ctx, typed: Vec<String>) -> Vec<String> {
         if r["flaky"] == true || ignored || t - ctx.told.get(&key).copied().unwrap_or(0.0) < OFFER_EVERY_S {
             continue;
         }
-        let (app_hit, other) = score(&typed, &r);
+        let (app_hit, other) = score(typed, &r);
         let hit = if script::is_script(&r) { script::fits(other, &r, &ctx.cwd) } else { app_hit && other >= 1 };
         if hit {
             hits.push((app_hit, other, r["stats"]["ok"].as_u64().unwrap_or(0), r));
         }
     }
     hits.sort_by_key(|h| std::cmp::Reverse((h.0, h.1, h.2)));
-    let mut lines = Vec::new();
-    for (_, _, _, mut r) in hits.into_iter().take(OFFERS) {
-        ctx.told.insert(format!("r:{}", text(&r["name"])), t);
-        r["stats"]["offered"] = json!(r["stats"]["offered"].as_u64().unwrap_or(0) + 1);
-        let _ = save(&d.home, &r);
-        lines.push(format!(
-            "Wisply routine fits this request (one call, swap the values): {}",
-            usage(&r, &BTreeMap::new())
-        ));
-    }
-    lines
+    hits.into_iter().map(|h| h.3).collect()
+}
+
+fn offer_line(r: &Value, typed: &[String]) -> String {
+    let values = if script::is_script(r) { script::swap(r, typed) } else { BTreeMap::new() };
+    let all = r["params"].as_object().is_some_and(|p| !p.is_empty() && p.len() == values.len());
+    let how = if all { "one call, the values of this request are filled in" } else { "one call, swap the values" };
+    format!("Wisply routine fits this request ({how}): {}", usage(r, &values))
 }
 
 fn listing(d: &Daemon, ctx: &mut Ctx, c: &Call) -> String {

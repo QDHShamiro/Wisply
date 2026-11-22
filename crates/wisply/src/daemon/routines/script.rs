@@ -76,19 +76,35 @@ fn task_words(prompt: Vec<String>, code: &str) -> Vec<String> {
     out
 }
 
+fn kind_of(value: &str) -> Option<&'static str> {
+    if MONTH.is_match(value) {
+        Some("month")
+    } else if DATE.is_match(value) {
+        Some("date")
+    } else if YEAR.is_match(value) {
+        Some("year")
+    } else {
+        VALUE.find(value).filter(|m| m.as_str() == value).map(|_| "value")
+    }
+}
+
+pub fn swap(r: &Value, typed: &[String]) -> BTreeMap<String, String> {
+    let found: Vec<&String> = typed.iter().filter(|w| w.starts_with(|c: char| c.is_ascii_digit())).collect();
+    let mut out: BTreeMap<String, String> = BTreeMap::new();
+    for (k, v) in r["params"].as_object().into_iter().flatten() {
+        let Some(kind) = kind_of(&text(v)) else { continue };
+        if let Some(w) = found.iter().find(|w| kind_of(w) == Some(kind) && !out.values().any(|o| o == **w)) {
+            out.insert(k.clone(), (*w).clone());
+        }
+    }
+    out
+}
+
 fn key_for(value: &str, params: &mut Map<String, Value>) -> String {
     if let Some((k, _)) = params.iter().find(|(_, v)| v.as_str() == Some(value)) {
         return k.clone();
     }
-    let kind = if MONTH.is_match(value) {
-        "month"
-    } else if DATE.is_match(value) {
-        "date"
-    } else if YEAR.is_match(value) {
-        "year"
-    } else {
-        "value"
-    };
+    let kind = kind_of(value).unwrap_or("value");
     let (mut key, mut n) = (kind.to_string(), 2);
     while params.contains_key(&key) {
         key = format!("{kind}{n}");
@@ -132,22 +148,29 @@ fn free_name(home: &Path, base: &str) -> String {
     name
 }
 
-fn replace(d: &Daemon, ctx: &mut Ctx, body: &Value, h: &str) -> Option<String> {
-    let (name, at) = ctx.broken_script.take()?;
-    if now() - at > REPLACE_WITHIN_S {
-        return None;
-    }
-    let mut r = store::load(&d.home, &name).ok().filter(is_script)?;
+struct Fresh<'a> {
+    code: &'a str,
+    hash: &'a str,
+    args: &'a Value,
+    calls: &'a Value,
+}
+
+fn renew(d: &Daemon, name: &str, new: &Fresh, word: &str) -> Option<String> {
+    let mut r = store::load(&d.home, name).ok().filter(is_script)?;
     let version = r["version"].as_u64().unwrap_or(1) + 1;
     r["version"] = json!(version);
-    r["script"]["code"] = body["code"].clone();
-    r["script"]["hash"] = json!(h);
-    r["script"]["calls"] = body["calls"].clone();
-    r["params"] = body["args"].clone();
+    r["script"]["code"] = json!(new.code);
+    r["script"]["hash"] = json!(new.hash);
+    r["script"]["calls"] = new.calls.clone();
+    r["params"] = new.args.clone();
     r["flaky"] = json!(false);
     r["stats"]["recent"] = json!([]);
     save(&d.home, &r).ok()?;
-    Some(format!("fixed routine {name} (now v{version}) {}", next_time(&r)))
+    Some(format!("{word} routine {name} (now v{version}) {}", next_time(&r)))
+}
+
+fn recent(at: f64) -> bool {
+    now() - at <= REPLACE_WITHIN_S
 }
 
 fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
@@ -161,10 +184,6 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
         save(&d.home, &same)?;
         return Ok(format!("this script is saved as routine {} {}", text(&same["name"]), next_time(&same)));
     }
-    if let Some(note) = replace(d, ctx, body, &h) {
-        return Ok(note);
-    }
-    prune(&d.home);
     let t0 = now() - body["ms"].as_f64().unwrap_or(0.0) / 1000.0;
     let prompts = d.prompts_of(&ctx.sid);
     let typed: HashSet<String> =
@@ -172,10 +191,27 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
     let given = body["args"].as_object().cloned().unwrap_or_default();
     let (code, args) = if given.is_empty() { lift(&code, &typed) } else { (code, given) };
     let args = Value::Object(args);
+    let new = Fresh { code: &code, hash: &h, args: &args, calls: &body["calls"] };
+    if let Some((name, at)) = ctx.broken_script.take()
+        && recent(at)
+        && let Some(note) = renew(d, &name, &new, "fixed")
+    {
+        return Ok(note);
+    }
+    prune(&d.home);
     let tags = task_words(prompt_words(&prompts, t0, &args, PROMPT_WORDS), &code);
     let said = slug(&tags.join(" "), NAME_WORDS);
     let base = if said.is_empty() { guess_name(&code) } else { said };
+    if let Some((name, at, last)) = ctx.last_script.clone()
+        && last == base
+        && recent(at)
+        && let Some(note) = renew(d, &name, &new, "updated")
+    {
+        ctx.last_script = Some((name, now(), base));
+        return Ok(note);
+    }
     let name = free_name(&d.home, &base);
+    ctx.last_script = Some((name.clone(), now(), base));
     let r = json!({
         "name": name, "version": 1, "source": "script", "created": local_now().chars().take(16).collect::<String>(),
         "params": args, "steps": [], "check": null, "cost": code.chars().count() / 4 + 1, "tags": tags,
