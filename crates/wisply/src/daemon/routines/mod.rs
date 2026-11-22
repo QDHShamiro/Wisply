@@ -22,7 +22,7 @@ use store::{file, load, save, score, slug, stem, text, usage};
 pub use align::{align, build, truthy};
 pub use episode::{close, observe};
 pub use run::run;
-pub use script::{code_of as script_code, project_of as script_project};
+pub use script::{code_of as script_code, project_of as script_project, values_in};
 pub use store::{load_all, step_line, words};
 
 const LIST_LINES: usize = 60;

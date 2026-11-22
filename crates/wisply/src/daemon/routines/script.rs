@@ -1,16 +1,24 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
-use serde_json::{Value, json};
+use regex::{Captures, Regex};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use wisply_core::{Call, Fail, local_now};
 
 use super::super::Daemon;
 use super::super::ctx::{Ctx, now};
-use super::learn::{stamp, tags_for};
-use super::store::{self, file, load_all, save, slug, text, usage};
+use super::learn::{TAGS, prompt_at, prompt_words, stamp};
+use super::store::{self, file, load_all, save, slug, stem, text, usage};
 
+static QUOTED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""[^"\n]*"|'[^'\n]*'|`[^`]*`"#).expect("quoted"));
+static VALUE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d+(?:[-.:]\d+)+\b|\b\d{3,}\b").expect("value"));
+static MONTH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:19|20)\d\d-\d\d$").expect("month"));
+static DATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:19|20)\d\d-\d\d-\d\d$").expect("date"));
+static YEAR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:19|20)\d\d$").expect("year"));
+const PROMPT_WORDS: usize = 64;
 const NAME_WORDS: usize = 3;
 const REPLACE_WITHIN_S: f64 = 1800.0;
 const FEW_RUNS_DAYS: f64 = 30.0;
@@ -60,6 +68,61 @@ fn guess_name(code: &str) -> String {
     if name.is_empty() { "script".to_string() } else { name }
 }
 
+fn task_words(prompt: Vec<String>, code: &str) -> Vec<String> {
+    let in_code: HashSet<String> = store::words(code).iter().map(|w| stem(w)).collect();
+    let (mut out, rest): (Vec<String>, Vec<String>) = prompt.into_iter().partition(|w| in_code.contains(&stem(w)));
+    out.extend(rest);
+    out.truncate(TAGS);
+    out
+}
+
+fn key_for(value: &str, params: &mut Map<String, Value>) -> String {
+    if let Some((k, _)) = params.iter().find(|(_, v)| v.as_str() == Some(value)) {
+        return k.clone();
+    }
+    let kind = if MONTH.is_match(value) {
+        "month"
+    } else if DATE.is_match(value) {
+        "date"
+    } else if YEAR.is_match(value) {
+        "year"
+    } else {
+        "value"
+    };
+    let (mut key, mut n) = (kind.to_string(), 2);
+    while params.contains_key(&key) {
+        key = format!("{kind}{n}");
+        n += 1;
+    }
+    params.insert(key.clone(), json!(value));
+    key
+}
+
+pub fn values_in(text: &str) -> Vec<String> {
+    VALUE.find_iter(text).map(|m| m.as_str().to_string()).collect()
+}
+
+fn lift(code: &str, typed: &HashSet<String>) -> (String, Map<String, Value>) {
+    let mut params = Map::new();
+    let out = QUOTED.replace_all(code, |c: &Captures| {
+        let lit = &c[0];
+        if lit.contains('\\') || lit.contains("${") {
+            return lit.to_string();
+        }
+        let q = &lit[..1];
+        VALUE
+            .replace_all(lit, |v: &Captures| {
+                if !typed.contains(&v[0]) {
+                    return v[0].to_string();
+                }
+                let key = key_for(&v[0], &mut params);
+                if q == "`" { format!("${{args.{key}}}") } else { format!("{q} + args.{key} + {q}") }
+            })
+            .into_owned()
+    });
+    (out.into_owned(), params)
+}
+
 fn free_name(home: &Path, base: &str) -> String {
     let (mut name, mut n) = (base.to_string(), 2);
     while file(home, &name).exists() {
@@ -102,9 +165,14 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
         return Ok(note);
     }
     prune(&d.home);
-    let args = Value::Object(body["args"].as_object().cloned().unwrap_or_default());
-    let ms = body["ms"].as_f64().unwrap_or(0.0);
-    let tags = tags_for(&d.prompts_of(&ctx.sid), now() - ms / 1000.0, &args);
+    let t0 = now() - body["ms"].as_f64().unwrap_or(0.0) / 1000.0;
+    let prompts = d.prompts_of(&ctx.sid);
+    let typed: HashSet<String> =
+        prompt_at(&prompts, t0).into_iter().filter(|w| w.starts_with(|c: char| c.is_ascii_digit())).collect();
+    let given = body["args"].as_object().cloned().unwrap_or_default();
+    let (code, args) = if given.is_empty() { lift(&code, &typed) } else { (code, given) };
+    let args = Value::Object(args);
+    let tags = task_words(prompt_words(&prompts, t0, &args, PROMPT_WORDS), &code);
     let said = slug(&tags.join(" "), NAME_WORDS);
     let base = if said.is_empty() { guess_name(&code) } else { said };
     let name = free_name(&d.home, &base);

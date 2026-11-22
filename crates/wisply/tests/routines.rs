@@ -149,6 +149,14 @@ fn a_code_mode_script_is_saved_once_replayed_with_values_and_replaced_after_it_b
     assert!(out.contains("fixed routine ping (now v2) -> next time: wisply run ping word=gamma"), "{out}");
     let (_, out) = home.run(&["run", "ping", "word=delta"]);
     assert!(out.contains("fixed delta"), "{out}");
+    let ask = json!({"prompt": "Rechne die Summe der Spalte betrag fuer Monat 2026-10"}).to_string();
+    home.run(&["suggest", &ask]);
+    let monthly = "await wisply`ping`;\nawait wisply`ping`;\nreturn 'summe spalte betrag ' + \"2026-10\"";
+    let (_, out) = home.run(&["codemode", monthly]);
+    let line = "saved as routine summe-spalte-betrag -> next time: wisply run summe-spalte-betrag month=2026-10";
+    assert!(out.contains(line), "{out}");
+    let (_, out) = home.run(&["run", "summe-spalte-betrag", "month=2026-11"]);
+    assert!(out.contains("summe spalte betrag 2026-11"), "{out}");
     let single = "await wisply`ping`;\nreturn 1";
     let (_, out) = home.run(&["codemode", single]);
     assert!(!out.contains("routine"), "{out}");
