@@ -5912,7 +5912,9 @@ dependencies = [
  "serde_json",
  "sha2 0.11.1",
  "toml",
+ "ureq",
  "wisply-core",
+ "wisply-proto",
 ]
 
 [[package]]

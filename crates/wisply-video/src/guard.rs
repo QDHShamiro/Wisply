@@ -176,6 +176,10 @@ fn limit_error(refusals: &[Refusal]) -> Fail {
     }
 }
 
+pub(crate) fn blocked(scope: &str, until: f64) -> Fail {
+    limit_error(&[Refusal { scope: scope.to_string(), reason: BLOCKED.to_string(), free_at: Some(until) }])
+}
+
 impl<'a> Guard<'a> {
     pub fn new(store: &'a Store, limits: &'a Limits, clock: &'a dyn Clock) -> Guard<'a> {
         Guard { store, limits, clock }
