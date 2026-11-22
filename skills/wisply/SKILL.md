@@ -29,7 +29,7 @@ Secrets never inline: `type e3 --env PASS`, `fill "Password=@secret" --env PASS`
 - Routines: `! routine X can finish this` means `wisply run X ...`; `routine save <intent-name> [k=v]` keeps the task just done. `references/routines.md` (also recording, what Wisply learned per site)
 - Memory and code: `recall "words"` (`recall 42` full, `--all` every project), `remember "fact"`, `todo add "task"`, `todo done 12`; before reading many files `code`, `code Name`, `code "what it does"`, `peek <files>`. `references/memory.md`
 - Snapshots, frames, tabs, page data, waiting: `references/web.md`
-- Settings, logs, tokens, own tools (`kit`), skills, `secure`, trouble: `references/system.md`
+- Settings, logs, tokens, `wait ci`, own tools `kit`, skills, `secure`, trouble: `references/system.md`
 - Whole flows (login, form, upload, dashboard, game): `references/recipes.md`
 
 ## Rules

@@ -29,6 +29,7 @@ mod update;
 mod v2;
 #[cfg(windows)]
 mod voice;
+mod waitfor;
 
 use std::env;
 use std::process::ExitCode;

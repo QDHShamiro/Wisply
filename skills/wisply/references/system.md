@@ -22,6 +22,12 @@
 - Blocklist: `~/.wisply/blocklist.txt` (banking and payment domains). Those sites are read-only for Wisply.
 - Ctrl+Alt+End stops the running and queued commands immediately; `wisply abort` does the same.
 
+## Waiting for CI or a command
+- `wisply wait ci` (or `--pr 12`, `--branch x`, `--sha abc`) waits for the GitHub Actions runs of the commit and
+  ends with one line: `green: ...`, or `red: ...` with the failed jobs and their error lines. `--timeout 30m`,
+  `--ignore name,name` for steps that may fail. Needs `gh`. Exit 0 green, 1 red, 2 timeout or error.
+- `wisply wait until "<command>" --every 5s --timeout 10m` repeats a command until it succeeds; never a sleep loop.
+
 ## Trouble
 - `err: no browser with the Wisply extension is connected`: `wisply setup` (it opens the extensions page and loads the extension by itself).
 - Something hangs: `wisply stop`; the background process starts again on the next call.

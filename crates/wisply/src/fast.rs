@@ -61,13 +61,18 @@ const LOCAL: &[&str] = &[
     "pupil",
 ];
 
+fn runs_in_full(first: &str, raw: &[String]) -> bool {
+    let second = raw.get(1).map(String::as_str);
+    LOCAL.contains(&first)
+        || first.starts_with("chrome-extension://")
+        || raw.iter().any(|a| a == "--env")
+        || matches!((first, second), ("memory", Some("bench")) | ("wait", Some("ci" | "until")))
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     let first = raw.first().map(String::as_str).unwrap_or("");
-    let local = LOCAL.contains(&first)
-        || first.starts_with("chrome-extension://")
-        || raw.iter().any(|a| a == "--env")
-        || (first == "memory" && raw.get(1).is_some_and(|a| a == "bench"));
+    let local = runs_in_full(first, &raw);
     if first == "hook" && raw.get(1).is_some_and(|a| a == "post") {
         hook::post();
         return ExitCode::SUCCESS;

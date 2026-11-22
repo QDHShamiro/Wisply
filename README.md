@@ -297,6 +297,16 @@ wisply peek crates/wisply/src --head 3
 `wisply grep` is the same idea for searching: a built-in `grep` that groups matches per file, caps the output and
 keeps the rest in a file.
 
+## Waiting without polling
+
+- `wisply wait ci [--pr N|--branch B|--sha S] [--timeout 30m]` blocks until the GitHub Actions runs of that commit
+  end (no option: the current branch and commit) and prints one line, `green: ...` or `red: ...`. A red run adds the
+  failed job and its last error lines, shortened like Headroom does. `gh` polls every 10 s, slowing to 30 s. A run that
+  ends green but whose result notice reports `name=failure` (a step with `continue-on-error`) counts as red;
+  `--ignore name,name` skips named steps. Exit code 0 green, 1 red, 2 timeout or error.
+- `wisply wait until "<command>" [--every 5s] [--timeout 10m]` repeats the command until it exits 0 and prints only
+  its last output (exit 2 on timeout).
+
 ## Tools and skills of your own
 
 An AI that keeps doing the same thing by hand can turn it into a tool. `wisply kit add` keeps a command, with an
@@ -552,7 +562,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Look** | `open <url>` · `snap [-f "a\|b"]` · `text` · `read <url>` (no browser) · `shot` |
 | **Research** | `research "words" "other words"` · `--quick` · `--deep` · `--site github.com` |
 | **Act** | `click` · `type` · `fill "Email=a@b.c" --submit` · `press` · `select` · `scroll --until "text"` · `upload` |
-| **Wait** | `wait "text"` · `expect "text"` · `wait url:/x` |
+| **Wait** | `wait "text"` · `expect "text"` · `wait url:/x` · `wait ci [--pr N]` · `wait until "<command>" [--every 5s]` |
 | **Apps** | `launch spotify` · `windows` · `snap w2` · `read w2` (OCR) · `click d5` · `press ctrl+s` |
 | **Clean up** | `done` · `keep t3` (hand it to you) · `config cleanup off` |
 | **Routines** | `routines` · `run <name> k=v` · `record start` … `record stop` |
