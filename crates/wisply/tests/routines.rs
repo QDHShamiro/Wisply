@@ -105,6 +105,25 @@ fn tasks_become_episodes_that_can_be_saved_offered_and_forgotten() {
 }
 
 #[test]
+fn a_routine_offered_twice_without_a_run_is_not_offered_again() {
+    let home = Home::new("offers");
+    assert_eq!(home.run(&["wait", "10"]).0, 0);
+    fs::create_dir_all(home.0.join("routines")).unwrap();
+    for (name, offered) in [("github-issues", 2), ("github-pulls", 1)] {
+        let routine = json!({"name": name, "version": 1, "source": "learned", "created": "2026-10-30 18:00",
+            "params": {}, "steps": [{"cmd": "open", "args": [format!("https://github.com/QDHShamiro/{name}")], "flags": {}}],
+            "check": null, "cost": 900, "tags": ["issues", "pulls"],
+            "stats": {"runs": 0, "ok": 0, "fail": 0, "ms": 0, "saved": 0, "seen": 2, "recent": [], "offered": offered},
+            "flaky": false});
+        fs::write(home.0.join("routines").join(format!("{name}.json")), routine.to_string()).unwrap();
+    }
+    let other = json!({"prompt": "<cross-session-message from-name=\"b0\">zeig die github issues und pulls"});
+    assert!(!home.run(&["suggest", &other.to_string()]).1.contains("wisply run"));
+    let (_, offered) = home.run(&["suggest", &json!({"prompt": "zeig mir die github issues und pulls"}).to_string()]);
+    assert!(offered.contains("wisply run github-pulls") && !offered.contains("github-issues"), "{offered}");
+}
+
+#[test]
 fn a_failed_routine_is_repaired_from_the_steps_done_by_hand() {
     let home = Home::new("repair");
     fs::create_dir_all(home.0.join("routines")).unwrap();

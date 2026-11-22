@@ -14,6 +14,21 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   extra turn that rereads the whole context (median about 2,400 tokens' worth). Replayed on that week, reloads fall
   from 18.6 to 8.9 per 100 squeezed outputs; Headroom saves about 21 % fewer raw tokens but clearly more once the
   extra turns count. Logs, build output and Grep results are squeezed as before.
+- `wisply code` run outside any project (the home folder, a skill folder) used to stop with "no project here", which
+  ended 5 of 9 such calls in the logs. It now answers from the project used last in the past 7 days, says which one
+  in the first line and lists up to 3 others for `--project <path>`. An explicit `--project` that is no project still
+  fails.
+- After a compact, a session that runs outside any project (an AI started in the home folder) got "no project", the
+  to-dos of every project and the newest notes of all, often the same title twice. The handoff now names the project
+  from the files the session touched, the notes after the summary are first the ones that match the goal and the
+  decisions of the handoff, then the newest of that project, each title only once, and the to-dos are only that
+  project's.
+- A learned routine is offered at most twice without being run (was 5). In one real set of 66 routines only 9 had
+  ever run, while 10 had been offered twice or more. Reply words ("ja", "nein", "los", "weiter", "egal", "ok",
+  "thanks" ...) and fillers ("machst", "muss") no longer end up in routine names and match words, so names like
+  `discord-los` are gone, and a prompt that starts with a machine tag such as `<cross-session-message ...>` (a message
+  from another session) no longer counts as typed by the user, so it neither gets an offer nor fills a routine's
+  words; 17 of the 66 routines had words from such messages.
 
 ## [3.5.1] - 2026-11-22
 

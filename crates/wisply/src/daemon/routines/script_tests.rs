@@ -73,7 +73,7 @@ fn values_from_the_request_become_args_and_the_task_words_name_it() {
         ["werkzeug", "hilfe", "rechne", "spalte", "betrag", "gesamtsumme"].map(String::from).into();
     let tags = task_words(prompt, "const i = header.indexOf(\"betrag\"); out.push('Gesamt'); 'Spalte'");
     assert_eq!(tags, ["spalte", "betrag", "gesamtsumme", "werkzeug", "hilfe", "rechne"]);
-    assert_eq!(slug(&tags.join(" "), NAME_WORDS), "spalte-betrag-gesamtsumme");
+    assert_eq!(name_slug(&tags.join(" "), NAME_WORDS), "spalte-betrag-gesamtsumme");
 }
 
 #[test]

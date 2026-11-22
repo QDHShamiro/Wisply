@@ -19,6 +19,7 @@ const START_SESSIONS: usize = 3;
 const START_COMMITS: usize = 5;
 const START_RULES: usize = 5;
 const START_NOTES: usize = 8;
+const GOAL_NOTES: usize = 5;
 const ABOUT_LINES: usize = 3;
 const ABOUT_CHARS: usize = 220;
 const GIT_WAIT: Duration = Duration::from_secs(3);
@@ -46,7 +47,7 @@ static SAY: LazyLock<Regex> = LazyLock::new(|| {
 });
 static NOT_TYPED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"\[SYSTEM NOTIFICATION|<task-notification>|^\s*<(?:system-reminder|local-command-\w+|command-name)>|^\s*This session is being continued from a previous conversation",
+        r"\[SYSTEM NOTIFICATION|<task-notification>|^\s*<[a-z][a-z0-9]*(?:-[a-z0-9]+)+[\s>]|^\s*This session is being continued from a previous conversation",
     )
     .expect("typed pattern")
 });
@@ -73,10 +74,15 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     with_store(d, |s| s.session_seen(&sid, &here, &cwd, transcript, event == "end"))?;
     if event == "compact" {
         if !transcript.is_empty() {
-            let todos: Vec<String> = with_store(d, |s| s.todos(Some(&here), true))
-                .map(|rows| rows.iter().map(|t| todo_line(t, true)).collect())
-                .unwrap_or_default();
-            super::handoff::save(&d.home, &sid, &super::handoff::from_transcript(Path::new(transcript), &todos));
+            let todos = |project: &str| -> Vec<String> {
+                if project.is_empty() {
+                    return Vec::new();
+                }
+                with_store(d, |s| s.todos(Some(project), true))
+                    .map(|rows| rows.iter().map(|t| todo_line(t, true)).collect())
+                    .unwrap_or_default()
+            };
+            super::handoff::save(&d.home, &sid, &super::handoff::for_compact(Path::new(transcript), &here, todos));
         }
         super::index::learn_now();
     }
@@ -88,8 +94,11 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     }
     super::index::nudge();
     if data_text(&data, "source") == "compact" {
-        let text = with_store(d, |s| compact_text(s, &here))?;
-        return Ok(match super::handoff::take(&d.home, &sid) {
+        let handoff = super::handoff::take(&d.home, &sid);
+        let told = handoff.as_deref().unwrap_or("");
+        let here = if here.is_empty() { super::handoff::project_in(told).unwrap_or_default() } else { here };
+        let text = with_store(d, |s| compact_text(s, &here, &super::handoff::goal_in(told)))?;
+        return Ok(match handoff {
             Some(handoff) => format!(
                 "{handoff}
 {text}"
@@ -126,14 +135,36 @@ fn listed(head: &str, rows: Vec<(i64, String)>) -> Vec<String> {
     out
 }
 
-fn compact_text(s: &mut Store, here: &str) -> DbResult<String> {
+fn compact_text(s: &mut Store, here: &str, goal: &str) -> DbResult<String> {
     let mut lines = vec![format!(
         "Wisply after the summary ({}): wisply recall \"<words>\" searches your notes, wisply todo tracks work.",
         if here.is_empty() { "no project" } else { here }
     )];
     lines.extend(listed("Project rules:", s.titles(here, true, START_RULES)?));
-    lines.extend(listed("Remembered:", s.titles(here, false, START_NOTES)?));
+    let mut notes: Vec<(i64, String)> = Vec::new();
+    if !goal.trim().is_empty() {
+        let hits = s.search(goal, here, GOAL_NOTES, None, 0.0)?;
+        notes.extend(
+            hits.into_iter()
+                .map(|h| h.note)
+                .filter(|n| here.is_empty() || n.project == here || n.project.is_empty())
+                .map(|n| (n.id, n.title)),
+        );
+    }
+    notes.extend(s.titles(here, false, START_NOTES)?);
+    lines.extend(listed("Remembered:", distinct(notes, START_NOTES)));
     Ok(lines.join("\n"))
+}
+
+fn distinct(rows: Vec<(i64, String)>, n: usize) -> Vec<(i64, String)> {
+    let mut seen: HashSet<String> = HashSet::new();
+    rows.into_iter()
+        .filter(|(_, title)| {
+            let key = oneline(title, LINE).to_lowercase();
+            !key.trim().is_empty() && seen.insert(key.trim_end_matches(['.', ':', ' ', '(']).to_string())
+        })
+        .take(n)
+        .collect()
 }
 
 pub(super) fn start_text(s: &mut Store, here: &str, commits: Vec<String>) -> DbResult<String> {
@@ -358,6 +389,9 @@ mod tests {
         assert_eq!(without_paths("open C:/x/y.txt and a/b or ~/c"), "open   and a/b or  ");
         assert_eq!(stem("deployment"), "deplo");
         assert!(NOT_TYPED.is_match("  <system-reminder>y") && !NOT_TYPED.is_match("fix the bug"));
+        assert!(NOT_TYPED.is_match("<cross-session-message from=\"uds:x\" from-name=\"b0\">hi"));
+        assert!(NOT_TYPED.is_match("<local-command-stdout>ok") && NOT_TYPED.is_match("<command-name>/x"));
+        assert!(!NOT_TYPED.is_match("<div> fix the header") && !NOT_TYPED.is_match("use <my-tag> in the page"));
         let m = SAY.captures("Bitte merk dir, dass Brave der einzige Browser ist.").unwrap();
         assert_eq!(wisply_memory::fact(&m[1]), "Brave der einzige Browser ist");
         assert!(SAY.captures("remembering things").is_none());

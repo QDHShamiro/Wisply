@@ -11,7 +11,7 @@ use wisply_core::{Call, Fail, local_now};
 use super::super::Daemon;
 use super::super::ctx::{Ctx, now};
 use super::learn::{TAGS, prompt_at, prompt_words, stamp};
-use super::store::{self, file, load_all, save, slug, stem, text, usage};
+use super::store::{self, file, load_all, name_slug, save, stem, text, usage};
 
 static QUOTED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""[^"\n]*"|'[^'\n]*'|`[^`]*`"#).expect("quoted"));
 static VALUE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d+(?:[-.:]\d+)+\b|\b\d{3,}\b").expect("value"));
@@ -65,7 +65,7 @@ fn next_time(r: &Value) -> String {
 
 fn guess_name(code: &str) -> String {
     let inside = code.split('`').nth(1).unwrap_or("");
-    let name = slug(inside, NAME_WORDS);
+    let name = name_slug(inside, NAME_WORDS);
     if name.is_empty() { "script".to_string() } else { name }
 }
 
@@ -226,7 +226,7 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
     }
     prune(&d.home);
     let tags = task_words(prompt_words(&prompts, t0, &args, PROMPT_WORDS), &code);
-    let said = slug(&tags.join(" "), NAME_WORDS);
+    let said = name_slug(&tags.join(" "), NAME_WORDS);
     let base = if said.is_empty() { guess_name(&code) } else { said };
     if let Some((name, at, last)) = ctx.last_script.clone()
         && last == base

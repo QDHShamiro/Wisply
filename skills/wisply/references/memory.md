@@ -9,7 +9,7 @@
 - By itself: the session start prints a summary, a prompt can show up to 2 fitting notes of the same project (`Wisply memory may help`), and a session is learned once it has been quiet for 10 minutes or ended.
 
 ## Code, before reading many files
-- `code` (overview of the project), `code Name` (find a function or class by name), `code "what it does"` (closest by name and body), `code callers Name`, `code body Name`, `code outline file`, `code impact [--base main]` (what the changes against HEAD or a base touch). `--project <path>` for another folder.
+- `code` (overview of the project), `code Name` (find a function or class by name), `code "what it does"` (closest by name and body), `code callers Name`, `code body Name`, `code outline file`, `code impact [--base main]` (what the changes against HEAD or a base touch). `--project <path>` for another folder; outside any project it uses the last used one and says which.
 - `peek a.rs b.rs src/ [--outline] [--head 10]` gives size, lines and advice (`whole`, `parts`, `grep`, `skip`) for all of them in one call. Read `parts` files with offset and limit, leave `skip` files (lock files, build output, binaries).
 - A tool output that Wisply shortened names a ref: `more <ref>` shows it in full, `--lines a-b` or `--grep "word|other"` a part.
 

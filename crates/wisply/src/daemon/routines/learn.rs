@@ -11,7 +11,7 @@ use super::super::Daemon;
 use super::super::ctx::{Ctx, now};
 use super::align::{ENTRY, Pairs, align, args, build, clean_step, cmd, entry_for, long_literal, put, templatize};
 use super::episode::{Episode, episodes, site};
-use super::store::{self, check_of, kv, load_all, save, slug, text, usage, words};
+use super::store::{self, check_of, kv, load_all, name_slug, save, slug, text, usage, words};
 
 const NAV_ONLY: &[&str] =
     &["open", "launch", "focus", "scroll", "wait", "back", "forward", "reload", "tab", "expect", "dismiss"];
@@ -204,7 +204,7 @@ fn auto_name(home: &Path, r: &Value) -> String {
     if !said.is_empty() {
         tail = said.iter().take(2).cloned().collect::<Vec<_>>().join(" ");
     }
-    let name = slug(&format!("{head} {tail}"), NAME_WORDS);
+    let name = name_slug(&format!("{head} {tail}"), NAME_WORDS);
     let base = if name.is_empty() { "routine".to_string() } else { name };
     let (mut name, mut n) = (base.clone(), 2);
     while store::file(home, &name).exists() {

@@ -667,7 +667,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | Notes | `wiki` · `wiki show 3` · `wiki accept 3 [folder]` · `wiki drop 3` · `config vault <folder>` · `config vault_inbox Inbox` |
 | Model | `memory` · `memory model` · `memory learn` · `memory lessons` · `memory import claude-mem` · `config memory_api <url>` · `memory off` · `memory bench` |
 
-**Code map** (per project folder, kept in `~/.wisply/code`)
+**Code map** (per project folder, kept in `~/.wisply/code`; outside a project it uses the last used one)
 
 | | |
 |---|---|

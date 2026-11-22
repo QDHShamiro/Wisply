@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 const EXE: &str = env!("CARGO_BIN_EXE_wisply-full");
@@ -8,8 +8,13 @@ struct Home(PathBuf);
 
 impl Home {
     fn run(&self, args: &[&str]) -> (i32, String) {
+        self.run_in(&std::env::current_dir().unwrap(), args)
+    }
+
+    fn run_in(&self, dir: &Path, args: &[&str]) -> (i32, String) {
         let out = Command::new(EXE)
             .args(args)
+            .current_dir(dir)
             .env("WISPLY_HOME", &self.0)
             .env(if cfg!(windows) { "USERPROFILE" } else { "HOME" }, &self.0)
             .env("CLAUDE_CODE_SESSION_ID", "it-code")
@@ -57,4 +62,10 @@ fn the_code_map_finds_definitions_callers_outlines_and_bodies() {
     assert_eq!(out, "src/main.rs:1-3\nfn main() {\n    helper();\n}");
     let (_, out) = home.run(&["code", "nothing_here", "--project", &at]);
     assert!(out.starts_with("nothing named \"nothing_here\" in demo"), "{out}");
+    let outside = home.0.clone();
+    let (code, out) = home.run_in(&outside, &["code", "helper"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("so the last used one: ") && out.contains("src/main.rs:5 function helper"), "{out}");
+    let (code, out) = home.run_in(&outside, &["code", "helper", "--project", &outside.display().to_string()]);
+    assert_ne!(code, 0, "{out}");
 }

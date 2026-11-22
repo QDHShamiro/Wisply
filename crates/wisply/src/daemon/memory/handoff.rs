@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use wisply_memory::{condense, oneline, typed_in};
+use wisply_memory::{condense, oneline, project_of_files, typed_in};
 
 const TAIL_BYTES: u64 = 1_000_000;
 const HEAD_BYTES: u64 = 400_000;
@@ -32,6 +32,11 @@ const EDIT: &str = "EDIT ";
 const RAN: &str = "RAN ";
 const ERROR: &str = "ERROR: ";
 const LATEST: &str = "Latest request: ";
+const PROJECT: &str = "Project: ";
+const PROJECT_FROM: &str = " (from the files this session touched)";
+const DECIDED: &str = "Decisions and findings:";
+const GOAL_LINES: [&str; 3] = ["Goal: ", "First request: ", LATEST];
+const GOAL_QUERY: usize = 600;
 
 pub struct Early {
     pub title: String,
@@ -80,7 +85,7 @@ pub fn compose(first: &str, earlier: &str, tail: &str, title: &str, todos: &[Str
     if !latest.is_empty() && latest != goal {
         out.push(format!("{LATEST}{}", oneline(latest, LATEST_CHARS)));
     }
-    bullets("Decisions and findings:", last_unique(lines(tail, CLAUDE), DECISIONS), DECISION_CHARS, &mut out);
+    bullets(DECIDED, last_unique(lines(tail, CLAUDE), DECISIONS), DECISION_CHARS, &mut out);
     let open: Vec<String> = todos.iter().take(TODOS).cloned().collect();
     bullets("Open to-dos:", open, DECISION_CHARS, &mut out);
     bullets("Last errors:", last_unique(lines(tail, ERROR), ERRORS), ERROR_CHARS, &mut out);
@@ -131,6 +136,39 @@ pub fn from_transcript(path: &Path, todos: &[String]) -> String {
     let at = tail_offset(path).unwrap_or(0);
     let Ok(tail) = condense(path, at, Some(TAIL_CHARS)) else { return String::new() };
     told(path, at, &tail.text, &tail.title, todos)
+}
+
+pub fn for_compact(path: &Path, here: &str, todos: impl FnOnce(&str) -> Vec<String>) -> String {
+    let at = tail_offset(path).unwrap_or(0);
+    let Ok(tail) = condense(path, at, Some(TAIL_CHARS)) else { return String::new() };
+    let found = if here.is_empty() { project_of_files(&tail.paths) } else { String::new() };
+    let project = if here.is_empty() { found.as_str() } else { here };
+    let text = told(path, at, &tail.text, &tail.title, &todos(project));
+    match text.split_once('\n') {
+        Some((head, rest)) if !found.is_empty() => format!("{head}\n{PROJECT}{found}{PROJECT_FROM}\n{rest}"),
+        _ => text,
+    }
+}
+
+pub fn project_in(text: &str) -> Option<String> {
+    text.lines().find_map(|l| l.strip_prefix(PROJECT)?.strip_suffix(PROJECT_FROM)).map(String::from)
+}
+
+pub fn goal_in(text: &str) -> String {
+    let mut section = "";
+    let mut out: Vec<&str> = Vec::new();
+    for line in text.lines() {
+        if let Some(said) = GOAL_LINES.iter().find_map(|p| line.strip_prefix(p)) {
+            out.push(said);
+        } else if let Some(item) = line.strip_prefix("  - ") {
+            if section == DECIDED {
+                out.push(item);
+            }
+        } else {
+            section = line;
+        }
+    }
+    oneline(&out.join(" "), GOAL_QUERY)
 }
 
 pub fn early(path: &Path, min_chars: usize, min_users: usize) -> Option<Early> {
@@ -272,6 +310,39 @@ mod tests {
         assert_eq!(take(&dir, "sess-1").as_deref(), Some(text.as_str()));
         assert_eq!(take(&dir, "sess-1"), None);
         assert_eq!(take(&dir, "../x"), None);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn outside_a_project_the_touched_files_name_it_and_the_goal_comes_from_the_words() {
+        let dir = std::env::temp_dir().join(format!("lt-handoff-proj-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let shop = dir.join("shop");
+        fs::create_dir_all(shop.join("src")).unwrap();
+        fs::write(shop.join("Cargo.toml"), "[package]\nname = \"shop\"\n").unwrap();
+        let file = shop.join("src").join("prices.rs").display().to_string();
+        let rows = vec![
+            user("Make the price page faster"),
+            said("Decided to batch the price query because it ran once per item."),
+            edit(&file),
+        ];
+        let path = write_transcript(&dir, &rows);
+        let mut asked = String::new();
+        let text = for_compact(&path, "", |p| {
+            asked = p.to_string();
+            vec!["#7 cache the prices".to_string()]
+        });
+        assert_eq!(asked, "shop");
+        assert_eq!(project_in(&text).as_deref(), Some("shop"), "{text}");
+        assert!(text.contains("Open to-dos:\n  - #7 cache the prices"), "{text}");
+        let goal = goal_in(&text);
+        assert!(goal.contains("Make the price page faster") && goal.contains("batch the price query"), "{goal}");
+        assert!(!goal.contains("prices.rs") && !goal.contains("#7"), "{goal}");
+        let inside = for_compact(&path, "web", |p| {
+            assert_eq!(p, "web");
+            Vec::new()
+        });
+        assert_eq!(project_in(&inside), None, "{inside}");
         let _ = fs::remove_dir_all(&dir);
     }
 
