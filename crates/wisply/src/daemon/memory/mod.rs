@@ -5,12 +5,16 @@ pub mod chat;
 mod code;
 mod early;
 mod embed;
+mod growth;
 mod handoff;
 mod hook;
 pub mod index;
 pub mod learn;
 mod learner;
+mod list;
+mod listview;
 mod status;
+mod tidy;
 mod watch;
 mod wiki;
 
@@ -39,8 +43,6 @@ const FILES_SHOWN: usize = 8;
 const TASK_SHORT: usize = 80;
 const QUERY_BUDGET: Duration = Duration::from_secs(4);
 const EMBED_BUDGET: Duration = Duration::from_secs(10);
-const TODO_HELP: &str =
-    "wisply todo | todo add \"task\" [--list name] | todo done|doing|drop|open <id> | todo note <id> \"text\"";
 
 thread_local! {
     static STORE: RefCell<Option<Store>> = const { RefCell::new(None) };
@@ -51,7 +53,9 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
         "recall" => recall(d, ctx, c),
         "remember" => remember(d, ctx, c),
         "forget" => forget(d, c),
-        "todo" => todo(d, ctx, c),
+        "todo" => list::todo(d, ctx, c),
+        "bug" => list::bug(d, ctx, c),
+        "list" => list::list(d, ctx, c),
         "hook" => hook::hook(d, ctx, c),
         "suggest" => hook::suggest(d, ctx, c),
         "memory" => status::memory(d, c),
@@ -270,85 +274,6 @@ fn todo_list(rows: &[Todo], short: bool) -> String {
         out.push("(wisply todo <id> shows one in full)".into());
     }
     out.join("\n")
-}
-
-fn todo_full(t: &Todo) -> String {
-    let notes: Vec<&str> = t.note.split('\n').filter(|l| !l.trim().is_empty()).collect();
-    let tail = if notes.is_empty() { String::new() } else { format!("\nnotes:\n  {}", notes.join("\n  ")) };
-    let list = if t.list.is_empty() { "to-dos" } else { &t.list };
-    let project = if t.project.is_empty() { "global" } else { &t.project };
-    format!("#{} {} {} [{list}, {project}]\n{}{tail}", t.id, date(t.updated), t.status, t.task)
-}
-
-fn todo(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
-    let raw = c.pos.first().map(|s| s.to_lowercase()).unwrap_or_default();
-    let listing = matches!(raw.as_str(), "list" | "ls" | "show");
-    let named = c.pos.get(1).filter(|_| listing);
-    let sub = match raw.as_str() {
-        "list" | "ls" | "show" => named.filter(|n| is_ident(n)).map_or("", String::as_str),
-        "close" | "finish" | "complete" => "done",
-        "start" => "doing",
-        "rm" | "remove" | "delete" => "drop",
-        "reopen" => "open",
-        other => other,
-    };
-    if is_ident(sub) {
-        let id = ident(sub)?;
-        let t = with_store(d, |s| s.todo(id))?;
-        let missing = || Fail::hint(format!("no to-do #{}", sub.trim_start_matches('#')), "wisply todo");
-        return t.map(|t| todo_full(&t)).ok_or_else(missing);
-    }
-    let here = project(ctx, c);
-    let list = c.val("list").or_else(|| named.map(String::as_str)).unwrap_or("");
-    match sub {
-        "add" => {
-            let task = c.pos[1..].join(" ");
-            if task.is_empty() {
-                return Err(Fail::hint("todo add needs the task", TODO_HELP));
-            }
-            let status = if c.on("doing") { "doing" } else { "todo" };
-            let id = with_store(d, |s| s.todo_add(&here, &task, list, status))?;
-            let to = if list.is_empty() { String::new() } else { format!(" to {list}") };
-            Ok(format!("to-do #{id} added{to}"))
-        }
-        "done" | "doing" | "drop" | "dropped" | "todo" | "open" => {
-            let Some(which) = c.pos.get(1) else { return Err(Fail::hint("which to-do?", TODO_HELP)) };
-            let status = match sub {
-                "drop" => "dropped",
-                "open" => "todo",
-                other => other,
-            };
-            let id = ident(which)?;
-            let text = c.pos[2..].join(" ");
-            let note = (!text.is_empty()).then_some(text.as_str());
-            let t = with_store(d, |s| s.todo_set(id, Some(status), note))?;
-            let t = t.ok_or_else(|| Fail::hint(format!("no to-do #{which}"), "wisply todo"))?;
-            Ok(format!("#{} is {}: {}", t.id, t.status, oneline(&t.task, TASK_SHORT)))
-        }
-        "note" => {
-            if c.pos.len() < 3 {
-                return Err(Fail::hint("todo note needs a number and the text", TODO_HELP));
-            }
-            let id = ident(&c.pos[1])?;
-            let text = c.pos[2..].join(" ");
-            let t = with_store(d, |s| s.todo_set(id, None, Some(&text)))?;
-            let t = t.ok_or_else(|| Fail::hint(format!("no to-do #{}", c.pos[1]), "wisply todo"))?;
-            Ok(format!("#{} noted", t.id))
-        }
-        "" => {
-            let scope = if c.on("all") { None } else { Some(here.as_str()) };
-            let mut rows = with_store(d, |s| s.todos(scope, true))?;
-            if !list.is_empty() {
-                rows.retain(|t| t.list == list);
-            }
-            Ok(if rows.is_empty() {
-                "no open to-dos (wisply todo add \"task\")".into()
-            } else {
-                todo_list(&rows, false)
-            })
-        }
-        other => Err(Fail::hint(format!("unknown todo command '{other}'"), TODO_HELP)),
-    }
 }
 
 #[cfg(test)]

@@ -51,6 +51,7 @@ fn mark(kind: &str) -> (&'static str, &'static str) {
         "ci_red" => ("high", "rotating_light"),
         "limit" => ("high", "hourglass"),
         "disk" => ("high", "floppy_disk"),
+        "bug" => ("high", "beetle"),
         "waiting" => ("default", "hourglass_flowing_sand"),
         "ci_green" => ("default", "white_check_mark"),
         "resumed" => ("default", "arrow_forward"),
