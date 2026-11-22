@@ -106,7 +106,8 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
     let ms = body["ms"].as_f64().unwrap_or(0.0);
     let tags = tags_for(&d.prompts_of(&ctx.sid), now() - ms / 1000.0, &args);
     let said = slug(&tags.join(" "), NAME_WORDS);
-    let name = free_name(&d.home, if said.is_empty() { &guess_name(&code) } else { &said });
+    let base = if said.is_empty() { guess_name(&code) } else { said };
+    let name = free_name(&d.home, &base);
     let r = json!({
         "name": name, "version": 1, "source": "script", "created": local_now().chars().take(16).collect::<String>(),
         "params": args, "steps": [], "check": null, "cost": code.chars().count() / 4 + 1, "tags": tags,
