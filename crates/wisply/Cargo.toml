@@ -36,6 +36,7 @@ wisply-video.workspace = true
 pdf-extract.workspace = true
 regex.workspace = true
 roxmltree.workspace = true
+rquickjs.workspace = true
 fancy-regex.workspace = true
 rusqlite.workspace = true
 serde_json.workspace = true
