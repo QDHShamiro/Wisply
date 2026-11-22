@@ -62,7 +62,7 @@ fn values_from_the_request_become_args_and_the_task_words_name_it() {
     assert_eq!(params, json!({"month": "2026-10", "value": "107"}).as_object().cloned().unwrap());
     assert!(lifted.contains("glob(\"data/\" + args.month + \"/*.csv\")"), "{lifted}");
     assert!(lifted.contains("$`gh pr view ${args.value}`"), "{lifted}");
-    assert!(lifted.contains("const n = '' + args.month + ''"), "{lifted}");
+    assert!(lifted.contains("const n = args.month;"), "{lifted}");
     assert!(lifted.contains("\"a\\\"2026-10\" + `${x}2026-10` + '300'"), "{lifted}");
     let mut taken = Map::new();
     assert_eq!(key_for("2026-10-05", &mut taken), "date");

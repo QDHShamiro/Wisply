@@ -162,8 +162,9 @@ fn a_code_mode_script_is_saved_once_replayed_with_values_and_replaced_after_it_b
     assert!(out.contains("updated routine summe-spalte-betrag (now v2)"), "{out}");
     let ask = json!({"prompt": "Rechne die Summe der Spalte betrag fuer Monat 2026-12"}).to_string();
     let (_, offered) = home.run(&["suggest", &ask]);
-    let line = "Wisply routine fits this request (one call, the values of this request are filled in): \
-                wisply run summe-spalte-betrag month=2026-12";
+    let line = "Wisply saved the script that did this task before in this project. Run it instead of doing the steps \
+                again (one call, the values of this request are filled in): wisply run summe-spalte-betrag \
+                month=2026-12 (code: wisply routine show summe-spalte-betrag)";
     assert!(offered.contains(line), "{offered}");
     let (_, out) = home.run(&["run", "summe-spalte-betrag", "month=2026-12"]);
     assert!(out.contains("summe der spalte betrag: 2026-12"), "{out}");
