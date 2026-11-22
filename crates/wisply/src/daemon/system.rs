@@ -102,7 +102,7 @@ pub fn run_one(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<(Out, Strin
         "done" => web::done(d, ctx, &call)?,
         "keep" => web::keep(d, ctx, &call)?,
         "codemode" if call.pos.first().is_some_and(|w| w == "mark") => {
-            ctx.tipped = true;
+            ctx.singles.clear();
             "ok".into()
         }
         "codemode" => {

@@ -17,8 +17,8 @@ const REPEAT_WINDOW: Duration = Duration::from_secs(120);
 const FAILS_KEPT: usize = 20;
 const SAVE_STEP_S: i64 = 600;
 const DESK: [&str; 4] = ["windows", "hwnd", "info", "launched"];
-const TIP_AFTER: usize = 6;
-const TIP_WINDOW_S: f64 = 90.0;
+const TIP_AFTER: usize = 3;
+const TIP_WINDOW_S: f64 = 120.0;
 
 pub fn now() -> f64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
@@ -95,7 +95,6 @@ pub struct Ctx {
     pub brain_miss: Option<Miss>,
     pub retried: Option<Vec<String>>,
     pub singles: Vec<f64>,
-    pub tipped: bool,
 }
 
 impl Ctx {
@@ -130,7 +129,6 @@ impl Ctx {
             brain_miss: None,
             retried: None,
             singles: Vec::new(),
-            tipped: false,
         }
     }
 
@@ -154,7 +152,7 @@ impl Ctx {
     }
 
     pub fn tip_due(&mut self, at: f64) -> bool {
-        if self.tipped || self.side {
+        if self.side {
             return false;
         }
         self.singles.retain(|t| at - t <= TIP_WINDOW_S);
@@ -162,7 +160,6 @@ impl Ctx {
         if self.singles.len() < TIP_AFTER {
             return false;
         }
-        self.tipped = true;
         self.singles.clear();
         true
     }
@@ -338,14 +335,10 @@ mod tests {
     #[test]
     fn the_code_mode_tip_comes_once_after_six_quick_calls() {
         let mut ctx = Ctx::scratch("s", "Wisply");
-        let tips: Vec<bool> = (0..5).map(|i| ctx.tip_due(f64::from(i) * 30.0)).collect();
+        let tips: Vec<bool> = (0..5).map(|i| ctx.tip_due(f64::from(i) * 200.0)).collect();
         assert_eq!(tips, vec![false; 5]);
-        let quick: Vec<bool> = (0..6).map(|i| ctx.tip_due(1000.0 + f64::from(i))).collect();
-        assert_eq!(quick, vec![false, false, false, false, false, true]);
-        assert!(!(0..10).any(|i| ctx.tip_due(2000.0 + f64::from(i))));
-        let mut used = Ctx::scratch("u", "Wisply");
-        used.tipped = true;
-        assert!(!(0..10).any(|i| used.tip_due(f64::from(i))));
+        let quick: Vec<bool> = (0..6).map(|i| ctx.tip_due(2000.0 + f64::from(i))).collect();
+        assert_eq!(quick, vec![false, false, true, false, false, true]);
         let mut side = Contexts::side();
         assert!(!(0..10).any(|i| side.get("s").tip_due(f64::from(i))));
     }
