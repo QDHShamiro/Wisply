@@ -5,7 +5,7 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
-## [Unreleased]
+## [3.5.0] - 2026-11-22
 
 ### Added
 - `wisply wait ci [--pr N|--branch B|--sha S] [--repo owner/name] [--timeout 30m]` waits for the CI of a commit and prints one
