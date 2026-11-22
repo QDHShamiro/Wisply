@@ -22,6 +22,7 @@ const CODE_CHARS: usize = 6000;
 const ROOTS: &str = "roots.json";
 const BG_EVERY: Duration = Duration::from_secs(600);
 const BG_RECENT_S: f64 = 3600.0;
+const OTHERS: usize = 3;
 
 static LAST_BG: Mutex<Option<Instant>> = Mutex::new(None);
 
@@ -113,14 +114,45 @@ fn answer(index: &mut Index, c: &Call) -> Result<String, String> {
     }
 }
 
-pub fn code(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
+fn last_used(home: &Path) -> Vec<PathBuf> {
+    let mut all: Vec<(f64, PathBuf)> = active(home)
+        .into_iter()
+        .filter_map(|(p, at)| Some((at.as_f64()?, PathBuf::from(p))))
+        .filter(|(_, p)| p.is_dir())
+        .collect();
+    all.sort_by(|a, b| b.0.total_cmp(&a.0));
+    all.into_iter().map(|(_, p)| p).take(OTHERS + 1).collect()
+}
+
+fn pick(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<(PathBuf, String), Fail> {
     let place = c.val("project").map(String::from).unwrap_or_else(|| ctx.cwd.clone());
-    let Some(root) = wisply_memory::root_of(Path::new(&place)) else {
-        return Err(Fail::hint(
+    if let Some(root) = wisply_memory::root_of(Path::new(&place)) {
+        return Ok((root, String::new()));
+    }
+    let fail = || {
+        Fail::hint(
             format!("no project here ({place})"),
             "run it inside a project folder, or wisply code ... --project <path>",
-        ));
+        )
     };
+    if c.val("project").is_some() {
+        return Err(fail());
+    }
+    let mut roots = last_used(&d.home).into_iter();
+    let root = roots.next().ok_or_else(fail)?;
+    let others: Vec<String> = roots.map(|p| p.display().to_string()).collect();
+    let more = if others.is_empty() { String::new() } else { format!(", others: {}", others.join(", ")) };
+    Ok((
+        root.clone(),
+        format!(
+            "(no project in {place}, so the last used one: {}{more}; another with --project <path>)\n",
+            root.display()
+        ),
+    ))
+}
+
+pub fn code(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
+    let (root, told) = pick(d, ctx, c)?;
     let fresh = throttle(&root);
     if !fresh.used {
         used(&d.home, &root);
@@ -137,7 +169,7 @@ pub fn code(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
         String::new()
     };
     let lines = (c.pos.first().map(String::as_str) == Some("impact")).then_some(IMPACT_LINES);
-    Ok(web::capped(d, ctx, &format!("{text}{note}"), "code", lines, CODE_CHARS))
+    Ok(web::capped(d, ctx, &format!("{told}{text}{note}"), "code", lines, CODE_CHARS))
 }
 
 pub fn background(home: &Path) {

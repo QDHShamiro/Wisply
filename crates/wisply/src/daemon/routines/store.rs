@@ -21,7 +21,10 @@ const STOP: &str = "a an and are auf aus bei bin bis bitte can da dann das dass 
     then to um und uns unter vom von vor was we wie will wir with wo you zu zum zur über wisply lighting claude okay ok jetzt \
     schnell einfach auch alle alles aber also hier dort mehr sehr gut kurz neu neue schau schaue guck gucke check checke \
     look see warum wieso weshalb welche welcher welches welchen wann wer wen wem woher wohin womit wofür this that these \
-    those what when where why how have has had get got want need just also more some any all";
+    those what when where why how have has had get got want need just also more some any all machst macht machs musst \
+    muss bist";
+const REPLY: &str = "ja nein noe nee jo jep jap jup ok okay oke okey los weiter egal passt genau danke yes yeah yep no \
+    nope sure thanks thx";
 const APP_PREFIX: usize = 5;
 const RECENT: usize = 10;
 
@@ -41,6 +44,11 @@ pub fn slug(text: &str, n: usize) -> String {
         .take(n)
         .collect::<Vec<_>>()
         .join("-")
+}
+
+pub fn name_slug(text: &str, n: usize) -> String {
+    let reply: Vec<&str> = REPLY.split_whitespace().collect();
+    slug(text, usize::MAX).split('-').filter(|w| !reply.contains(w)).take(n).collect::<Vec<_>>().join("-")
 }
 
 pub fn load_all(home: &Path) -> Vec<Value> {
@@ -96,7 +104,7 @@ fn names(rs: &[Value]) -> String {
 }
 
 pub fn words(text: &str) -> Vec<String> {
-    let stop: Vec<&str> = STOP.split_whitespace().collect();
+    let stop: Vec<&str> = STOP.split_whitespace().chain(REPLY.split_whitespace()).collect();
     WORD.find_iter(&text.to_lowercase())
         .map(|m| m.as_str().to_string())
         .filter(|t| t == "@" || t == "#" || (t.chars().count() > 2 && !stop.contains(&t.as_str())))
@@ -331,6 +339,10 @@ mod tests {
         assert_eq!(kv("q", "a b's"), "q='a bs'");
         assert_eq!(kv("page", "Context-Engine"), "page=Context-Engine");
         assert_eq!(slug("Öffne GitHub 2 Issues & PRs", 6), "oeffne-github-issues-prs");
+        assert_eq!(name_slug("Nein users desktop", 4), "users-desktop");
+        assert_eq!(name_slug("discord los weiter Spawn Area", 3), "discord-spawn-area");
+        assert_eq!(name_slug("ja nein", 4), "");
+        assert_eq!(words("nein los, weiter: öffne discord passt"), vec!["öffne", "discord"]);
         let step = json!({"cmd": "type", "args": ["Search", "{q}"], "flags": {"on": "web", "enter": true, "max": 3}});
         assert_eq!(step_line(&step, None), "type Search {q} --enter --max 3");
         assert_eq!(argv_of(&step, &p), vec!["type", "Search", "{q}", "--on", "web", "--enter", "--max", "3"]);

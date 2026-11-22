@@ -30,7 +30,7 @@ const NAME_WORDS: usize = 6;
 const SUBS: &str = "wisply routine list|show|save|rm|rename|forget|schedule|schedules|script";
 const PROMPTS: usize = 5;
 const OFFER_EVERY_S: f64 = 600.0;
-const OFFER_IGNORED: u64 = 5;
+const OFFER_IGNORED: u64 = 2;
 const OFFERS: usize = 2;
 
 pub(crate) fn took(ms: f64) -> String {
