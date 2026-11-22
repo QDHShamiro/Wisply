@@ -70,7 +70,16 @@ fn setup_fills_a_home_without_touching_the_browser_and_uninstall_clears_it() {
 
 #[test]
 fn the_skill_stays_within_its_byte_budget() {
-    let skill = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../skills/wisply/SKILL.md");
-    let size = fs::metadata(&skill).unwrap().len();
-    assert!(size <= 3_700, "SKILL.md grew to {size} bytes (budget 3700)");
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../skills/wisply");
+    let text = fs::read_to_string(dir.join("SKILL.md")).unwrap();
+    assert!(text.len() <= 3_500, "SKILL.md grew to {} bytes (budget 3500)", text.len());
+    let about = text.lines().find_map(|l| l.strip_prefix("description: ")).unwrap_or("");
+    let chars = about.chars().count();
+    assert!((1..=250).contains(&chars), "the skill description has {chars} characters (1 to 250)");
+    for file in fs::read_dir(dir.join("references")).unwrap().flatten() {
+        let name = file.file_name().to_string_lossy().to_string();
+        let size = file.metadata().unwrap().len();
+        assert!(size <= 5_500, "references/{name} grew to {size} bytes (budget 5500): split it by topic");
+        assert!(text.contains(&format!("references/{name}")), "SKILL.md never names references/{name}");
+    }
 }

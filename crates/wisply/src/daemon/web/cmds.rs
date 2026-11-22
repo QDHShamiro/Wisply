@@ -188,24 +188,39 @@ pub fn search(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
     })
 }
 
+fn fill_pairs(pos: &[String]) -> Option<Vec<(String, String)>> {
+    let mut found: Vec<(String, String)> = Vec::new();
+    for p in pos {
+        match (p.split_once('='), found.last_mut()) {
+            (Some((label, value)), _) => found.push((label.trim().to_string(), value.to_string())),
+            (None, Some(last)) => {
+                last.1.push(' ');
+                last.1.push_str(p);
+            }
+            (None, None) => return None,
+        }
+    }
+    Some(found)
+}
+
 pub fn fill(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
-    let mut pairs = Vec::new();
-    for p in &c.pos {
-        let Some((label, value)) = p.split_once('=') else {
-            let hint = match c.pos.as_slice() {
-                [r, _, ..] if super::ref_kind(r) == Some("e") => {
-                    format!("wisply type {r} \"<value>\" (one field by its ref)")
-                }
-                _ => "wisply fill \"Email=me@x.de\" \"Password=@secret\" --env PASS".into(),
-            };
-            return Err(Fail::hint("fill wants Label=value pairs", hint));
+    let Some(found) = fill_pairs(&c.pos) else {
+        let hint = match c.pos.as_slice() {
+            [r, _, ..] if super::ref_kind(r) == Some("e") => {
+                format!("wisply type {r} \"<value>\" (one field by its ref)")
+            }
+            _ => "wisply fill \"Email=me@x.de\" \"Password=@secret\" --env PASS".into(),
         };
-        let value = match (value, &ctx.secret) {
+        return Err(Fail::hint("fill wants Label=value pairs", hint));
+    };
+    let mut pairs = Vec::new();
+    for (label, value) in found {
+        let value = match (value.as_str(), &ctx.secret) {
             ("@secret", Some(secret)) => secret.clone(),
             ("@secret", None) => return Err(Fail::new("@secret needs --env VAR")),
-            (value, _) => value.to_string(),
+            _ => value,
         };
-        pairs.push(json!({"label": label.trim(), "value": value}));
+        pairs.push(json!({"label": label, "value": value}));
     }
     if pairs.is_empty() {
         return Err(Fail::new("fill wants Label=value pairs"));
@@ -438,5 +453,19 @@ mod tests {
     fn uploads_name_their_type() {
         assert_eq!(mime(Path::new("a/B.PNG")), "image/png");
         assert_eq!(mime(Path::new("x.bin")), "application/octet-stream");
+    }
+
+    #[test]
+    fn a_fill_value_with_spaces_stays_one_value_without_quotes() {
+        let pos = |words: &[&str]| words.iter().map(|w| w.to_string()).collect::<Vec<_>>();
+        let pair = |l: &str, v: &str| (l.to_string(), v.to_string());
+        assert_eq!(fill_pairs(&pos(&["Name=Ada", "Test"])), Some(vec![pair("Name", "Ada Test")]));
+        assert_eq!(
+            fill_pairs(&pos(&["Name=Ada", "van", "Test", "E-Mail=a@b.c"])),
+            Some(vec![pair("Name", "Ada van Test"), pair("E-Mail", "a@b.c")])
+        );
+        assert_eq!(fill_pairs(&pos(&["Email=a@b.c"])), Some(vec![pair("Email", "a@b.c")]));
+        assert_eq!(fill_pairs(&pos(&["e36", "x"])), None);
+        assert_eq!(fill_pairs(&pos(&[])), Some(vec![]));
     }
 }
