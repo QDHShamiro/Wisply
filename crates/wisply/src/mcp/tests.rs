@@ -104,7 +104,10 @@ fn protocol_answers_like_the_2x_server() {
     assert_eq!(one(r#"{"jsonrpc":"2.0","id":"a","method":"ping"}"#)[0]["result"], json!({}));
     let tools = one(r#"{"jsonrpc":"2.0","id":3,"method":"tools/list"}"#);
     assert_eq!(tools[0]["result"]["tools"][0]["name"], "wisply");
-    assert_eq!(tools[0]["result"]["tools"][0]["inputSchema"]["required"][0], "cmd");
+    let schema = &tools[0]["result"]["tools"][0]["inputSchema"];
+    assert!(schema.get("required").is_none());
+    assert_eq!(schema["properties"]["code"]["type"], "string");
+    assert_eq!(schema["properties"]["yes"]["type"], "boolean");
     let ok =
         one(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"wisply","arguments":{"cmd":"snap"}}}"#);
     assert_eq!(ok[0]["result"]["content"][0]["text"], "ok");

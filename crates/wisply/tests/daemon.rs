@@ -167,6 +167,7 @@ t3 a Mine - mine.com
 fn a_browser_host_gets_the_session_tab_and_done_closes_it() {
     let home = Home::new("host", true);
     assert_eq!(home.run(&["ping"]).1, "pong");
+    assert_eq!(home.run(&["config", "codemode", "off"]).0, 0);
     let Some(token) = wisply_proto::key_token(&home.0) else { panic!("no key") };
     let Ok(link) = wisply_proto::Link::connect(&home.0) else { panic!("no daemon") };
     let version = wisply_core::ext_version(env!("CARGO_PKG_VERSION"));
@@ -433,4 +434,23 @@ fn do_runs_steps_in_order_waits_and_stops_at_the_first_error() {
     assert_eq!(home.run(&["do", "ping; ping", "--quiet"]).1, "ok 2/2\n2 pong");
     let (_, out) = home.run(&["do", "do ping"]);
     assert!(out.starts_with("err: do cannot run inside do"), "{out}");
+}
+
+#[test]
+fn quick_single_calls_bring_the_code_mode_tip_every_time() {
+    let home = Home::new("tip", true);
+    let tip = "! tip: code mode is the default here";
+    let said: Vec<bool> = (1..=6).map(|i| home.run(&[&format!("zz{i}")]).1.contains(tip)).collect();
+    assert_eq!(said, vec![false, false, true, false, false, true]);
+    let Some(token) = wisply_proto::key_token(&home.0) else { panic!("no key") };
+    let mark = json!({"token": token, "argv": ["codemode", "mark"], "sid": "cm"}).to_string();
+    assert!(!(1..=2).any(|i| home.run_as("cm", &[&format!("zz{i}")]).1.contains(tip)));
+    let Ok(reply) = wisply_proto::exchange_once(&home.0, mark.as_bytes()) else { panic!("no daemon") };
+    let reply: Value = serde_json::from_slice(&reply).unwrap();
+    assert_eq!(reply["out"], "ok");
+    assert!(!(1..=2).any(|i| home.run_as("cm", &[&format!("zz{i}")]).1.contains(tip)));
+    let ui: Vec<bool> = (0..3).map(|_| home.run_as("ui", &["snap"]).1.contains(tip)).collect();
+    assert_eq!(ui, vec![false, false, true]);
+    assert_eq!(home.run(&["config", "codemode", "off"]).0, 0);
+    assert!(!(1..=8).any(|i| home.run_as("off", &[&format!("zz{i}")]).1.contains(tip)));
 }

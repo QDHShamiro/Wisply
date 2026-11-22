@@ -37,6 +37,7 @@ fn apps_list_windows_share_the_clipboard_and_name_missing_windows() {
     fs::create_dir_all(&path).unwrap();
     fs::write(path.join("v3"), "").unwrap();
     let home = Home(path);
+    assert_eq!(home.run(&["config", "codemode", "off"]).0, 0);
     let (code, list) = home.run(&["windows"]);
     assert!(code == 0 && (list == "no windows" || list.starts_with("w1 ")), "{list}");
     let (_, saved) = home.run(&["clip"]);

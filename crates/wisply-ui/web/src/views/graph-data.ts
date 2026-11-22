@@ -3,53 +3,42 @@ import type { GraphData } from "../api";
 
 export const PALETTE = ["#4f7cff", "#ff3d8b", "#12c99b", "#ff9f1a", "#a259ff", "#ff5c39", "#1bb8f0", "#8bc34a", "#e040fb", "#00bfa5"];
 export const KINDS = ["note", "project", "session"] as const;
-export const BIG = 3000;
-const STORE = "wisply.graph.v3:";
+const FAMILY = "wisply.graph.";
 const CLUSTER_MIN = 3;
 const ROUNDS = 15;
 
 export type Kind = (typeof KINDS)[number];
 export type Attrs = { label: string; tag: string; kind: Kind; group: string; cluster: string; t: number; x: number; y: number; size: number; color: string; deg: number };
 export type Net = Graph<Attrs>;
-export type Spots = Record<string, [number, number]>;
+export type Pack = { key: string; name: string; color: string; count: number; hub: string };
 
-export function loadSpots(key: string): Spots {
+export function forget(): void {
   try {
-    return JSON.parse(localStorage.getItem(STORE + key) ?? "{}") as Spots;
+    for (const k of Object.keys(localStorage)) if (k.startsWith(FAMILY)) localStorage.removeItem(k);
   } catch {
-    return {};
+    return;
   }
 }
 
-export function saveSpots(key: string, g: Net): void {
-  const out: Spots = {};
-  g.forEachNode((n, a) => {
-    out[n] = [Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10];
-  });
-  try {
-    localStorage.setItem(STORE + key, JSON.stringify(out));
-  } catch {
-    localStorage.removeItem(STORE + key);
-  }
+function hex(v: number): string {
+  return Math.round(Math.min(1, Math.max(0, v)) * 255)
+    .toString(16)
+    .padStart(2, "0");
 }
 
-export function place(g: Net, spots: Spots): number {
-  let fresh = 0;
+export function tint(g: Net, home: Map<string, string>, colors: Map<string, string>, edge: readonly [number, number, number, number], cross: number): void {
   g.forEachNode((n, a) => {
-    const s = spots[n];
-    if (s) {
-      a.x = s[0];
-      a.y = s[1];
-      return;
-    }
-    fresh++;
-    const near = g.neighbors(n).map((m) => spots[m]).filter((x): x is [number, number] => !!x);
-    if (near.length) {
-      a.x = near.reduce((v, s2) => v + s2[0], 0) / near.length + (Math.random() - 0.5) * 4;
-      a.y = near.reduce((v, s2) => v + s2[1], 0) / near.length + (Math.random() - 0.5) * 4;
-    }
+    const c = colors.get(home.get(n) ?? "");
+    if (c !== undefined && !colors.has(a.cluster)) a.color = c;
   });
-  return fresh;
+  const own = hex(edge[3]);
+  const apart = `#${hex(edge[0])}${hex(edge[1])}${hex(edge[2])}${hex(edge[3] * cross)}`;
+  g.forEachEdge((_e, a, s, t) => {
+    const k = home.get(s);
+    const c = colors.get(k ?? "");
+    if (k === undefined || k !== home.get(t)) a.color = apart;
+    else if (c !== undefined) a.color = c + own;
+  });
 }
 
 function communities(g: Net): Map<string, string> {
@@ -96,8 +85,8 @@ export function seed(data: GraphData, other: string): { g: Net; colors: Map<stri
       group,
       cluster: "",
       t,
-      x: (Math.random() - 0.5) * 100,
-      y: (Math.random() - 0.5) * 100,
+      x: 0,
+      y: 0,
       size: k === "project" ? 3 + Math.sqrt(deg[i]) * 0.5 : 1.2 + Math.sqrt(deg[i]) * 0.5,
       color: other,
       deg: deg[i],
@@ -115,18 +104,35 @@ export function seed(data: GraphData, other: string): { g: Net; colors: Map<stri
   });
   const sizes = new Map<string, number>();
   g.forEachNode((_, a) => sizes.set(a.cluster, (sizes.get(a.cluster) ?? 0) + 1));
-  const top = [...sizes.entries()].filter(([c, n]) => c && n >= CLUSTER_MIN).sort((a, b) => b[1] - a[1]).slice(0, PALETTE.length);
+  const top = [...sizes.entries()].filter(([c, n]) => c && n >= CLUSTER_MIN).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
   const colors = new Map<string, string>();
   const names = new Map<string, string>();
+  const hubs = new Map<string, string>();
+  g.forEachNode((n, a) => {
+    const hub = hubs.get(a.cluster);
+    if (hub === undefined || a.deg > g.getNodeAttribute(hub, "deg")) hubs.set(a.cluster, n);
+  });
   top.forEach(([c], i) => {
-    colors.set(c, PALETTE[i]);
-    if (lab) {
-      const hub = g.filterNodes((_, a) => a.cluster === c).sort((x, y) => g.getNodeAttribute(y, "deg") - g.getNodeAttribute(x, "deg"))[0];
-      names.set(c, g.getNodeAttribute(hub, "label"));
-    } else names.set(c, c);
+    colors.set(c, PALETTE[i % PALETTE.length]);
+    names.set(c, lab ? g.getNodeAttribute(hubs.get(c) as string, "label") : c);
   });
   g.forEachNode((_, a) => {
     a.color = colors.get(a.cluster) ?? other;
   });
   return { g, colors, names };
+}
+
+export function packs(g: Net, colors: Map<string, string>, names: Map<string, string>): Pack[] {
+  const out = new Map<string, Pack & { lead: boolean }>();
+  for (const [key, color] of colors) out.set(key, { key, name: names.get(key) ?? key, color, count: 0, hub: "", lead: false });
+  g.forEachNode((n, a) => {
+    const p = out.get(a.cluster);
+    if (!p) return;
+    p.count++;
+    const lead = a.label === p.name;
+    if (p.hub && ((p.lead && !lead) || (p.lead === lead && g.getNodeAttribute(p.hub, "deg") >= a.deg))) return;
+    p.hub = n;
+    p.lead = lead;
+  });
+  return [...out.values()];
 }

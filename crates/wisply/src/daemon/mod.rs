@@ -164,6 +164,7 @@ enum Msg {
     Hello(Map<String, Value>),
 }
 
+pub use config::{load as load_config, on as config_on};
 pub(crate) use doctor::install as net;
 pub use doctor::run as doctor;
 #[cfg(windows)]
@@ -173,6 +174,7 @@ pub use media::{multipart, spoken, whisper_service};
 pub use memory::bench::run as memory_bench;
 #[cfg(windows)]
 pub use memory::chat::api_key;
+pub use routines::{script_code, script_project};
 pub use squeeze::{MAX_BYTES as SQUEEZE_MAX_BYTES, USAGE as SQUEEZE_USAGE};
 pub use web::installed_browsers;
 

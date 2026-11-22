@@ -38,7 +38,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
         peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
         progress [<percent> | <done>/<total>] [\"what you are doing\"] | progress show [--color] [--ascii] | progress clear (how far the task is, shown in the status line; plan tools are noted by themselves)
-        kit | kit add <name> \"what it does\" [--file script] [--replace] -- <program> [args with {1} {all} {file}] | kit run <name> [args] | kit show|rm <name> (tools of your own, kept for this user: every session and every AI runs them)
+        kit | kit add <name> \"what it does\" [--file script | --rust file.rs|cargo-folder] [--replace] -- <program> [args with {1} {all} {file} {exe}] | kit run <name> [args] | kit show|rm <name> (tools of your own, kept for this user: every session and every AI runs them)
         skill | skill find <words> [--web] | skill new <name> \"what it does, use when ...\" --file text.md | skill add <folder> | skill get <owner/repo/path> | skill check <folder or name> | skill rm <name> (finds, builds, checks and installs skills for every AI on this PC)
         secure [folder|domain|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json] (keys, vulnerable dependencies, risky code, headers of your own sites; not while a game runs)
         secure allow <domain> [--remove]   secure fix [folder] [--with claude|codex] (FIX.md + branch secure/fix-date, re-checks, never commits)
@@ -49,6 +49,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         agents [--all] [--json] (every Claude session: running, waiting, done, limit, tokens, cost estimate; resumes limit-stopped background sessions once after the reset)
         mobile pair [--name handy] | list | revoke <name> | status | on | off (phone API for the Wisply app, localhost and Tailscale only)
         notify event <done|waiting|ci_red|ci_green|limit|resumed|disk|bug> <title> [text] (Windows toast that never takes focus, plus the phone feed)
+code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many shell, file and wisply steps in one call, only the result comes back; wisply codemode help)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
 Output is plain text, one line per action. Big results go to a file (path printed).
@@ -102,6 +103,16 @@ pub fn run_one(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<(Out, Strin
         }
         "done" => web::done(d, ctx, &call)?,
         "keep" => web::keep(d, ctx, &call)?,
+        "codemode" if call.pos.first().is_some_and(|w| w == "mark") => {
+            ctx.singles.clear();
+            "ok".into()
+        }
+        "codemode" => {
+            return Err(Fail::hint(
+                "code mode runs in the wisply command itself, not in the daemon",
+                "wisply codemode help",
+            ));
+        }
         "keys" => {
             let text = web::keys::command(&d.home, ctx, &call)?;
             web::capped(d, ctx, &text, "keys", Some(KEYS_LINES), OUT_CHARS)
@@ -128,6 +139,9 @@ fn help(name: Option<&str>) -> Result<String, Fail> {
     let Some(name) = name.map(str::to_lowercase).filter(|n| !n.is_empty()) else { return Ok(HELP.into()) };
     if !built_later(&name) {
         return Err(unknown(&name));
+    }
+    if name == "codemode" {
+        return Ok(crate::codemode::HELP.trim_end().into());
     }
     Ok(about(&name).unwrap_or_else(|| HELP.into()))
 }
@@ -236,9 +250,11 @@ mod tests {
         assert!(about("wiki").is_some_and(|row| row.starts_with("wiki | wiki accept")));
         assert!(about("kit").is_some_and(|row| row.starts_with("kit | kit add <name>")));
         assert!(about("skill").is_some_and(|row| row.starts_with("skill | skill find <words>")));
+        assert!(about("codemode").is_some_and(|row| row.starts_with("codemode \"<javascript>\" [--yes]")));
         assert_eq!(help(Some("voice")).ok().as_deref(), Some(HELP));
         assert_eq!(help(None).ok().as_deref(), Some(HELP));
         assert!(help(Some("zzz")).is_err());
+        assert!(help(Some("codemode")).is_ok_and(|text| text.starts_with("wisply codemode \"<javascript>\"")));
     }
 
     #[test]

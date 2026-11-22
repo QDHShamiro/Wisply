@@ -299,6 +299,9 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         let list: Vec<&str> = missing.iter().map(|k| k.as_str()).collect();
         return Err(Fail::hint(format!("{name} needs {}", list.join(", ")), usage(&r, &BTreeMap::new())));
     }
+    if super::script::is_script(&r) {
+        return super::script::handoff(ctx, c, &name, &params).map(Out::Text);
+    }
     let steps: Vec<Value> = r["steps"].as_array().cloned().unwrap_or_default();
     let secret = steps
         .iter()

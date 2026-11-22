@@ -25,6 +25,31 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - `wisply ui` has a Memory page (every shelf with counts, search, project filter, forget) and an Intelligence page:
   score, knowledge, lessons, routines and finished work over 7, 30, 90 days or all time as line and bar charts, with
   the week before and the best day.
+- `wisply codemode`: code mode for every AI. The AI writes one short JavaScript and Wisply runs it in a sandbox
+  (QuickJS, no network, no `require`): `` $`…` `` shell commands with safe quoting, `` wisply`…` `` for every wisply
+  command, `read`, `write`, `edit`, `glob`, `sleep`, loops and `Promise.all` (up to 8 calls at once, 10 minutes at
+  most). Only the result and `console.log` lines come back. Code comes as an argument, from `--file`, from stdin or
+  through the new `code`, `yes` and `timeout` arguments of the MCP tool. Errors name the line, its source and how
+  many calls already finished. Every step passes the deny and ask rules of Claude Code, Codex, Gemini and Cursor and
+  the four risk classes; a risky step stops the script before it runs and the same code runs again with `--yes`,
+  deleting inside the project passes. Code mode is the default for every task with more than one step: the skill,
+  the start and the compact info say so, and three single calls within two minutes bring a tip, every time. On by
+  default, `wisply config codemode off` turns it off. Measured: five checks over git, files and memory took 6 calls and ~674
+  tokens one by one, and 1 call and ~155 tokens in code mode.
+- Script routines: a code mode script that worked and made at least two calls is saved whole as a routine on this
+  computer, once per script, named from the request. Values come as data: `--arg pr=100` (MCP `args`) is `args.pr`
+  in the script, and `wisply run <name> pr=101` replays it in one call from every client and AI. The prompt hook
+  offers it in the same project. A script routine that fails is replaced by the next working script of the session
+  as a new version. `--yes` is never saved, scripts with secrets are never saved, and unused ones go after 30 days
+  (90 days from 5 runs on). `wisply routines` shows the tokens each routine saved, `wisply routine show <name>` the
+  code, `wisply config codemode_save off` stops the saving.
+- `wisply kit add <name> "what it does" --rust file.rs|cargo-folder`: kit tools in Rust. A `.rs` file is built with
+  `rustc -O`, a Cargo folder with `cargo build --release`, once when added and again only when the code changes;
+  `{exe}` stands for the built program. Without Rust installed the error says how to go on.
+- Early session notes: a session that is still running gets a short note in the memory once it has two requests and
+  enough text, so `wisply recall` finds it from another folder or AI right away instead of only after the session is
+  learned. The note names the goal and the latest request and is marked as not summarized yet; it reads the
+  transcript only and needs no model, and the learned note takes its place once the session is learned.
 - `wisply pupil info <YouTube link>` and `wisply pupil captions <YouTube link>`: Wisply reads a YouTube video without
   watching it. `info` names title, channel, length, picture size, sound, spoken language, chapters and which text the
   video has. `captions` prints its subtitles (or, without any, the automatic captions of the spoken language) as
@@ -141,6 +166,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   tagging loads the ONNX Runtime named by `runtime` in `hear.toml` instead of building it in.
 
 ### Fixed
+- `fill Name=Ada Test` without quotes, and so every `fill` step inside `do "fill Name=Ada Test; click Send"`, stopped
+  with `fill wants Label=value pairs` because the value was cut at the space. A word without `=` now continues the
+  value before it. In four of four test sessions the AI wrote exactly that call and had to repeat the steps one by one.
+- Setup and `install` left reference files of an older skill in the skill folders of the AI apps. Markdown files in
+  `wisply/references` that the new skill no longer has are removed there; other files stay.
+- The test of the channel ledger failed when the clock moved to the next second between its two steps (`1 s ago`
+  instead of `0 s ago`, seen once on the Windows runner). It now passes the time in, and also checks the minutes.
 - A `brain.json` with a wrong shape (a page without its element list, a list where a table belongs, a short entry)
   made every command that learns from a page fail. The file is now mended when it is loaded: broken parts are
   dropped, the rest is kept.
@@ -228,10 +260,20 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   is now taken as it is written.
 
 ### Changed
+- The skill every AI reads is smaller and sorted by topic. The description that sits in every session went from 431
+  to 250 characters, and the two large reference files (15.1 KB and 11.2 KB) became seven small ones of 1.8 to 5.2 KB
+  (apps, chats, video, routines, memory, web, system), so an AI that needs one detail reads a third of the text at
+  most. Measured with twenty headless sessions of a small model on five tasks: 10 of 10 solved with the new text, 8
+  of 10 with the old one, about the same cost (0.065 against 0.068 USD), and no session opened a whole reference file
+  where one with the old text read all 15 KB. A test keeps the sizes in check.
 - The graph in `wisply ui` no longer stutters on big graphs: focusing, hovering, dragging, zooming, the filters and
-  the time slider touch only the nodes that change instead of every node, the highlight is drawn by a small second
-  layer, and the layout runs in a worker so the window stays usable while a new graph settles. Edges and names now
-  stay visible while a big graph moves.
+  the time slider touch only the nodes that change instead of every node, and the highlight is drawn by a small second
+  layer. Edges and names now stay visible while a big graph moves.
+- The graph in `wisply ui` is laid out at once instead of settling: every group gets its own place, groups that share
+  many notes sit side by side, a note without a group joins the group it links to most, links inside a group take its
+  colour and links between groups are fainter. Names of the most connected nodes and around a focused node no longer
+  overlap, the graph no longer sits under the time slider, the counter says how many nodes are shown out of how many,
+  the legend can list every group, and small windows hide the hint box.
 - Every error for a wrong command or value says what to try: `headless`, `statusline`, `statusline set`, `update`,
   `progress`, `dialog`, `install` and the MCP answers for a blocked command, a missing setup and a busy daemon now
   end in `-> try: ...` like the rest, without the word `usage:`, and an unknown word is shown in quotes everywhere.

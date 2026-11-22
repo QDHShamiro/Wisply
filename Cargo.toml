@@ -38,6 +38,7 @@ windows-sys = "0.59"
 proptest = { version = "1", default-features = false, features = ["std"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 roxmltree = "0.21"
+rquickjs = { version = "0.14", default-features = false, features = ["std"] }
 fancy-regex = { version = "0.20", default-features = false, features = ["std", "perf"] }
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 serde_json = { version = "1", features = ["preserve_order"] }

@@ -85,6 +85,8 @@ fn defaults() -> Map<String, Value> {
         ("servers", json!(true)),
         ("servers_file", json!("")),
         ("list_tidy", json!(true)),
+        ("codemode", json!(true)),
+        ("codemode_save", json!(true)),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }

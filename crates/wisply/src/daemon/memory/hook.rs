@@ -54,6 +54,8 @@ static WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[@#]|[^\W\d_][\w-]*
 static PATH: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"(?:[A-Za-z]:|~|\.{1,2})?[\\/][^\s"'<>|]*"#).expect("path pattern"));
 
+const CODEMODE_START: &str = "Code mode is the default: every task with more than one step (browser, apps, chats, uploads, shell, files, recall) runs as ONE wisply codemode --file x.js script (MCP: the code argument), never as a chain of single calls; a single call only when the task is exactly one command.";
+
 fn data_text<'a>(data: &'a Value, key: &str) -> &'a str {
     data.get(key).and_then(Value::as_str).unwrap_or("")
 }
@@ -78,6 +80,9 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         }
         super::index::learn_now();
     }
+    if event == "end" && data_text(&data, "reason") == "clear" && !transcript.is_empty() {
+        super::handoff::save_cleared(&d.home, &cwd, Path::new(transcript));
+    }
     if event != "start" {
         return Ok(String::new());
     }
@@ -90,17 +95,26 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
 {text}"
             ),
             None => text,
-        });
+        }
+        .lines()
+        .chain(codemode_line(d).as_deref())
+        .collect::<Vec<_>>()
+        .join(
+            "
+",
+        ));
     }
     let commits = if here.is_empty() || cwd.is_empty() { Vec::new() } else { commits(&cwd) };
     let text = with_store(d, |s| start_text(s, &here, commits))?;
-    Ok(match crate::update::notice(&d.home) {
-        Some(line) => format!(
-            "{text}
-{line}"
-        ),
-        None => text,
-    })
+    let cleared =
+        if data_text(&data, "source") == "clear" { super::handoff::take_cleared(&d.home, &cwd) } else { None };
+    let parts: Vec<String> =
+        [cleared, Some(text), codemode_line(d), crate::update::notice(&d.home)].into_iter().flatten().collect();
+    Ok(parts.join("\n"))
+}
+
+fn codemode_line(d: &Daemon) -> Option<String> {
+    config::on(&config::load(&d.home), "codemode").then(|| CODEMODE_START.to_string())
 }
 
 fn listed(head: &str, rows: Vec<(i64, String)>) -> Vec<String> {

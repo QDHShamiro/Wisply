@@ -25,7 +25,7 @@ pub use bench::{
 pub use board::{Card, Graph, Node, Run, links};
 pub use expand::{near, stem_word};
 pub use growth::DayCount;
-pub use learner::{Due, Record, points, titled};
+pub use learner::{Due, Record, Unsummarized, points, titled};
 pub use lessons::Lesson;
 pub use list::{
     BODY_CHARS, Change, FIELDS, KINDS, LEVELS, LogHit, Mute, NewEntry, OPEN, PRIOS, STATUSES, Seen, ServerState, Todo,

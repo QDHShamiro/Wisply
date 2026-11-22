@@ -56,8 +56,9 @@ export const T = {
   graph: {
     loading: "Loading graph…",
     find: "Find a project or note…",
-    layout: "Arranging…",
-    nodes: (n: number, e: number) => `${n.toLocaleString("en-US")} nodes · ${e.toLocaleString("en-US")} links`,
+    nodes: (shown: number, all: number, links: number) => `${shown < all ? `${shown.toLocaleString("en-US")} of ` : ""}${all.toLocaleString("en-US")} nodes · ${links.toLocaleString("en-US")} links`,
+    more: (n: number) => `Show ${n.toLocaleString("en-US")} more`,
+    fewer: "Show fewer",
     kinds: { note: "Notes", project: "Projects", session: "Sessions" },
     orphans: "Unlinked notes",
     report: "Report",
