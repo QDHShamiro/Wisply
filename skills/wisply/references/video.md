@@ -4,6 +4,7 @@
 - `watch <link|file|e40>` answers in one call: title, length, chapters, 12 scenes in one image (`frames <path>`, open it with your file-read tool), the text on screen and the speech as a skim with times.
 - Then zoom: `--from 4:05 --to 6:00` (denser frames, all speech of that part), `--at 1:23,2:45` (those frames large enough to read code), `--text` (screen text from the real frames), `--full` (all speech).
 - The next call about the same video answers from the cache (24 h). Tutorials: read the chapters and the skim first, then `--at` the moments with code or settings.
+- `pupil watch <YouTube link>` has Gemini watch the whole video and write it down as text, no image to read: every step with its time, keys, menu path and code (`--mode steps`, the default), the gist (`--mode summary`) or both (`--mode full`), plus the notable sounds. `--focus "words"` narrows it, `--start 4:05 --end 6:00` watches one part. Needs a free key in `GEMINI_API_KEY`; takes seconds to a few minutes, the answer is kept. `pupil info <link>` and `pupil captions <link>` read title, chapters and captions without Gemini.
 
 ## Listen: what a video says
 - `listen` (the playing video of the current tab), `listen e40`, `listen https://vm.tiktok.com/...` (no browser needed) or `listen C:/clip.mp4`. Answer: `transcript (en, groq whisper-large-v3-turbo, 5.8 s):` and lines like `0:05 the cool thing about these guys`.
