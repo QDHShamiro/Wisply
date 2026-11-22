@@ -15,7 +15,7 @@ More than one step = one `wisply codemode --file x.js` (MCP: `code`): look, deci
 2. Public page: `read <url>` (no browser, PDFs too). Question: `research "q" "q en"`. Data: `fetch <url> --pick a.b`, `net`.
 3. `open <url> -f "a|b"` finds, `--text` reads, plain is the first look.
 4. `-f "word"` on an action shows its result: `click "Merge" -f merged`. Then `snap -f`, `text -f`, `shot` last. A repeated `snap` lists changes (`--full` all).
-5. Waiting: `wait "text" --reload 15s --timeout 10m`, never a sleep loop.
+5. Waiting: `wait "text" --reload 15s --timeout 10m`, CI: `wait ci`, a command: `wait until "cmd"`. Never a sleep loop.
 
 ## Web
 ```

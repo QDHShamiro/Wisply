@@ -8,6 +8,10 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply wait ci [--pr N|--branch B|--sha S] [--repo owner/name] [--timeout 30m]` waits for the CI of a commit and prints one
+  `green`/`red` line: on red the failed job and its last error lines, shortened; a result notice with `=failure`
+  counts as red. Exit 0, 1 or 2. `wisply wait until "<command>" [--every 5s] [--timeout 10m]` repeats a command until
+  it passes and prints only the last output. An AI no longer polls `gh run view` or sleeps in loops while it waits.
 - To-dos become one list for bugs, features, tasks and ideas (`SPEC-list.md`). `wisply ui` opens on it: table and
   board with drag and drop, a side panel per entry (markdown text, log excerpt, notes, history with undo), filters,
   "+ Entry", a strip with the AI sessions of the last 24 hours and a Warnings, Done and Suggestions tab. Status is

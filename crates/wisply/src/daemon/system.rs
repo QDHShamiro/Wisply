@@ -35,6 +35,7 @@ memory  recall \"words\" [--all] [--max n] | recall <id>   remember \"fact\" [--
 keys    keys [site] [-f x]   keys add <site> \"ctrl+k=what\"   keys rm <site> <key>
 cleanup done [--quiet]   keep [t]   config cleanup on|off
 system  status   channels   stop   abort   config [key value]   log [n] | log stats [n]   version
+        wait ci [--pr N|--branch B|--sha S] [--repo o/r] [--timeout 30m] (one green/red line)   wait until \"<command>\" [--every 5s --timeout 10m]
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
         peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
         progress [<percent> | <done>/<total>] [\"what you are doing\"] | progress show [--color] [--ascii] | progress clear (how far the task is, shown in the status line; plan tools are noted by themselves)
@@ -250,6 +251,7 @@ mod tests {
         assert!(about("wiki").is_some_and(|row| row.starts_with("wiki | wiki accept")));
         assert!(about("kit").is_some_and(|row| row.starts_with("kit | kit add <name>")));
         assert!(about("skill").is_some_and(|row| row.starts_with("skill | skill find <words>")));
+        assert!(about("wait").is_some_and(|rows| rows.contains("wait ci [--pr N") && rows.contains("wait until")));
         assert!(about("codemode").is_some_and(|row| row.starts_with("codemode \"<javascript>\" [--yes]")));
         assert_eq!(help(Some("voice")).ok().as_deref(), Some(HELP));
         assert_eq!(help(None).ok().as_deref(), Some(HELP));
