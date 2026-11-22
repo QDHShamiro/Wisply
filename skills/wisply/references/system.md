@@ -25,7 +25,8 @@
 ## Waiting for CI or a command
 - `wisply wait ci` (or `--pr 12`, `--branch x`, `--sha abc`) waits for the GitHub Actions runs of the commit and
   ends with one line: `green: ...`, or `red: ...` with the failed jobs and their error lines. `--timeout 30m`,
-  `--ignore name,name` for steps that may fail. Needs `gh`. Exit 0 green, 1 red, 2 timeout or error.
+  `--ignore name,name` for steps that may fail, `--repo owner/name` outside the repo folder. Needs `gh`; if it
+  cannot reach the repo it stops after 3 tries with the gh error. Exit 0 green, 1 red, 2 timeout or error.
 - `wisply wait until "<command>" --every 5s --timeout 10m` repeats a command until it succeeds; never a sleep loop.
 
 ## Trouble

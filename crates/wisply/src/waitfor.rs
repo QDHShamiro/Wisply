@@ -5,7 +5,10 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use wisply_squeeze::{clean, decode, read_limited, squeeze};
 
-const CI_USAGE: &str = "wisply wait ci [--pr N|--branch B|--sha S] [--timeout 30m] [--ignore name,name]";
+const CI_USAGE: &str =
+    "wisply wait ci [--pr N|--branch B|--sha S] [--repo owner/name] [--timeout 30m] [--ignore name,name]";
+const GH_FAILS: u32 = 3;
+const GH_HINT: &str = "run it in the repo folder or add --repo owner/name";
 const UNTIL_USAGE: &str = "wisply wait until \"<command>\" [--every 5s] [--timeout 10m]";
 const CI_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const UNTIL_TIMEOUT: Duration = Duration::from_secs(10 * 60);
@@ -89,12 +92,13 @@ struct Flags {
     pr: Option<String>,
     branch: Option<String>,
     sha: Option<String>,
+    repo: Option<String>,
     timeout: Duration,
     ignore: Vec<String>,
 }
 
 fn parse_ci(args: &[String]) -> Result<Flags, String> {
-    let mut f = Flags { pr: None, branch: None, sha: None, timeout: CI_TIMEOUT, ignore: Vec::new() };
+    let mut f = Flags { pr: None, branch: None, sha: None, repo: None, timeout: CI_TIMEOUT, ignore: Vec::new() };
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let (key, inline) = match a.split_once('=') {
@@ -106,6 +110,7 @@ fn parse_ci(args: &[String]) -> Result<Flags, String> {
             "--pr" => f.pr = Some(value),
             "--branch" => f.branch = Some(value),
             "--sha" => f.sha = Some(value),
+            "--repo" | "-R" => f.repo = Some(value),
             "--timeout" => f.timeout = parse_duration(&value).ok_or("timeout like 30m, 90s or 1h")?,
             "--ignore" => f.ignore = value.split(',').map(str::to_string).collect(),
             other => return Err(format!("unknown option {other}")),
@@ -114,43 +119,70 @@ fn parse_ci(args: &[String]) -> Result<Flags, String> {
     Ok(f)
 }
 
-fn capture(program: &str, args: &[&str]) -> Option<String> {
-    let out = Command::new(program).args(args).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
-    out.status.success().then(|| decode(&out.stdout))
+pub fn first_line(stderr: &str) -> String {
+    stderr.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("no message").chars().take(300).collect()
 }
 
-fn gh(args: &[&str]) -> Option<String> {
+fn capture(program: &str, args: &[&str]) -> Result<String, String> {
+    let out = Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("cannot start {program} ({e})"))?;
+    if out.status.success() { Ok(decode(&out.stdout)) } else { Err(first_line(&decode(&out.stderr))) }
+}
+
+pub fn gh_args<'a>(repo: Option<&'a str>, args: &[&'a str]) -> Vec<&'a str> {
+    let mut all = args.to_vec();
+    if let Some(r) = repo
+        && matches!(args.first(), Some(&"run" | &"pr"))
+    {
+        all.extend(["--repo", r]);
+    }
+    all
+}
+
+fn gh(repo: Option<&str>, args: &[&str]) -> Result<String, String> {
     let program = std::env::var(GH_ENV).unwrap_or_else(|_| "gh".into());
-    capture(&program, args)
+    capture(&program, &gh_args(repo, args))
 }
 
 fn git(args: &[&str]) -> Option<String> {
-    capture("git", args).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    capture("git", args).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
-fn json(raw: Option<String>) -> Option<Value> {
-    serde_json::from_str(&raw?).ok()
+fn json(raw: Result<String, String>) -> Result<Value, String> {
+    serde_json::from_str(&raw?).map_err(|e| format!("gh gave no JSON ({e})"))
 }
 
 struct Target {
     branch: Option<String>,
     sha: Option<String>,
+    repo: Option<String>,
+}
+
+impl Target {
+    fn repo(&self) -> Option<&str> {
+        self.repo.as_deref()
+    }
 }
 
 fn target(f: &Flags) -> Result<Target, String> {
+    let repo = f.repo.clone();
     if let Some(pr) = &f.pr {
-        let v = json(gh(&["pr", "view", pr, "--json", "headRefName,headRefOid"]))
-            .ok_or(format!("gh cannot read PR {pr}"))?;
+        let v = json(gh(repo.as_deref(), &["pr", "view", pr, "--json", "headRefName,headRefOid"]))
+            .map_err(|why| format!("gh cannot read PR {pr}: {why}"))?;
         return Ok(Target {
             branch: Some(text(&v, "headRefName").to_string()),
             sha: Some(text(&v, "headRefOid").to_string()),
+            repo,
         });
     }
     if f.branch.is_some() || f.sha.is_some() {
-        return Ok(Target { branch: f.branch.clone(), sha: f.sha.clone() });
+        return Ok(Target { branch: f.branch.clone(), sha: f.sha.clone(), repo });
     }
     let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]).ok_or("not in a git repository")?;
-    Ok(Target { sha: git(&["rev-parse", "HEAD"]), branch: Some(branch) })
+    Ok(Target { sha: git(&["rev-parse", "HEAD"]), branch: Some(branch), repo })
 }
 
 fn list_runs(t: &Target) -> Result<Vec<Value>, String> {
@@ -159,7 +191,7 @@ fn list_runs(t: &Target) -> Result<Vec<Value>, String> {
     if let Some(b) = &t.branch {
         args.extend(["--branch", b]);
     }
-    let all = json(gh(&args)).ok_or("gh run list failed (is gh installed and logged in?)")?;
+    let all = json(gh(t.repo(), &args)).map_err(|why| format!("gh run list failed: {why}"))?;
     let all = all.as_array().cloned().unwrap_or_default();
     Ok(match &t.sha {
         Some(sha) => all.into_iter().filter(|r| text(r, "headSha").starts_with(sha.as_str())).collect(),
@@ -167,8 +199,8 @@ fn list_runs(t: &Target) -> Result<Vec<Value>, String> {
     })
 }
 
-fn failed_job_lines(run: u64) -> String {
-    let log = gh(&["run", "view", &run.to_string(), "--log-failed"]).unwrap_or_default();
+fn failed_job_lines(t: &Target, run: u64) -> String {
+    let log = gh(t.repo(), &["run", "view", &run.to_string(), "--log-failed"]).unwrap_or_default();
     let body = squeeze(&log).map_or_else(|| clean(&log), |s| s.plain);
     let lines: Vec<&str> = body.lines().filter(|l| !l.trim().is_empty()).collect();
     let tail = lines.len().saturating_sub(FAIL_LINES);
@@ -176,14 +208,17 @@ fn failed_job_lines(run: u64) -> String {
     joined.chars().take(FAIL_CHARS).collect()
 }
 
-fn annotation_failures(run: u64, ignore: &[String]) -> Vec<String> {
-    let Some(v) = json(gh(&["run", "view", &run.to_string(), "--json", "jobs"])) else { return Vec::new() };
-    let repo = gh(&["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).unwrap_or_default();
+fn annotation_failures(t: &Target, run: u64, ignore: &[String]) -> Vec<String> {
+    let Ok(v) = json(gh(t.repo(), &["run", "view", &run.to_string(), "--json", "jobs"])) else { return Vec::new() };
+    let repo = match t.repo() {
+        Some(r) => r.to_string(),
+        None => gh(None, &["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]).unwrap_or_default(),
+    };
     let mut marks = Vec::new();
     for job in v["jobs"].as_array().into_iter().flatten() {
         let Some(job_id) = job["databaseId"].as_u64() else { continue };
         let path = format!("repos/{}/check-runs/{job_id}/annotations", repo.trim());
-        let Some(list) = json(gh(&["api", &path])) else { continue };
+        let Ok(list) = json(gh(None, &["api", &path])) else { continue };
         for a in list.as_array().into_iter().flatten() {
             for m in failure_marks(text(a, "message"), ignore) {
                 marks.push(format!("{} {m}", text(job, "name")));
@@ -214,15 +249,25 @@ pub fn ci(args: &[String]) -> ExitCode {
     let started = Instant::now();
     let mut pause = POLL_FIRST;
     let mut last;
+    let (mut fails, mut reached) = (0, false);
     loop {
         match list_runs(&target) {
-            Ok(runs) => match judge(&runs) {
-                State::Green(n) => return finish_green(&runs, n, &target, &flags, started),
-                State::Red(bad) => return finish_red(&bad, &target),
-                State::Waiting(0) => last = "no runs yet".to_string(),
-                State::Waiting(n) => last = format!("{n} run(s) still going"),
-            },
-            Err(why) => last = why,
+            Ok(runs) => {
+                reached = true;
+                match judge(&runs) {
+                    State::Green(n) => return finish_green(&runs, n, &target, &flags, started),
+                    State::Red(bad) => return finish_red(&bad, &target),
+                    State::Waiting(0) => last = "no runs yet".to_string(),
+                    State::Waiting(n) => last = format!("{n} run(s) still going"),
+                }
+            }
+            Err(why) => {
+                fails += 1;
+                if !reached && fails >= GH_FAILS {
+                    return fail(&format!("err: {why} -> try: {GH_HINT}"));
+                }
+                last = why;
+            }
         }
         let Some(left) = left_of(flags.timeout, started) else {
             return fail(&format!("err: timeout after {} s: {last}", started.elapsed().as_secs()));
@@ -238,7 +283,7 @@ fn left_of(timeout: Duration, started: Instant) -> Option<Duration> {
 
 fn finish_green(runs: &[Value], n: usize, t: &Target, f: &Flags, started: Instant) -> ExitCode {
     let marks: Vec<String> =
-        runs.iter().flat_map(|r| annotation_failures(r["databaseId"].as_u64().unwrap_or(0), &f.ignore)).collect();
+        runs.iter().flat_map(|r| annotation_failures(t, r["databaseId"].as_u64().unwrap_or(0), &f.ignore)).collect();
     if marks.is_empty() {
         println!("green: {n} run(s) {} in {} s", sha_label(t), started.elapsed().as_secs());
         return ExitCode::SUCCESS;
@@ -251,13 +296,13 @@ fn finish_red(bad: &[Failed], t: &Target) -> ExitCode {
     let names: Vec<&str> = bad.iter().map(|b| b.name.as_str()).collect();
     println!("red: {} {}", sha_label(t), names.join(", "));
     for b in bad {
-        let jobs = json(gh(&["run", "view", &b.run.to_string(), "--json", "jobs"]));
+        let jobs = json(gh(t.repo(), &["run", "view", &b.run.to_string(), "--json", "jobs"]));
         for job in jobs.iter().flat_map(|v| v["jobs"].as_array().into_iter().flatten()) {
             if text(job, "conclusion") == "failure" {
                 println!("job: {}", text(job, "name"));
             }
         }
-        println!("{}", failed_job_lines(b.run));
+        println!("{}", failed_job_lines(t, b.run));
     }
     ExitCode::from(1)
 }
@@ -411,6 +456,21 @@ mod tests {
         old["headSha"] = json!("old");
         let kept = runs_of_newest_sha(vec![run("completed", "success", 2), old]);
         assert_eq!(kept.len(), 1);
+    }
+
+    #[test]
+    fn the_repo_goes_to_run_and_pr_and_the_gh_error_is_kept() {
+        assert_eq!(gh_args(Some("o/r"), &["run", "list"]), ["run", "list", "--repo", "o/r"]);
+        assert_eq!(gh_args(Some("o/r"), &["pr", "view", "3"]), ["pr", "view", "3", "--repo", "o/r"]);
+        assert_eq!(gh_args(Some("o/r"), &["api", "x"]), ["api", "x"]);
+        assert_eq!(gh_args(None, &["run", "list"]), ["run", "list"]);
+        assert_eq!(
+            first_line("\n  failed to run git: not a git repository\nmore"),
+            "failed to run git: not a git repository"
+        );
+        assert_eq!(first_line(""), "no message");
+        let f = parse_ci(&["--sha".into(), "abc".into(), "-R".into(), "o/r".into()]).unwrap();
+        assert_eq!((f.sha.as_deref(), f.repo.as_deref()), (Some("abc"), Some("o/r")));
     }
 
     #[test]

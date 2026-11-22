@@ -299,11 +299,13 @@ keeps the rest in a file.
 
 ## Waiting without polling
 
-- `wisply wait ci [--pr N|--branch B|--sha S] [--timeout 30m]` blocks until the GitHub Actions runs of that commit
+- `wisply wait ci [--pr N|--branch B|--sha S] [--repo owner/name] [--timeout 30m]` blocks until the GitHub Actions runs of that commit
   end (no option: the current branch and commit) and prints one line, `green: ...` or `red: ...`. A red run adds the
   failed job and its last error lines, shortened like Headroom does. `gh` polls every 10 s, slowing to 30 s. A run that
   ends green but whose result notice reports `name=failure` (a step with `continue-on-error`) counts as red;
-  `--ignore name,name` skips named steps. Exit code 0 green, 1 red, 2 timeout or error.
+  `--ignore name,name` skips named steps. Outside the repo folder add `--repo owner/name`; when `gh` cannot reach the
+  repo at all, it stops after 3 tries with the gh error instead of waiting out the timeout. Exit code 0 green, 1 red,
+  2 timeout or error.
 - `wisply wait until "<command>" [--every 5s] [--timeout 10m]` repeats the command until it exits 0 and prints only
   its last output (exit 2 on timeout).
 

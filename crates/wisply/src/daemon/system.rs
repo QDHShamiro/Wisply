@@ -33,7 +33,7 @@ memory  recall \"words\" [--all] [--max n] | recall <id>   remember \"fact\" [--
 keys    keys [site] [-f x]   keys add <site> \"ctrl+k=what\"   keys rm <site> <key>
 cleanup done [--quiet]   keep [t]   config cleanup on|off
 system  status   channels   stop   abort   config [key value]   log [n] | log stats [n]   version
-        wait ci [--pr N|--branch B|--sha S] [--timeout 30m] (one green/red line)   wait until \"<command>\" [--every 5s --timeout 10m]
+        wait ci [--pr N|--branch B|--sha S] [--repo o/r] [--timeout 30m] (one green/red line)   wait until \"<command>\" [--every 5s --timeout 10m]
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
         peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
         progress [<percent> | <done>/<total>] [\"what you are doing\"] | progress show [--color] [--ascii] | progress clear (how far the task is, shown in the status line; plan tools are noted by themselves)
