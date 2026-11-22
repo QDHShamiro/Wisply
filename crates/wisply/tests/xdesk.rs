@@ -56,6 +56,7 @@ fn linux_apps_list_snap_type_read_and_click_through_atspi() {
     fs::create_dir_all(&path).unwrap();
     fs::write(path.join("v3"), "").unwrap();
     let home = Home(path);
+    assert_eq!(home.run(&["config", "codemode", "off"]).0, 0);
     let mut app = Command::new("zenity")
         .args(["--entry", &format!("--title={TITLE}"), "--text=Your name"])
         .stdout(Stdio::piped())
