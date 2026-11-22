@@ -26,6 +26,13 @@ const CLAUDE: &str = "CLAUDE: ";
 const EDIT: &str = "EDIT ";
 const RAN: &str = "RAN ";
 const ERROR: &str = "ERROR: ";
+const LATEST: &str = "Latest request: ";
+
+pub struct Early {
+    pub title: String,
+    pub body: String,
+    pub paths: Vec<String>,
+}
 
 fn lines<'a>(text: &'a str, prefix: &str) -> Vec<&'a str> {
     text.lines().filter_map(|l| l.strip_prefix(prefix)).collect()
@@ -66,7 +73,7 @@ pub fn compose(first: &str, earlier: &str, tail: &str, title: &str, todos: &[Str
         out.push(format!("First request: {}", oneline(first, GOAL_CHARS)));
     }
     if !latest.is_empty() && latest != goal {
-        out.push(format!("Latest request: {}", oneline(latest, LATEST_CHARS)));
+        out.push(format!("{LATEST}{}", oneline(latest, LATEST_CHARS)));
     }
     bullets("Decisions and findings:", last_unique(lines(tail, CLAUDE), DECISIONS), DECISION_CHARS, &mut out);
     let open: Vec<String> = todos.iter().take(TODOS).cloned().collect();
@@ -109,12 +116,31 @@ fn earlier(path: &Path, at: u64) -> String {
     String::new()
 }
 
+fn told(path: &Path, at: u64, tail: &str, title: &str, todos: &[String]) -> String {
+    let first = typed_in(path, 0, at.min(HEAD_BYTES)).map(|found| found.0).unwrap_or_default();
+    let before = if lines(tail, USER).is_empty() { earlier(path, at) } else { String::new() };
+    compose(&first, &before, tail, title, todos)
+}
+
 pub fn from_transcript(path: &Path, todos: &[String]) -> String {
     let at = tail_offset(path).unwrap_or(0);
     let Ok(tail) = condense(path, at, Some(TAIL_CHARS)) else { return String::new() };
-    let first = typed_in(path, 0, at.min(HEAD_BYTES)).map(|found| found.0).unwrap_or_default();
-    let before = if lines(&tail.text, USER).is_empty() { earlier(path, at) } else { String::new() };
-    compose(&first, &before, &tail.text, &tail.title, todos)
+    told(path, at, &tail.text, &tail.title, todos)
+}
+
+pub fn early(path: &Path, min_chars: usize, min_users: usize) -> Option<Early> {
+    let at = tail_offset(path).unwrap_or(0);
+    let tail = condense(path, at, Some(TAIL_CHARS)).ok()?;
+    if tail.text.chars().count() < min_chars || (tail.users < min_users && tail.edits == 0) {
+        return None;
+    }
+    let text = told(path, at, &tail.text, &tail.title, &[]);
+    let mut body: Vec<&str> = text.lines().skip(1).collect();
+    if let Some(at) = body.iter().position(|l| l.starts_with(LATEST)) {
+        let line = body.remove(at);
+        body.insert(0, line);
+    }
+    Some(Early { title: tail.title, body: body.join("\n"), paths: tail.paths }).filter(|e| !e.body.is_empty())
 }
 
 fn file_of(home: &Path, sid: &str) -> Option<PathBuf> {
@@ -295,5 +321,35 @@ mod tests {
     #[test]
     fn nothing_to_say_gives_nothing() {
         assert_eq!(compose("", "", "", "", &[]), "");
+    }
+
+    #[test]
+    fn an_early_note_leads_with_the_latest_request_and_skips_small_talk() {
+        let dir = std::env::temp_dir().join(format!("lt-handoff-early-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let rows = vec![
+            user("Build a cache for the shop prices so the page loads faster"),
+            said("Root cause: the price query runs once per item, so I chose one batched query instead."),
+            edit("/work/shop/src/prices.rs"),
+            user("also keep the cache for five minutes only"),
+            said("Decided to expire entries after 300 s because stale prices cost orders."),
+            serde_json::json!({"type": "ai-title", "aiTitle": "Price cache"}).to_string(),
+        ];
+        let path = write_transcript(&dir, &rows);
+        let got = early(&path, 100, 2).unwrap();
+        assert_eq!(got.title, "Price cache");
+        let lead = "Latest request: also keep the cache for five minutes only\nGoal: Price cache\n";
+        assert!(got.body.starts_with(lead), "{}", got.body);
+        assert!(
+            !got.body.contains("Wisply handoff") && got.body.contains("expire entries after 300 s"),
+            "{}",
+            got.body
+        );
+        assert!(!got.paths.is_empty() && got.paths.iter().all(|p| p == "/work/shop/src/prices.rs"), "{:?}", got.paths);
+        assert!(early(&path, 100_000, 2).is_none());
+        let small = write_transcript(&dir, &[user("hi there, are you awake"), said("Yes, I am here.")]);
+        assert!(early(&small, 1, 2).is_none());
+        let _ = fs::remove_dir_all(&dir);
     }
 }
