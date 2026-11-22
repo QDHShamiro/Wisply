@@ -78,6 +78,9 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         }
         super::index::learn_now();
     }
+    if event == "end" && data_text(&data, "reason") == "clear" && !transcript.is_empty() {
+        super::handoff::save_cleared(&d.home, &cwd, Path::new(transcript));
+    }
     if event != "start" {
         return Ok(String::new());
     }
@@ -94,13 +97,10 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     }
     let commits = if here.is_empty() || cwd.is_empty() { Vec::new() } else { commits(&cwd) };
     let text = with_store(d, |s| start_text(s, &here, commits))?;
-    Ok(match crate::update::notice(&d.home) {
-        Some(line) => format!(
-            "{text}
-{line}"
-        ),
-        None => text,
-    })
+    let cleared =
+        if data_text(&data, "source") == "clear" { super::handoff::take_cleared(&d.home, &cwd) } else { None };
+    let parts: Vec<String> = [cleared, Some(text), crate::update::notice(&d.home)].into_iter().flatten().collect();
+    Ok(parts.join("\n"))
 }
 
 fn listed(head: &str, rows: Vec<(i64, String)>) -> Vec<String> {
