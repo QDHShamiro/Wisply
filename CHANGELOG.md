@@ -19,6 +19,16 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   the start and the compact info say so, and three single calls within two minutes bring a tip, every time. On by
   default, `wisply config codemode off` turns it off. Measured: five checks over git, files and memory took 6 calls and ~674
   tokens one by one, and 1 call and ~155 tokens in code mode.
+- Script routines: a code mode script that worked and made at least two calls is saved whole as a routine on this
+  computer, once per script, named from the request. Values come as data: `--arg pr=100` (MCP `args`) is `args.pr`
+  in the script, and `wisply run <name> pr=101` replays it in one call from every client and AI. The prompt hook
+  offers it in the same project. A script routine that fails is replaced by the next working script of the session
+  as a new version. `--yes` is never saved, scripts with secrets are never saved, and unused ones go after 30 days
+  (90 days from 5 runs on). `wisply routines` shows the tokens each routine saved, `wisply routine show <name>` the
+  code, `wisply config codemode_save off` stops the saving.
+- `wisply kit add <name> "what it does" --rust file.rs|cargo-folder`: kit tools in Rust. A `.rs` file is built with
+  `rustc -O`, a Cargo folder with `cargo build --release`, once when added and again only when the code changes;
+  `{exe}` stands for the built program. Without Rust installed the error says how to go on.
 - Early session notes: a session that is still running gets a short note in the memory once it has two requests and
   enough text, so `wisply recall` finds it from another folder or AI right away instead of only after the session is
   learned. The note names the goal and the latest request and is marked as not summarized yet; it reads the

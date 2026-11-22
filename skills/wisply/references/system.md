@@ -9,7 +9,7 @@
 - The status line shows how far the task is. With a plan tool (TodoWrite, TaskCreate/TaskUpdate, `update_plan`) that happens by itself; without one say it: `wisply progress 3/8 "what you are doing"` or `wisply progress 40`, and `wisply progress clear` when the task is over.
 
 ## Own tools and skills
-- A step you keep repeating by hand becomes a tool: `wisply kit add <name> "what it does" [--file script] -- <program> [args]` (`{1}`..`{9}`, `{all}`, `{file}` stand for arguments and the script), then `wisply kit run <name> [args]` in every session. `wisply kit` lists them.
+- A step you keep repeating by hand becomes a tool: `wisply kit add <name> "what it does" [--file script | --rust file.rs|cargo-folder] -- <program> [args]` (`{1}`..`{9}`, `{all}`, `{file}`, `{exe}` stand for arguments, the script and the built Rust program; with `--rust` the program part can be left out), then `wisply kit run <name> [args]` in every session. `wisply kit` lists them.
 - Know-how: `wisply skill find <words>` (this computer first, `--web` for GitHub), `skill get <owner/repo/path>` installs one for every AI here, `skill new` explains and builds one.
 - An answer that says "ask them first" means the user decides (deleting, AI permissions, money/accounts/keys/uploads, autostart or code from the internet): ask, and only repeat the call with `--yes` after they agreed.
 

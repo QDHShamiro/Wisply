@@ -177,6 +177,13 @@ pub fn send(home: &Path, args: &[String]) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    if let Some((argv, rest)) = wisply_proto::handoff(&reply.out) {
+        let code = crate::codemode::run(home, &argv[1..]);
+        if !rest.trim().is_empty() {
+            println!("{}", rest.trim_end());
+        }
+        return code;
+    }
     let mut out = reply.out;
     if stats {
         out.push_str(&format!("\n[{} ms, ~{} tokens]", started.elapsed().as_millis(), out.len() / 4 + 1));

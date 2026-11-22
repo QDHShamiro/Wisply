@@ -2,8 +2,10 @@ mod engine;
 mod files;
 mod gate;
 mod host;
+mod saved;
 mod shell;
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io::{self, Read};
@@ -31,11 +33,24 @@ const AGAIN: &str = "ask the user, then run the same code again with --yes (\"ye
 const OFF: &str = "err: code mode is turned off on this computer -> try: single wisply commands, or the user turns it on with: wisply config codemode on";
 const NESTED: &str = "err: code mode cannot start inside code mode -> try: put those steps into the outer script";
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 struct Ask {
     yes: bool,
     limit: Duration,
     code: String,
+    args: BTreeMap<String, String>,
+    routine: Option<String>,
+}
+
+fn pair(text: &str) -> Result<(String, String), String> {
+    let bad = format!("--arg takes name=value, got '{text}'");
+    let (k, v) = text.split_once('=').ok_or(bad.clone())?;
+    let mut chars = k.chars();
+    let starts = chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+    if !starts || !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(bad);
+    }
+    Ok((k.to_string(), v.to_string()))
 }
 
 fn span(text: &str) -> Option<Duration> {
@@ -53,25 +68,32 @@ fn span(text: &str) -> Option<Duration> {
 }
 
 fn parse(args: &[String], stdin: impl FnOnce() -> Result<String, String>) -> Result<Option<Ask>, String> {
-    let (mut yes, mut limit, mut words, mut from, mut piped) = (false, LIMIT, Vec::new(), None::<String>, false);
+    let mut ask = Ask { limit: LIMIT, ..Ask::default() };
+    let (mut words, mut from, mut piped) = (Vec::new(), None::<String>, false);
     let bad_time = "--timeout takes a time like 90s or 5m";
     let mut i = 0;
     while i < args.len() {
         let a = args[i].as_str();
-        let value = || args.get(i + 1).cloned().ok_or(format!("{a} needs a value"));
-        match a {
-            "--yes" | "-y" => yes = true,
-            "--timeout" => {
-                limit = span(&value()?).ok_or(bad_time)?;
+        let (flag, inline) = a.split_once('=').map_or((a, None), |(f, v)| (f, Some(v.to_string())));
+        let takes = matches!(flag, "--timeout" | "--file" | "--arg" | "--routine");
+        let value = match (takes, inline) {
+            (false, _) => String::new(),
+            (true, Some(v)) => v,
+            (true, None) => {
                 i += 1;
+                args.get(i).cloned().ok_or(format!("{a} needs a value"))?
             }
-            "--file" => {
-                from = Some(value()?);
-                i += 1;
+        };
+        match flag {
+            "--yes" | "-y" => ask.yes = true,
+            "--timeout" => ask.limit = span(&value).ok_or(bad_time)?,
+            "--file" => from = Some(value),
+            "--arg" => {
+                let (k, v) = pair(&value)?;
+                ask.args.insert(k, v);
             }
+            "--routine" => ask.routine = Some(value),
             "-" => piped = true,
-            _ if a.starts_with("--timeout=") => limit = span(&a["--timeout=".len()..]).ok_or(bad_time)?,
-            _ if a.starts_with("--file=") => from = Some(a["--file=".len()..].to_string()),
             _ => words.push(a),
         }
         i += 1;
@@ -79,7 +101,7 @@ fn parse(args: &[String], stdin: impl FnOnce() -> Result<String, String>) -> Res
     if words.len() == 1 && matches!(words[0], "help" | "-h" | "--help") && from.is_none() && !piped {
         return Ok(None);
     }
-    let code = match (from, piped) {
+    ask.code = match (from, piped) {
         (Some(path), _) => {
             let full = files::resolve(&env::current_dir().unwrap_or_default(), &path);
             fs::read_to_string(&full).map_err(|e| format!("cannot read {} ({e})", files::shown(&full)))?
@@ -87,7 +109,11 @@ fn parse(args: &[String], stdin: impl FnOnce() -> Result<String, String>) -> Res
         (None, true) => stdin()?,
         (None, false) => words.join(" "),
     };
-    Ok((!code.trim().is_empty()).then_some(Ask { yes, limit, code }))
+    match (&ask.routine, ask.code.trim().is_empty()) {
+        (Some(_), false) => Err("--routine runs saved code, so leave the code out".into()),
+        (Some(_), true) | (None, false) => Ok(Some(ask)),
+        (None, true) => Ok(None),
+    }
 }
 
 fn read_stdin() -> Result<String, String> {
@@ -209,7 +235,8 @@ fn settle(shared: &Shared, verdict: &Verdict, deadline: Instant) {
 fn execute(home: &Path, ask: &Ask, cwd: PathBuf, rules: gate::Rules, shell: shell::Shell) -> (Ran, Arc<Shared>) {
     let deadline = Instant::now() + ask.limit;
     let sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
-    let setup = Setup { home: home.to_path_buf(), cwd, sid, yes: ask.yes, shell, rules, deadline };
+    let args = ask.args.clone();
+    let setup = Setup { home: home.to_path_buf(), cwd, sid, yes: ask.yes, shell, rules, deadline, args };
     let (done_tx, done_rx) = mpsc::channel();
     let (runner, shared) = host::start(setup, done_tx);
     let code = ask.code.clone();
@@ -243,6 +270,13 @@ fn scan_first(ask: &Ask, cwd: &Path, rules: &gate::Rules, bash: bool) -> Option<
     Some(halted(&format!("{reason}\0{hint}"), 0))
 }
 
+fn for_routine(text: String, ask: &Ask) -> String {
+    match &ask.routine {
+        Some(name) => text.replace(AGAIN, &format!("ask the user, then run: wisply run {name} --yes")),
+        None => text,
+    }
+}
+
 fn emit(home: &Path, text: &str, seen: usize, code: i32, started: Instant) -> ExitCode {
     let (shown, _) = wisply_core::cap(&home.join("out"), text, "codemode", None, OUT_CHARS);
     println!("{shown}");
@@ -271,7 +305,7 @@ pub fn run(home: &Path, args: &[String]) -> ExitCode {
         println!("{NESTED}");
         return ExitCode::from(1);
     }
-    let ask = match parse(args, read_stdin) {
+    let mut ask = match parse(args, read_stdin) {
         Ok(Some(ask)) => ask,
         Ok(None) => {
             println!("{}", HELP.trim_end());
@@ -286,15 +320,39 @@ pub fn run(home: &Path, args: &[String]) -> ExitCode {
         println!("{OFF}");
         return ExitCode::from(1);
     }
+    if let Some(name) = &ask.routine {
+        match saved::code_of(home, name) {
+            Ok(code) => ask.code = code,
+            Err(why) => return emit(home, &format!("err: {why}"), 0, 1, started),
+        }
+    }
     let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let rules = gate::load(&cwd);
     let shell = shell::find();
     if let Some(stop) = scan_first(&ask, &cwd, &rules, shell.kind != shell::Kind::Power) {
-        return emit(home, &stop, 0, 1, started);
+        return emit(home, &for_routine(stop, &ask), 0, 1, started);
     }
-    let (ran, shared) = execute(home, &ask, cwd, rules, shell);
+    let (ran, shared) = execute(home, &ask, cwd.clone(), rules, shell);
     let finished = shared.finished.load(Ordering::SeqCst);
     let (text, ok) = explain(&ran, &ask.code, finished, ask.limit);
+    let mut text = for_routine(text, &ask);
+    if matches!(ran.verdict, Verdict::Halted(_)) {
+        return emit(home, &text, shared.seen.load(Ordering::Relaxed), 1, started);
+    }
+    let report = saved::Report {
+        code: &ask.code,
+        args: &ask.args,
+        routine: ask.routine.as_deref(),
+        calls: finished,
+        ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        ok,
+        secret: shared.secret.load(Ordering::SeqCst),
+        error: (!ok).then(|| text.lines().next().unwrap_or("")),
+    };
+    let sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
+    if let Some(note) = saved::tell(home, &cwd, &sid, &report) {
+        text.push_str(&format!("\n{note}"));
+    }
     emit(home, &text, shared.seen.load(Ordering::Relaxed), if ok { 0 } else { 1 }, started)
 }
 

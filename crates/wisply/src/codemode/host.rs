@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;
@@ -47,6 +48,7 @@ pub struct Setup {
     pub shell: Shell,
     pub rules: Rules,
     pub deadline: Instant,
+    pub args: BTreeMap<String, String>,
 }
 
 #[derive(Default)]
@@ -55,6 +57,7 @@ pub struct Shared {
     pub busy: AtomicUsize,
     pub seen: AtomicUsize,
     pub finished: AtomicUsize,
+    pub secret: AtomicBool,
     marked: AtomicBool,
 }
 
@@ -111,7 +114,13 @@ fn perform(setup: &Setup, shared: &Shared, task: Work) -> Result<(String, usize)
             Ok((json!({"code": out.code, "stdout": out.stdout, "stderr": out.stderr}).to_string(), seen))
         }
         Work::Wisply { argv, secret } => {
+            if secret.is_some() {
+                shared.secret.store(true, Ordering::SeqCst);
+            }
             let (code, out) = wisply(setup, shared, &argv, secret.as_deref())?;
+            if out.starts_with(wisply_proto::HANDOFF) {
+                return Err(super::saved::INSIDE.to_string());
+            }
             let seen = out.chars().count();
             Ok((json!({"code": code, "out": out}).to_string(), seen))
         }
@@ -208,7 +217,7 @@ fn take_env(argv: &mut Vec<String>) -> Result<Option<String>, String> {
 }
 
 fn halt(gate: &Gate) -> Option<Step> {
-    let again = "ask the user, then run the same code again with --yes (\"yes\": true over MCP)";
+    let again = super::AGAIN;
     let (reason, hint) = match gate {
         Gate::Pass => return None,
         Gate::Ask { what, risk: Some(risk), mark } => {
@@ -306,6 +315,7 @@ impl Host for Runner {
 
     fn facts(&self) -> String {
         let cwd = files::shown(&self.setup.cwd);
-        json!({"shell": self.setup.shell.name(), "os": env::consts::OS, "cwd": cwd}).to_string()
+        json!({"shell": self.setup.shell.name(), "os": env::consts::OS, "cwd": cwd, "args": self.setup.args})
+            .to_string()
     }
 }

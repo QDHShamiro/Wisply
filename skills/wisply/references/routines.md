@@ -9,6 +9,7 @@
 - `routine save <name> [param=value]` saves the task just done. Name it by intent in the user's words: `routine save discord-markieren user=Tom text=hi`. A step `run gh-open page=Tools` uses another routine (at most 3 deep).
 - `wisply routines [-f word]` lists them (`spotify-wiedergeben search= | 2x ok | 1.4 s`), `routine show X` shows steps and stats, `routine rm|rename`, `routine forget` clears the task history (routines stay), `config learn off` stops learning.
 - Tasks that only navigate are not learned. Learned routines never run within 14 days are deleted; saved and recorded ones stay.
+- Script routines: a working `wisply codemode` script with 2+ calls is saved whole (loops, shell, files, logic), once per script, offered only in its project. `wisply run X pr=101` hands the values to the script as `args.pr`; `--yes` is never saved. It is marked `| script` in the list, `routine show X` prints the code. A failed run: fix the script and run it with `wisply codemode`, the next working one replaces X (v2). Gone after 30 days unused, 90 days from 5 runs on; `config codemode_save off` stops saving.
 - Files: `~/.wisply/routines/<name>.json` and `~/.wisply/episodes.jsonl` (last 300 tasks, typed text included; `--env` values are stored as `@secret`).
 
 ## Recording (the user shows it once)

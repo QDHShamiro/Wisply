@@ -350,6 +350,17 @@ Gemini and Cursor, and the four risk classes: a risky step stops the script befo
 the same code with `--yes`. Deleting inside the project is fine. It is on by default; `wisply config codemode off`
 turns it off. `wisply codemode help` lists every call.
 
+A script that worked and made at least two calls is kept as a routine on this computer, once per script (the name
+comes from the request). Values go in as data, never into the code: `--arg pr=100` (MCP `args`) is `args.pr` in the
+script, and `wisply run <name> pr=101` replays it in one call; the hook offers it when a request in the same project
+fits. If a saved script breaks, the next working script of that session replaces it as a new version. `--yes` is
+never kept, scripts with secrets are never saved, and an unused one goes after 30 days (90 days from 5 runs on).
+`wisply routines` shows the tokens each one saved, `wisply routine show <name>` the code, and
+`wisply config codemode_save off` stops the saving.
+
+For heavy work a kit tool can be Rust: `wisply kit add <name> "what it does" --rust tool.rs` (or a Cargo folder)
+builds it once with `rustc -O` or `cargo build --release` and again only when the code changes.
+
 ## Headless
 
 `wisply headless` runs a browser with no window, with the Wisply extension loaded, for servers and CI.
@@ -582,9 +593,9 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Routines** | `routines` · `run <name> k=v` · `record start` … `record stop` |
 | **Memory** | `remember "fact"` · `recall "words"` · `todo add "task"` · `wiki` (drafts) · `ui` (window) |
 | **Code** | `code` · `code Name` · `code "what it does"` · `code outline file` · `code impact` |
-| **Script** | `codemode "<js>"` · `codemode --file x.js` · `codemode help` · MCP `code` argument |
+| **Script** | `codemode "<js>"` · `codemode --file x.js --arg k=v` · `codemode help` · MCP `code` argument |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `peek <file|folder> ...` · `secure` |
-| **Own tools** | `kit add <name> "what it does" -- <program> [args]` · `kit run <name>` · `skill find <words>` · `skill new` |
+| **Own tools** | `kit add <name> "what it does" [--rust x.rs] -- <program> [args]` · `kit run <name>` · `skill find <words>` · `skill new` |
 | **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) · `config compact 250k` |
 | **Agents** | `agents` · `mobile pair` · `notify event done "title"` |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
@@ -629,8 +640,8 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | | |
 |---|---|
 | Use | `routines [-f word]` · `run <name> param=value` · `routine show <name>` |
-| Teach | learned by itself on repeat · `routine save <name> [param=value]` · `record start <name>` … `record stop [param=value]` |
-| Tidy | `routine rm\|rename <name>` · `routine forget` · `config learn off` |
+| Teach | learned by itself on repeat · working code mode scripts · `routine save <name> [param=value]` · `record start <name>` … `record stop [param=value]` |
+| Tidy | `routine rm\|rename <name>` · `routine forget` · `config learn off` · `config codemode_save off` |
 
 **Memory** (one file on your computer, `~/.wisply/memory`)
 
@@ -656,7 +667,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | Headroom | `more <hr-id> [--lines 400-440] [--grep "a\|b"]` · `~/.wisply/headroom/off` turns it off |
 | Look before reading | `peek <file\|folder> ... [--head 10] [--outline]` · `~/.wisply/headroom/junk-off` |
 | Search | `grep <pattern> [folder\|file ...] [-i] [-w] [-l] [-C 2] [--glob '*.py'] [--all]` |
-| Own tools | `kit` · `kit add <name> "what it does" [--file script] [--replace] -- <program> [args]` · `kit run <name> [args]` · `kit show\|rm <name>` |
+| Own tools | `kit` · `kit add <name> "what it does" [--file script \| --rust file.rs\|cargo-folder] [--replace] -- <program> [args]` · `kit run <name> [args]` · `kit show\|rm <name>` |
 | Skills | `skill` · `skill find <words> [--web]` · `skill new <name> "..." --file text.md` · `skill add <folder>` · `skill get <owner/repo/path>` · `skill check <folder or name>` · `skill rm <name>` |
 | Safety check | `secure [folder|site|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json]` (keys, vulnerable dependencies in Cargo/npm/pnpm/yarn/Maven/Gradle/pip/poetry, risky code, .gitignore, severity per line) · `secure allow <domain> [--remove]` (only these sites get the passive web check, 1 request/s) · `secure fix [folder] [--with claude|codex]` (FIX.md, branch `secure/fix-<date>`, AI fixes, re-check; never commits or pushes) · `config secure on|off` |
 | Numbers | `tokens` (used and saved, last 30 days) · `bench` · `selftest` · `log stats` · `channels` (the ways Wisply reads GitHub, the web, video and audio right now) |
