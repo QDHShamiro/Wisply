@@ -7,6 +7,9 @@ description: Drives the user's logged-in browser and desktop apps with the `wisp
 
 `wisply <command>` in a shell or the `wisply` MCP tool. Refs: `e12` page element, `d5` app control, `o3` screen text, `w2` window, `t4` tab. Flags of one command: `wisply help <command>` (one row, not the whole help).
 
+## Code mode first
+Every task with more than one step runs as one `wisply codemode --file x.js` (MCP: `code`), never as a chain of single calls: look, decide and act inside the script (`const s = await wisply\`snap -f Upload\``, pick the ref, `click`, check) and return only the result. A single call only when the whole task is exactly one command. Details: `references/codemode.md`.
+
 ## Cheapest first
 1. The prompt says `Wisply routine fits ...`, or the task was done before: `wisply run <name or words> k=v` (one call).
 2. Public page: `read <url>` (no browser, PDFs too). A question: `research "q" "q en"`. Data: `net`, `fetch <url> --pick a.b`.
