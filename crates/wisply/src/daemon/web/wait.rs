@@ -7,9 +7,14 @@ use wisply_core::{Call, Fail, Flag};
 
 use super::super::ctx::Ctx;
 use super::super::{Daemon, Out, Pending};
-use super::{CALL_TIMEOUT, LOAD_TIMEOUT, REF_RE, SNAP_LINES, call, call_on, obj, out, re, secs};
+use super::{CALL_TIMEOUT, LOAD_TIMEOUT, REF_RE, SNAP_LINES, call, call_on, head, obj, out, re, secs, text_of};
 
 const WAIT_SLEEP_MAX_MS: u64 = 60_000;
+const NEAR_LINES: usize = 5;
+const NEAR_WORDS: usize = 4;
+const WORD_MIN: usize = 3;
+const LINE_CHARS: usize = 140;
+const NEAR_WAIT: f64 = 8.0;
 
 static TIME: LazyLock<Regex> = LazyLock::new(|| re(r"^\s*(\d+(?:\.\d+)?)\s*(ms|s|m|h)?\s*$"));
 
@@ -66,7 +71,52 @@ pub fn wait(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
     }
     let timeout = parse_ms(c.flags.get("timeout"), 10_000)?;
     s.insert("timeout".into(), json!(timeout));
-    Ok(Out::Text(out(d, ctx, "wait", s, timeout as f64 / 1000.0 + 10.0, SNAP_LINES)?))
+    match out(d, ctx, "wait", s.clone(), timeout as f64 / 1000.0 + 10.0, SNAP_LINES) {
+        Err(e) if e.msg.contains("timeout after") => Err(near(d, ctx, &s, e)),
+        done => done.map(Out::Text),
+    }
+}
+
+fn words(text: &str) -> String {
+    let mut seen: Vec<String> = Vec::new();
+    for w in text.split(|c: char| !c.is_alphanumeric()).filter(|w| w.chars().count() >= WORD_MIN) {
+        let w = w.to_lowercase();
+        if !seen.contains(&w) && seen.len() < NEAR_WORDS {
+            seen.push(w);
+        }
+    }
+    if seen.is_empty() { text.trim().to_lowercase() } else { seen.join("|") }
+}
+
+fn closest(snap: &str) -> String {
+    let mut lines = snap.lines().filter(|l| !l.trim().is_empty());
+    let Some(top) = lines.next() else { return String::new() };
+    let rest: Vec<String> = lines.take(NEAR_LINES).map(|l| head(l, LINE_CHARS)).collect();
+    if rest.is_empty() {
+        return format!("now on {top}");
+    }
+    format!("now on {top}\nclosest on the page:\n{}", rest.join("\n"))
+}
+
+fn place_line(msg: &Map<String, Value>) -> Option<String> {
+    let place = msg.get("where")?;
+    let field = |k: &str| place.get(k).and_then(Value::as_str).unwrap_or("");
+    let url = field("url");
+    (!url.is_empty()).then(|| format!("now on [{}] {} - {}", field("tab"), head(field("title"), 70), head(url, 100)))
+}
+
+fn near(d: &Daemon, ctx: &mut Ctx, s: &Map<String, Value>, mut e: Fail) -> Fail {
+    let text = s.get("text").and_then(Value::as_str).filter(|t| !t.trim().is_empty());
+    let page = match text {
+        Some(text) => call(d, ctx, "snap", obj(json!({"filter": words(text), "force": true})), NEAR_WAIT)
+            .ok()
+            .map(|m| closest(text_of(&m, "out"))),
+        None => call(d, ctx, "where", Map::new(), NEAR_WAIT).ok().and_then(|m| place_line(&m)),
+    };
+    if let Some(page) = page.filter(|p| !p.is_empty()) {
+        e.msg = format!("{}\n{page}", e.msg);
+    }
+    e
 }
 
 fn found(d: &Daemon, ctx: &mut Ctx, s: &Map<String, Value>, tab: Option<String>) -> Result<bool, Fail> {
@@ -141,5 +191,21 @@ mod tests {
         assert_eq!(parse_ms(Some(&val("2h")), 0).unwrap(), 7_200_000);
         let bad = parse_ms(Some(&val("soon")), 0).unwrap_err().text();
         assert_eq!(bad, "err: cannot read the time 'soon' -> try: use 90s, 10m or milliseconds");
+    }
+
+    #[test]
+    fn wait_timeouts_name_the_page_and_the_closest_lines() {
+        assert_eq!(words("Save all changes, save!"), "save|all|changes");
+        assert_eq!(words("Weiter zur Kasse bitte jetzt"), "weiter|zur|kasse|bitte");
+        assert_eq!(words(" OK "), "ok");
+        let snap = "[t5] Settings - github.com/x\ne12 button \"Save draft\"\n\ne13 link \"Changes\"";
+        assert_eq!(
+            closest(snap),
+            "now on [t5] Settings - github.com/x\nclosest on the page:\ne12 button \"Save draft\"\ne13 link \"Changes\""
+        );
+        assert_eq!(closest("[t5] Empty - a.b"), "now on [t5] Empty - a.b");
+        let msg = obj(json!({"where": {"url": "https://a.b/login", "title": "Login", "tab": "t7"}}));
+        assert_eq!(place_line(&msg).unwrap(), "now on [t7] Login - https://a.b/login");
+        assert!(place_line(&Map::new()).is_none());
     }
 }
