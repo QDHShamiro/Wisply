@@ -35,6 +35,7 @@ use crate::voice::{ASR_RATE, AUDIO_RATE, AudioKind, clean, record, wav};
 
 pub const NAME: &str = "Ctrl+Alt+Space";
 const HOTKEY_ID: i32 = 0x60;
+const NOTE: &str = "! ";
 const RETRY: Duration = Duration::from_secs(5);
 const HOLD: Duration = Duration::from_millis(350);
 const HOLD_POLL: Duration = Duration::from_millis(15);
@@ -324,8 +325,13 @@ fn run_go(home: &Path, said: &str) {
             let ok = o.status.success();
             let raw =
                 String::from_utf8_lossy(if ok || o.stderr.is_empty() { &o.stdout } else { &o.stderr }).to_string();
-            let line =
-                raw.lines().map(str::trim).filter(|l| !l.is_empty()).take(2).collect::<Vec<_>>().join(" \u{00B7} ");
+            let line = raw
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty() && !l.starts_with(NOTE))
+                .take(2)
+                .collect::<Vec<_>>()
+                .join(" \u{00B7} ");
             finish(ok, &line);
         }
         Err(f) => finish(false, &f.text()),

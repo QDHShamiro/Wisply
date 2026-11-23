@@ -33,6 +33,9 @@ pub fn hotkey() -> &'static str {
 }
 
 fn timed(out: &str, t0: Instant) -> String {
+    if wisply_proto::handoff(out).is_some() {
+        return out.to_string();
+    }
     let out = out.trim();
     let took = format!("in {:.1} s", t0.elapsed().as_secs_f64());
     if out.contains('\n') { format!("{out}\n({took})") } else { format!("{out} {took}") }
@@ -47,7 +50,7 @@ fn cancel(d: &Daemon, c: &Call) -> Result<Out, Fail> {
     later::cancel(&d.home, id).map(Out::Text)
 }
 
-fn taught(d: &Daemon, ctx: &mut Ctx, said: &str, dry: bool, t0: Instant) -> Option<Result<Out, Fail>> {
+fn taught(d: &Daemon, ctx: &mut Ctx, said: &str, (dry, yes): (bool, bool), t0: Instant) -> Option<Result<Out, Fail>> {
     let hit = teach::find(&d.home, said)?;
     if dry {
         return Some(Ok(Out::Text(
@@ -56,7 +59,13 @@ fn taught(d: &Daemon, ctx: &mut Ctx, said: &str, dry: bool, t0: Instant) -> Opti
     }
     let mut argv = vec!["run".to_string(), hit.name];
     argv.extend(hit.pairs);
-    Some(act::step(d, ctx, &argv).map(|out| Out::Text(timed(&out, t0))))
+    if yes {
+        argv.push("--yes".into());
+    }
+    Some(act::reply(d, ctx, &argv).map(|out| match out {
+        Out::Text(t) => Out::Text(timed(&t, t0)),
+        other => other,
+    }))
 }
 
 fn plan(d: &Daemon, said: &str, t: f64) -> Result<Plan, Fail> {
@@ -69,7 +78,7 @@ fn plan(d: &Daemon, said: &str, t: f64) -> Result<Plan, Fail> {
 fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
     let t0 = Instant::now();
     let (yes, dry) = (c.on("yes"), c.on("dry"));
-    if let Some(done) = taught(d, ctx, said, dry, t0) {
+    if let Some(done) = taught(d, ctx, said, (dry, yes), t0) {
         return done;
     }
     let t = now();

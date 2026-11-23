@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::LazyLock;
 use std::sync::atomic::Ordering;
@@ -5,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use regex::Regex;
+use serde_json::json;
 use wisply_core::Fail;
 
 use super::super::ctx::Ctx;
@@ -16,6 +18,7 @@ const RETRY_FOR: Duration = Duration::from_secs(5);
 const RETRY_EVERY: Duration = Duration::from_millis(300);
 const PLAY_WAIT: Duration = Duration::from_secs(6);
 const WEB_SEARCH: &str = "google";
+const SEND: &str = "send-message";
 const NOT_WEB: &[&str] = &["exe", "lnk", "bat", "cmd", "msi", "txt", "png", "jpg", "pdf", "json", "yml", "jar"];
 const YT_FIRST: &str = r#"return (async () => {
   for (let t = 0; t < 8000; t += 200) {
@@ -26,7 +29,6 @@ const YT_FIRST: &str = r#"return (async () => {
   return "";
 })();"#;
 
-static DM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"https://discord\.com/channels/@me/\d+").expect("dm"));
 static LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(https?://|www\.)\S+").expect("link"));
 static URLISH: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^[a-z0-9-]+(\.[a-z0-9-]+)*\.([a-z]{2,10})(/\S*)?$").expect("url"));
@@ -44,14 +46,22 @@ fn stopped(d: &Daemon) -> bool {
     d.abort.load(Ordering::SeqCst)
 }
 
-fn once(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<String, Fail> {
+pub fn reply(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<Out, Fail> {
     match system::run_one(d, ctx, argv)? {
-        (Out::Wait(p), _) => p.settle(d, ctx),
-        (Out::Text(t) | Out::Stop(t), _) => Ok(t),
+        (Out::Wait(p), _) => p.settle(d, ctx).map(Out::Text),
+        (out, _) => Ok(out),
     }
 }
 
-pub fn step(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<String, Fail> {
+pub fn once(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<String, Fail> {
+    match reply(d, ctx, argv)? {
+        Out::Stop(t) => Err(Fail::new(t)),
+        Out::Text(t) => Ok(t),
+        Out::Wait(_) => Ok(String::new()),
+    }
+}
+
+fn step(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<String, Fail> {
     let end = Instant::now() + RETRY_FOR;
     loop {
         if stopped(d) {
@@ -97,13 +107,6 @@ fn resolve(home: &Path, who: &[String], asked: Option<&str>, yes: bool) -> Resul
     ))
 }
 
-fn partial(sent: &[String], f: Fail) -> Fail {
-    if sent.is_empty() {
-        return f;
-    }
-    Fail { msg: format!("{} (already sent to {})", f.msg, sent.join(", ")), ..f }
-}
-
 fn guard(text: &str, yes: bool) -> Result<(), Fail> {
     if LINK.is_match(text) && !yes {
         return Err(Fail::hint("nothing sent: the text has a link", "add --yes if the link is meant"));
@@ -111,50 +114,47 @@ fn guard(text: &str, yes: bool) -> Result<(), Fail> {
     Ok(())
 }
 
-fn send_one(d: &Daemon, ctx: &mut Ctx, t: &To, text: &str) -> Result<String, Fail> {
-    let handle = t.person.handle(&t.app);
-    let mut parts = vec![
-        "run".to_string(),
-        "send-message".into(),
-        format!("to={handle}"),
-        format!("text={text}"),
-        format!("app={}", t.app),
-    ];
-    if t.app == "discord" && !t.person.dm.is_empty() {
-        parts.push(format!("dm={}", t.person.dm));
-    }
-    let out = step(d, ctx, &parts)?;
-    let dm = DM.find(&out).map(|m| m.as_str().to_string());
-    contacts::learn(&d.home, &t.person.name, &t.app, &handle, dm.as_deref());
-    let shaky = if out.contains("not visible") { ", not seen yet" } else { "" };
-    Ok(format!("{} ({}{shaky})", t.person.name, t.app))
+fn lists(home: &Path) -> bool {
+    routines::ensure_shipped(home);
+    routines::load_all(home)
+        .iter()
+        .find(|r| r["name"] == SEND)
+        .is_none_or(|r| r["script"]["code"].as_str().is_some_and(|c| c.contains("args.list")))
 }
 
-fn message(
-    d: &Daemon,
-    ctx: &mut Ctx,
-    who: &[String],
-    app: Option<&str>,
-    text: &str,
-    yes: bool,
-) -> Result<String, Fail> {
+fn message(home: &Path, who: &[String], app: Option<&str>, text: &str, yes: bool) -> Result<String, Fail> {
     guard(text, yes)?;
-    let to = resolve(&d.home, who, app, yes)?;
-    let mut sent = Vec::new();
-    for t in &to {
-        if stopped(d) {
-            return Err(partial(&sent, Fail::new("stopped")));
+    let to = resolve(home, who, app, yes)?;
+    let (Some(first), Some(last)) = (to.first(), to.last()) else {
+        return Err(Fail::hint("nothing sent: nobody to send to", super::USAGE));
+    };
+    let rows: Vec<serde_json::Value> = to
+        .iter()
+        .map(|t| {
+            let dm = if t.app == "discord" { t.person.dm.as_str() } else { "" };
+            json!({"name": t.person.name, "to": t.person.handle(&t.app), "app": t.app, "dm": dm})
+        })
+        .collect();
+    let mut pairs = vec![("text".to_string(), text.to_string()), ("app".to_string(), last.app.clone())];
+    if lists(home) {
+        pairs.push(("list".into(), serde_json::Value::Array(rows).to_string()));
+    } else if to.len() == 1 {
+        pairs.push(("to".into(), first.person.handle(&first.app)));
+        if first.app == "discord" && !first.person.dm.is_empty() {
+            pairs.push(("dm".into(), first.person.dm.clone()));
         }
-        match send_one(d, ctx, t, text) {
-            Ok(line) => sent.push(line),
-            Err(f) => return Err(partial(&sent, f)),
-        }
+    } else {
+        return Err(Fail::hint(
+            "nothing sent: your send-message routine was changed and sends to one chat only",
+            "send to one person at a time",
+        ));
     }
-    Ok(format!("sent to {}", sent.join(", ")))
+    Ok(wisply_proto::handoff_line(SEND, &pairs, true))
 }
 
 fn spotify(d: &Daemon, ctx: &mut Ctx, q: &str) -> Result<String, Fail> {
     step(d, ctx, &argv(&["launch", &format!("spotify:search:{q}")]))?;
+    hold_app(d, ctx, "spotify");
     let labels = [format!("{q} wiedergeben"), format!("Play {q}")];
     let end = Instant::now() + PLAY_WAIT;
     loop {
@@ -211,6 +211,7 @@ fn open(d: &Daemon, ctx: &mut Ctx, what: &str) -> Result<String, Fail> {
         }
         None => {
             step(d, ctx, &argv(&["launch", what]))?;
+            hold_app(d, ctx, what);
             Ok(format!("started {what}"))
         }
     }
@@ -227,9 +228,21 @@ fn shot(d: &Daemon, ctx: &mut Ctx, of: Option<&str>) -> Result<String, Fail> {
     step(d, ctx, &argv(&["shot", &target]))
 }
 
+fn hold(d: &Daemon, ctx: &mut Ctx, before: &BTreeSet<String>) {
+    let new: Vec<String> = ctx.owned.difference(before).cloned().collect();
+    for tab in new {
+        let _ = once(d, ctx, &argv(&["keep", &tab]));
+    }
+}
+
+fn hold_app(d: &Daemon, ctx: &mut Ctx, name: &str) {
+    let _ = once(d, ctx, &argv(&["keep", &format!("app:{name}")]));
+}
+
 pub fn run(d: &Daemon, ctx: &mut Ctx, act: &Act, yes: bool) -> Result<String, Fail> {
-    match act {
-        Act::Msg { who, app, text } => message(d, ctx, who, app.as_deref(), text, yes),
+    let before = ctx.owned.clone();
+    let out = match act {
+        Act::Msg { who, app, text } => message(&d.home, who, app.as_deref(), text, yes),
         Act::Play { app, q } if app.as_deref() == Some("youtube") => youtube(d, ctx, q),
         Act::Play { q, .. } => spotify(d, ctx, q),
         Act::Media { key, times } => media(d, ctx, key, *times),
@@ -240,9 +253,13 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, act: &Act, yes: bool) -> Result<String, Fa
             Ok(format!("reminded: {text}"))
         }
         Act::Shot { of } => shot(d, ctx, of.as_deref()),
-        Act::Remember { text } => step(d, ctx, &argv(&["remember", text])),
+        Act::Remember { text } => once(d, ctx, &argv(&["remember", text])),
         Act::Recall { q } => step(d, ctx, &argv(&["recall", q])),
+    };
+    if matches!(act, Act::Play { .. } | Act::Open { .. } | Act::Search { .. }) {
+        hold(d, ctx, &before);
     }
+    out
 }
 
 pub fn preview(home: &Path, act: &Act, yes: bool) -> Result<String, Fail> {

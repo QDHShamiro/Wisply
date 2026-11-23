@@ -238,6 +238,19 @@ fn list(home: &Path) -> String {
     people.iter().map(row).collect::<Vec<_>>().join("\n")
 }
 
+fn sent(home: &Path, c: &Call) -> Result<String, Fail> {
+    let name =
+        c.pos.get(1).filter(|n| !n.contains('=')).ok_or_else(|| Fail::hint("contact sent needs a name", USAGE))?;
+    let kv = pairs(c);
+    let get = |k: &str| kv.iter().find(|(key, _)| key == k).map(|(_, v)| v.as_str());
+    let app = get("app").unwrap_or("").to_lowercase();
+    if !APPS.contains(&app.as_str()) {
+        return Err(Fail::hint(format!("contact sent needs app={}", APPS.join("|")), USAGE));
+    }
+    learn(home, name, &app, get("handle").unwrap_or(name), get("dm"));
+    Ok(format!("noted a message to {name}"))
+}
+
 pub fn command(home: &Path, c: &Call) -> Result<String, Fail> {
     if c.name == "contacts" {
         return Ok(list(home));
@@ -246,6 +259,7 @@ pub fn command(home: &Path, c: &Call) -> Result<String, Fail> {
         None | Some("list" | "ls") => Ok(list(home)),
         Some("add" | "set") => add(home, c),
         Some("rm" | "remove" | "forget" | "del") => rm(home, c),
+        Some("sent") => sent(home, c),
         Some(other) => Err(Fail::hint(format!("unknown contact command '{other}'"), USAGE)),
     }
 }
@@ -283,8 +297,13 @@ mod tests {
         learn(&h, "mama", "whatsapp", "Mama", None);
         let people = load(&h);
         assert!(matches!(find(&people, "mama"), Found::One(p) if p.whatsapp == "Mama" && p.name == "Mama"));
+        let dm = "dm=https://discord.com/channels/@me/7";
+        command(&h, &call("contact", &["sent", "Albion", "app=discord", "handle=xALBIONx", dm])).expect("sent");
+        let a = load(&h).into_iter().find(|p| p.name == "Albion").expect("albion");
+        assert_eq!((a.discord.as_str(), a.dm.as_str(), a.sent), ("xALBIONx", "https://discord.com/channels/@me/7", 1));
+        assert!(command(&h, &call("contact", &["sent", "Albion", "app=icq"])).is_err());
         command(&h, &call("contact", &["rm", "franz"])).expect("rm");
-        assert_eq!(load(&h).len(), 1);
+        assert_eq!(load(&h).len(), 2);
         assert!(command(&h, &call("contact", &["add", "x", "bogus=1"])).is_err());
         let _ = fs::remove_dir_all(&h);
     }

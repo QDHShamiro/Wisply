@@ -22,6 +22,7 @@ pub use episode::Episode;
 use store::{file, load, save, score, slug, stem, text, usage};
 
 pub use align::{align, build, truthy};
+pub use defaults::ensure as ensure_shipped;
 pub use episode::{close, observe};
 pub use learn::{current_steps, save_episode};
 pub use run::{run, transient};

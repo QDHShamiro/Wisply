@@ -16,6 +16,7 @@ use super::parse::label;
 const FILE: &str = "go-later.json";
 const TICK: Duration = Duration::from_secs(5);
 const LATE_OK: f64 = 600.0;
+#[cfg(windows)]
 const HIDDEN: u32 = 0x0800_0000;
 
 static LOCK: Mutex<()> = Mutex::new(());

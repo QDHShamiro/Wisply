@@ -95,6 +95,12 @@ fn messages_later() {
     let p = plan("schreib Franz um 18 Uhr: bin auf dem Weg");
     assert_eq!(p.act, m(&["Franz"], None, "bin auf dem Weg"));
     assert_eq!(p.when.map(hm), Some((18, 0)));
+    let p = plan("at 18:00 send franz on my way");
+    assert_eq!((p.act, p.when.map(hm)), (m(&["franz"], None, "on my way"), Some((18, 0))));
+    let p = plan("text Franz at 6pm: on my way");
+    assert_eq!((p.act, p.when.map(hm)), (m(&["Franz"], None, "on my way"), Some((18, 0))));
+    let p = plan("send franz hi at 18:00");
+    assert_eq!((p.act, p.when), (m(&["franz"], None, "hi at 18:00"), None));
     let p = plan("schreib Lukas morgen um 9 dass er mich weckt");
     assert_eq!(p.act, m(&["Lukas"], None, "er mich weckt"));
     let at = p.when.expect("when");
