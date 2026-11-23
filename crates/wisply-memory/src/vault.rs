@@ -13,6 +13,8 @@ use super::text::{oneline, scrub};
 const BODY_CHARS: usize = 12_000;
 const TITLE_CHARS: usize = 200;
 const SKIP: &[&str] = &[".obsidian", ".obsidian-mcp", ".trash", "templates", ".git"];
+const NESTED: &str = "metadata";
+const INDEXES: &[&str] = &["MEMORY.md", super::projects::PROJECTS];
 const KIND_DIRS: &[(&str, &str)] = &[
     ("knowledge/mistakes", "mistake"),
     ("knowledge/patterns", "pattern"),
@@ -42,12 +44,16 @@ pub(crate) fn posix(p: &Path) -> String {
 pub(crate) fn front(text: &str) -> (HashMap<String, String>, &str) {
     let Some(m) = FRONT.captures(text) else { return (HashMap::new(), text) };
     let mut meta = HashMap::new();
+    let mut parent = String::new();
     for line in m[1].lines() {
-        if line.starts_with([' ', '\t']) {
-            continue;
-        }
-        if let Some((k, v)) = line.split_once(':') {
-            meta.insert(k.trim().to_lowercase(), v.trim().trim_matches(['"', '\'']).to_string());
+        let nested = line.starts_with([' ', '\t']);
+        let Some((k, v)) = line.split_once(':') else { continue };
+        let (k, v) = (k.trim().to_lowercase(), v.trim().trim_matches(['"', '\'']).to_string());
+        if !nested {
+            parent = if v.is_empty() { k.clone() } else { String::new() };
+            meta.insert(k, v);
+        } else if parent == NESTED && !k.is_empty() {
+            meta.entry(k).or_insert(v);
         }
     }
     let end = m.get(0).map_or(0, |all| all.end());
@@ -119,7 +125,7 @@ fn files(base: &Path, claude: bool) -> Vec<(PathBuf, String)> {
         if let Ok(entries) = fs::read_dir(base) {
             for e in entries.flatten() {
                 let name = e.file_name().to_string_lossy().into_owned();
-                if name.ends_with(".md") && name != "MEMORY.md" && e.path().is_file() {
+                if name.ends_with(".md") && !INDEXES.contains(&name.as_str()) && e.path().is_file() {
                     out.push((e.path(), name));
                 }
             }
@@ -260,9 +266,16 @@ mod tests {
             "---\nname: Short answers\ndescription: keep it short\ntype: feedback\n---\nbody",
         )
         .unwrap();
+        fs::write(
+            claude.join("project_b.md"),
+            "---\nname: Shop server\ndescription: runs on box 2\nmetadata:\n  type: project\n  name: ignored\nkind: x\n  \
+             type: wrong\n---\nbody",
+        )
+        .unwrap();
         fs::write(claude.join("MEMORY.md"), "index").unwrap();
+        fs::write(claude.join("PROJECTS.md"), "index").unwrap();
         let mut s = Store::open(&base).unwrap();
-        assert_eq!(s.index_files(&vault, "Inbox", std::slice::from_ref(&claude)).unwrap(), 4);
+        assert_eq!(s.index_files(&vault, "Inbox", std::slice::from_ref(&claude)).unwrap(), 5);
         assert_eq!(s.index_files(&vault, "Inbox", std::slice::from_ref(&claude)).unwrap(), 0);
         let hits = s.search("brave", "", 8, None, 0.0).unwrap();
         let n = &hits[0].note;
@@ -278,7 +291,9 @@ mod tests {
             (mem.kind.as_str(), mem.source.as_str(), mem.body.as_str()),
             ("feedback", "claude", "keep it short\nbody")
         );
-        assert_eq!(s.unembedded(10).unwrap().len(), 4);
+        let nested = &s.search("shop server box", "", 8, None, 0.0).unwrap()[0].note;
+        assert_eq!((nested.kind.as_str(), nested.title.as_str()), ("project", "Shop server"));
+        assert_eq!(s.unembedded(10).unwrap().len(), 5);
         fs::remove_file(vault.join("Projects/Shop/plan.md")).unwrap();
         assert_eq!(s.index_files(&vault, "Inbox", std::slice::from_ref(&claude)).unwrap(), 1);
         assert!(s.search("plan", "", 8, None, 0.0).unwrap().is_empty());

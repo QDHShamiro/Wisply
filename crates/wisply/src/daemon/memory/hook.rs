@@ -86,6 +86,9 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         }
         super::index::learn_now();
     }
+    if event == "end" {
+        super::projects::at_end(&data, &cwd);
+    }
     if event == "end" && data_text(&data, "reason") == "clear" && !transcript.is_empty() {
         super::handoff::save_cleared(&d.home, &cwd, Path::new(transcript));
     }
@@ -300,10 +303,8 @@ fn stems(text: &str) -> HashSet<String> {
 
 pub fn suggest(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
     let raw = c.pos.join(" ");
-    let prompt = serde_json::from_str::<Value>(&raw)
-        .ok()
-        .and_then(|v| v.get("prompt").and_then(Value::as_str).map(String::from))
-        .unwrap_or(raw);
+    let data: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
+    let prompt = data.get("prompt").and_then(Value::as_str).map(String::from).unwrap_or(raw);
     let head: String = prompt.chars().take(TYPED_PREFIX).collect();
     if prompt.is_empty() || NOT_TYPED.is_match(&head) {
         return Ok(String::new());
@@ -311,6 +312,12 @@ pub fn suggest(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
     let mut typed = routines::words(&without_paths(&prompt));
     typed.extend(routines::values_in(&prompt));
     let mut lines = routines::offer(d, ctx, typed);
+    if config::on(&config::load(&d.home), "memory") {
+        let notes = super::projects::hint(ctx, &data, &prompt);
+        if !notes.is_empty() {
+            lines.push(notes);
+        }
+    }
     if let Ok(tip) = memory_tip(d, ctx, prompt).map(|t| t.trim().to_string())
         && !tip.is_empty()
     {

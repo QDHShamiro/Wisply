@@ -9,6 +9,7 @@ mod list;
 mod nindex;
 mod pages;
 mod project;
+pub mod projects;
 mod rank;
 mod start;
 mod store;
