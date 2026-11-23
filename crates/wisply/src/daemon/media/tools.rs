@@ -102,9 +102,15 @@ fn wait(child: &mut Child, limit: Duration) -> Option<bool> {
 }
 
 pub fn run(exe: &Path, args: &[String], limit: Duration) -> Result<Ran, Fail> {
-    let name = exe.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let mut cmd = Command::new(exe);
-    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.args(args);
+    run_cmd(cmd, limit)
+}
+
+pub fn run_cmd(mut cmd: Command, limit: Duration) -> Result<Ran, Fail> {
+    let exe = Path::new(cmd.get_program());
+    let name = exe.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     crate::v2::hide(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| Fail::new(format!("could not start {name}: {e}")))?;
     let out = child.stdout.take().map(drain);

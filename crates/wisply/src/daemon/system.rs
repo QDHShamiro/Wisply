@@ -46,7 +46,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         secure allow <domain> [--remove]   secure fix [folder] [--with claude|codex] (FIX.md + branch secure/fix-date, re-checks, never commits)
         think <step> (finds, fixes and proves improvements without AI; wisply think help lists the steps)
         headless [start|stop|status|install] (a browser without a window for servers and CI; install fetches Chrome for Testing)
-        update [--check|--rollback] (installs the newest release by itself in the background; config update auto|notify|off)
+        update [--check|--plugins|--rollback] (installs the newest release and the Claude/Codex plugin by itself in the background; config update auto|notify|off)
         pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
         agents [--all] [--json] (every Claude session: running, waiting, done, limit, tokens, cost estimate; resumes limit-stopped background sessions once after the reset)
         mobile pair [--name handy] | list | revoke <name> | status | on | off (phone API for the Wisply app, localhost and Tailscale only)
@@ -213,6 +213,7 @@ fn status(d: &Daemon, ctx: &Ctx) -> String {
     lines.extend(media::usage(&d.home));
     lines.extend(super::pc::status_line(d));
     lines.extend(super::agents::status_line(d));
+    lines.extend(crate::update::status_line(&d.home));
     lines.push(format!("home {}", posix(&d.home)));
     lines.join("\n")
 }

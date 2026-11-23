@@ -10,7 +10,11 @@
     {
       "name": "wisply",
       "description": "The wisply command drives your open Brave, Chrome or Edge through a small extension and any app on Windows, macOS or Linux through the accessibility APIs and OCR, answering in short text lines instead of screenshots.",
-      "source": "./",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/QDHShamiro/Wisply.git",
+        "ref": "v3.6.0"
+      },
       "category": "productivity"
     }
   ]

@@ -6,7 +6,7 @@ Runbook for Claude Code: building, verifying and changing Wisply without redisco
 ## 1. Layout
 
 ```
-.claude-plugin/plugin.json, marketplace.json   Claude Code plugin + marketplace (source "./")
+.claude-plugin/plugin.json, marketplace.json   Claude Code plugin + marketplace (source = this repo at the release tag, ref vX.Y.Z)
 .codex-plugin/plugin.json                      Codex plugin (skills only, MCP comes from `wisply install codex`)
 .agents/plugins/marketplace.json               Codex marketplace (source local "./")
 .mcp.json                                      MCP server: ${WISPLY_BIN:-${CLAUDE_PLUGIN_ROOT}/bin}/wisply.exe mcp (1 tool)

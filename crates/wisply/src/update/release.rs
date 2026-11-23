@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::daemon::net;
 use crate::setup::place::exe_name;
 
-const REPO: &str = "QDHShamiro/Wisply";
+pub const REPO: &str = "QDHShamiro/Wisply";
 const SUMS: &str = "SHA256SUMS.txt";
 
 pub struct Release {
