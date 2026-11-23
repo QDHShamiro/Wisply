@@ -1,0 +1,8 @@
+# Wisply: skills (taught once, then one call)
+
+- A skill is a task that repeats with other values (send a message, fill a form, check a PR). The AI writes it once, Wisply practices and checks it without tokens.
+- `wisply learn "<task>"` prints the short how-to and names skills that may do it already. Write `run.js` (values as `args.x`; with `args.dry === "1"` stop right before the last real step) and `check.js` (gets the same args plus `args.result`, throws or returns false when the outcome is wrong).
+- `wisply learn save <name> "<what it does>" --file run.js --check check.js [--guide "<args>"] [--before 2m] [--tokens 3000] k=v` saves it and practices at once: 3 dry runs, each checked. All green: ask the user, then `wisply learn ok <name>`. Red: the error is kept as a hint for the next AI (`learn show <name>`); fix and save again (v2).
+- Learned skills are offered in the prompt (`Wisply skill fits this request (one call, checked after every run): wisply run send-message to=<…> text=<…>`) and checked after every real run. `learn practice <name> [k=v]` practices again, `learn drop <name>` removes one.
+- `wisply learn` lists them with runs, time against by hand and tokens saved; `WEAK` (often fails or barely faster) = ask the user, then drop. Script routines that keep coming back are named as candidates.
+- Default skills on every PC, local and editable (`learn show`, then `learn save` with your own file): `send-message to= text= app=` (WhatsApp Web default, Telegram Web, chat apps; sends at once, only on an exact chat name, then checks the message is in the chat), `read-form url= fill="A=1;B=2" submit= find=`, `find-file name= in=`, `pr-ci pr= repo=`. A dropped default stays away; a changed one is never overwritten by updates.
