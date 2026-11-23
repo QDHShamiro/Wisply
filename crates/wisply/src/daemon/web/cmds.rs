@@ -229,10 +229,21 @@ pub fn fill(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
     out(d, ctx, "fill", args, LOAD_TIMEOUT + 15.0, ACTED_LINES)
 }
 
-pub fn press(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
-    if c.pos.is_empty() {
+fn only_keys(pos: &[String]) -> Result<(), Fail> {
+    if pos.is_empty() {
         return Err(Fail::hint("press needs keys", "wisply press Enter | ctrl+a | Escape"));
     }
+    let Some(r) = pos.iter().find(|p| REF_RE.is_match(p)) else { return Ok(()) };
+    let keys = pos.iter().filter(|p| *p != r).cloned().collect::<Vec<_>>().join(" ");
+    let keys = if keys.is_empty() { "Enter".to_string() } else { keys };
+    Err(Fail::hint(
+        format!("press sends keys to the page and takes no element like {r}"),
+        format!("wisply click {r}, then wisply press {keys} (text field: wisply type {r} \"text\" --enter)"),
+    ))
+}
+
+pub fn press(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
+    only_keys(&c.pos)?;
     if let Some(done) = tabkeys::press(d, ctx, c)? {
         return Ok(done);
     }
@@ -451,6 +462,17 @@ pub fn viewport(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn press_points_element_refs_to_click_first() {
+        let pos = |v: &[&str]| v.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            only_keys(&pos(&["e12", "Enter"])).unwrap_err().text(),
+            "err: press sends keys to the page and takes no element like e12 -> try: wisply click e12, then wisply press Enter (text field: wisply type e12 \"text\" --enter)"
+        );
+        assert!(only_keys(&pos(&["f1.e3"])).unwrap_err().text().contains("wisply press Enter"));
+        assert!(only_keys(&pos(&["ctrl+a", "t3"])).is_ok());
+        assert!(only_keys(&[]).is_err());
+    }
 
     #[test]
     fn uploads_name_their_type() {

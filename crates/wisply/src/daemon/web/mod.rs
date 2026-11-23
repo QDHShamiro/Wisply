@@ -9,6 +9,7 @@ mod read;
 mod shot;
 mod sites;
 mod tabkeys;
+mod tabref;
 mod url;
 mod wait;
 
@@ -58,6 +59,8 @@ const SESSION_FREE: &[&str] = &[
     "record-status",
 ];
 const FRONT_WAIT: f64 = 5.0;
+const TAB_URLS_KEPT: usize = 40;
+const TAB_FIRST: &[&str] = &["press", "type", "scroll"];
 const REOPEN: &[&str] = &["snap", "text", "shot", "frames", "expect"];
 
 fn re(pattern: &str) -> Regex {
@@ -70,6 +73,14 @@ static FRONT: LazyLock<Regex> = LazyLock::new(|| re(r"(?m)^(t\d+) a (.+?) - "));
 static NEW_TAB: LazyLock<Regex> = LazyLock::new(|| re(r"new tab (t\d+) opened from (t\d+)"));
 
 pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
+    if let Some(first) = c.pos.first().filter(|p| ref_kind(p) == Some("t") && !REF_RE.is_match(p))
+        && TAB_FIRST.contains(&c.name.as_str())
+        && (c.pos.len() > 1 || c.name == "scroll")
+    {
+        tabref::tab(d, ctx, first)?;
+        let rest = Call { name: c.name.clone(), pos: c.pos[1..].to_vec(), flags: c.flags.clone() };
+        return run(d, ctx, &rest);
+    }
     let text = match c.name.as_str() {
         "open" => cmds::open(d, ctx, c)?,
         "snap" => cmds::snap(d, ctx, c)?,
@@ -95,7 +106,7 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         "upload" => cmds::upload(d, ctx, c)?,
         "tabs" => cmds::tabs(d, ctx, c)?,
         "tab" => match c.pos.first() {
-            Some(id) => out(d, ctx, "tab", obj(json!({"id": id})), 15.0, SNAP_LINES)?,
+            Some(id) => tabref::tab(d, ctx, id)?,
             None => return Err(Fail::hint("tab needs an id", "wisply tabs")),
         },
         "close" => cmds::close(d, ctx, c)?,
@@ -294,7 +305,24 @@ fn session_tab(d: &Daemon, ctx: &mut Ctx, cmd: &str, args: &mut Map<String, Valu
     ))
 }
 
+pub fn tab_url(ctx: &Ctx, tab: &str) -> Option<String> {
+    ctx.tab_urls.iter().find(|(t, _)| t == tab).map(|(_, url)| url.clone())
+}
+
+fn keep_url(ctx: &mut Ctx, msg: &Map<String, Value>) {
+    let place = msg.get("where");
+    let field = |k: &str| place.and_then(|w| w.get(k)).and_then(Value::as_str).filter(|v| !v.is_empty());
+    let (Some(tab), Some(url)) = (field("tab"), field("url")) else { return };
+    let (tab, url) = (tab.to_string(), url.to_string());
+    ctx.tab_urls.retain(|(t, _)| *t != tab);
+    ctx.tab_urls.push((tab, url));
+    if ctx.tab_urls.len() > TAB_URLS_KEPT {
+        ctx.tab_urls.remove(0);
+    }
+}
+
 fn track(d: &Daemon, ctx: &mut Ctx, cmd: &str, msg: &Map<String, Value>) {
+    keep_url(ctx, msg);
     if ctx.sid.is_empty() {
         return;
     }
@@ -357,5 +385,22 @@ mod tests {
         assert!(REF_RE.is_match("e12") && REF_RE.is_match("f1.e2") && !REF_RE.is_match("t3"));
         assert_eq!(plural(1, "tab"), "1 tab");
         assert_eq!(plural(3, "tool"), "3 tools");
+    }
+
+    #[test]
+    fn tabs_remember_their_last_page() {
+        let mut ctx = Ctx::scratch("s1", "1");
+        let at = |tab: &str, url: &str| obj(json!({"where": {"tab": tab, "url": url}}));
+        keep_url(&mut ctx, &at("t5", "https://a.b/one"));
+        keep_url(&mut ctx, &at("t5", "https://a.b/two"));
+        keep_url(&mut ctx, &at("t6", ""));
+        keep_url(&mut ctx, &Map::new());
+        assert_eq!(tab_url(&ctx, "t5").as_deref(), Some("https://a.b/two"));
+        assert_eq!(tab_url(&ctx, "t6"), None);
+        for n in 0..TAB_URLS_KEPT {
+            keep_url(&mut ctx, &at(&format!("t{}", 100 + n), "https://c.d"));
+        }
+        assert_eq!(ctx.tab_urls.len(), TAB_URLS_KEPT);
+        assert_eq!(tab_url(&ctx, "t5"), None);
     }
 }

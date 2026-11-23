@@ -327,12 +327,23 @@ pub fn type_in(x: &mut Desk, c: &Call) -> Res<String> {
     Ok(done + &x.after_action(hwnd, before, wait, None))
 }
 
+fn only_keys(combos: &[&String]) -> Result<(), Fail> {
+    if combos.is_empty() {
+        return Err(Fail::hint("press needs keys", "wisply press ctrl+s | press w3 ctrl+s"));
+    }
+    let Some(r) = combos.iter().find(|p| matches!(ref_kind(p), Some("d" | "o" | "e" | "t"))) else { return Ok(()) };
+    let keys: Vec<&str> = combos.iter().filter(|p| *p != r).map(|p| p.as_str()).collect();
+    let keys = if keys.is_empty() { "Enter".to_string() } else { keys.join(" ") };
+    Err(Fail::hint(
+        format!("press sends keys to a window and takes no element like {r}"),
+        format!("wisply click {r}, then wisply press {keys} (a window goes first: wisply press w3 {keys})"),
+    ))
+}
+
 pub fn press(x: &mut Desk, c: &Call) -> Res<String> {
     let window = c.pos.iter().find(|p| windowish(p)).map(String::as_str);
     let combos: Vec<&String> = c.pos.iter().filter(|p| !windowish(p)).collect();
-    if combos.is_empty() {
-        return Err(Fail::hint("press needs keys", "wisply press ctrl+s | press w3 ctrl+s").into());
-    }
+    only_keys(&combos)?;
     let all = combos.iter().map(|k| k.as_str()).collect::<Vec<_>>().join(" ");
     if combos.iter().all(|p| combo::media(p)) {
         for p in &combos {
@@ -429,4 +440,25 @@ pub fn drag(x: &mut Desk, c: &Call) -> Res<String> {
     let hwnd = x.target(None)?;
     focus::drag(x.bg(hwnd), from, to, hwnd)?;
     Ok(format!("ok (dragged {a} to {b}, cursor restored)"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn press_refuses_element_refs_with_the_right_steps() {
+        let k = |v: &[&str]| v.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        let keys = k(&["d5", "Enter"]);
+        let err = only_keys(&keys.iter().collect::<Vec<_>>()).unwrap_err().text();
+        assert_eq!(
+            err,
+            "err: press sends keys to a window and takes no element like d5 -> try: wisply click d5, then wisply press Enter (a window goes first: wisply press w3 Enter)"
+        );
+        let alone = k(&["o2"]);
+        assert!(only_keys(&alone.iter().collect::<Vec<_>>()).unwrap_err().text().contains("wisply press Enter"));
+        let fine = k(&["ctrl+s", "Escape"]);
+        assert!(only_keys(&fine.iter().collect::<Vec<_>>()).is_ok());
+        assert!(only_keys(&[]).unwrap_err().text().starts_with("err: press needs keys"));
+    }
 }
