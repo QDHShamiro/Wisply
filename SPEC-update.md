@@ -31,6 +31,10 @@ The daemon cannot replace itself, so it starts a detached copy of the old progra
 Rollback = stop the daemon, move every `*.old` over its program, restore the extension folder, start the daemon.
 `wisply update --rollback` does the same by hand.
 
+Windows does not let a running program be deleted or overwritten, only renamed. A file that is still in use (an
+older `*.old` an MCP server runs from, or the program itself on rollback) therefore moves aside to `*.old1` …
+`*.old9`; every setup first removes the ones nothing runs any more.
+
 ## Commands
 
 `wisply update` (check, stage, apply now) · `--check` (say what is there, change nothing) · `--plugins` (plugin

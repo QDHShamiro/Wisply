@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use super::state;
 use crate::daemon::net;
-use crate::setup::place::{ALIAS, EXES, copy_tree, exe_name};
+use crate::setup::place::{ALIAS, EXES, clear, copy_tree, exe_name};
 
 const TRIES: usize = 3;
 const PAUSE: Duration = Duration::from_secs(3);
@@ -48,7 +48,7 @@ pub fn swap_back(bin_dir: &Path) -> usize {
         if !old.is_file() {
             continue;
         }
-        let _ = fs::remove_file(&dst);
+        clear(&dst);
         if fs::rename(&old, &dst).or_else(|_| fs::copy(&old, &dst).map(|_| ())).is_ok() {
             moved += 1;
         }

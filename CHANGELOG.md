@@ -5,6 +5,14 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [3.6.2] - 2026-11-23
+
+### Fixed
+- An update no longer fails with "the process cannot access the file" (os error 32) on Windows when wisply processes
+  from two versions back still run, for example an MCP server of a Claude session that was open over two updates. The
+  kept older program moves aside to `bin/*.old1` and later; every later setup removes those once nothing runs them.
+  `wisply update --rollback` works the same way.
+
 ## [3.6.1] - 2026-11-23
 
 ### Fixed

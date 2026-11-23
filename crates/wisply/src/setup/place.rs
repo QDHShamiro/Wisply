@@ -13,6 +13,7 @@ pub const FULL: &str = "wisply-full";
 pub const EXES: &[&str] = &[MAIN, FULL, "wisply-ui", "wisply-task"];
 const SOURCE_DEPTH: usize = 4;
 const REFERENCES: &str = "references";
+const ASIDE: usize = 9;
 const BLOCKLIST: &str = "paypal.com\npaypal.me\nstripe.com\ncheckout.stripe.com\nklarna.com\nsofort.com\ngiropay.de\n\
 paysafecard.com\nwise.com\nrevolut.com\nn26.com\nbunq.com\nsparkasse.de\ndkb.de\ning.de\ncomdirect.de\ncommerzbank.de\n\
 deutsche-bank.de\npostbank.de\nconsorsbank.de\nvolksbank.de\nvr.de\ntargobank.de\nsantander.de\nhypovereinsbank.de\n\
@@ -163,7 +164,8 @@ pub fn replace(src: &Path, dst: &Path) -> io::Result<bool> {
         return Ok(false);
     }
     let old = dst.with_extension("old");
-    let _ = fs::remove_file(&old);
+    sweep(&old);
+    clear(&old);
     let _ = fs::rename(dst, &old);
     fs::write(dst, data)?;
     #[cfg(unix)]
@@ -172,6 +174,23 @@ pub fn replace(src: &Path, dst: &Path) -> io::Result<bool> {
         fs::set_permissions(dst, fs::Permissions::from_mode(0o755))?;
     }
     Ok(true)
+}
+
+fn aside(path: &Path, n: usize) -> PathBuf {
+    path.with_extension(format!("old{n}"))
+}
+
+fn sweep(path: &Path) {
+    for n in 1..=ASIDE {
+        let _ = fs::remove_file(aside(path, n));
+    }
+}
+
+pub fn clear(path: &Path) -> bool {
+    if fs::remove_file(path).is_ok() || !path.exists() {
+        return true;
+    }
+    (1..=ASIDE).map(|n| aside(path, n)).any(|spot| !spot.exists() && fs::rename(path, &spot).is_ok())
 }
 
 pub fn host_json(home: &Path) -> PathBuf {
@@ -280,6 +299,44 @@ mod tests {
         assert!(host["path"].as_str().unwrap().ends_with(&exe_name(MAIN)));
         blocklist(&dir).unwrap();
         assert!(fs::read_to_string(dir.join("blocklist.txt")).unwrap().contains("paypal.com"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_program_is_replaced_while_the_kept_and_the_current_one_still_run() {
+        use std::process::{Command, Stdio};
+        let dir = std::env::temp_dir().join(format!("lt-busy-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let ping = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32").join("PING.EXE");
+        let dst = dir.join(exe_name(MAIN));
+        let old = dst.with_extension("old");
+        let start = |exe: &Path| {
+            Command::new(exe)
+                .args(["-n", "60", "127.0.0.1"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap()
+        };
+        fs::copy(&ping, &dst).unwrap();
+        let mut kept = start(&dst);
+        fs::rename(&dst, &old).unwrap();
+        fs::copy(&ping, &dst).unwrap();
+        let mut current = start(&dst);
+        let src = dir.join("new");
+        fs::write(&src, "new").unwrap();
+        let swapped = replace(&src, &dst);
+        let _ = (kept.kill(), current.kill(), kept.wait(), current.wait());
+        assert!(swapped.unwrap());
+        assert_eq!(fs::read(&dst).unwrap(), b"new");
+        assert_eq!(fs::read(&old).unwrap(), fs::read(&ping).unwrap());
+        assert!(aside(&old, 1).is_file());
+        fs::write(&src, "newer").unwrap();
+        assert!(replace(&src, &dst).unwrap());
+        assert_eq!(fs::read(&old).unwrap(), b"new");
+        assert!(!aside(&old, 1).exists());
         let _ = fs::remove_dir_all(&dir);
     }
 
