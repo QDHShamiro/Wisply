@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use serde_json::Value;
@@ -17,6 +17,9 @@ const NOT_DENIALS: [&str; 2] = ["interrupted", "cancelled"];
 const TOP_DENIALS: usize = 5;
 const IDENT_MAX: usize = 40;
 const IDENT_CHARS: &str = "_-./~:=@\\";
+const OWN: [&str; 2] = ["wisply", "lighting"];
+const INNER_KEY: &str = "\"ms\":";
+const INNER_LOGS: [&str; 2] = ["log.1.jsonl", "log.jsonl"];
 
 #[derive(Default)]
 pub struct Scan {
@@ -25,6 +28,8 @@ pub struct Scan {
     pub mcp: HashMap<String, usize>,
     pub skills: HashMap<String, usize>,
     pub hooks: HashMap<(String, String), Vec<u64>>,
+    pub own: HashMap<(String, String), Vec<u64>>,
+    pub inner: Vec<u64>,
     pub timeouts: HashMap<(String, String), usize>,
     pub denials: HashMap<String, HashMap<String, usize>>,
 }
@@ -122,8 +127,23 @@ fn hook(entry: &Value, scan: &mut Scan) {
         *scan.timeouts.entry(key.clone()).or_default() += 1;
     }
     if let Some(ms) = a.get("durationMs").and_then(Value::as_u64) {
-        scan.hooks.entry(key).or_default().push(ms);
+        let command = text("command").to_lowercase();
+        let map = if OWN.iter().any(|n| command.contains(n)) { &mut scan.own } else { &mut scan.hooks };
+        map.entry(key).or_default().push(ms);
     }
+}
+
+pub fn inner_times(state: &Path) -> Vec<u64> {
+    let mut times = Vec::new();
+    for name in INNER_LOGS {
+        let Ok(file) = File::open(state.join(name)) else { continue };
+        for line in BufReader::new(file).lines().map_while(Result::ok) {
+            let Some(at) = line.find(INNER_KEY) else { continue };
+            let digits: String = line[at + INNER_KEY.len()..].chars().take_while(char::is_ascii_digit).collect();
+            times.extend(digits.parse::<u64>().ok());
+        }
+    }
+    times
 }
 
 fn read_file(path: &PathBuf, scan: &mut Scan) {
@@ -173,33 +193,55 @@ fn slow(event: &str, median: u64) -> bool {
     if PER_CALL.contains(&event) { median > SLOW_PER_CALL_MS } else { median > SLOW_SESSION_MS }
 }
 
+fn hook_row(key: &(String, String), times: &[u64], timeouts: usize, own: Option<Option<u64>>) -> Option<Row> {
+    let mid = median(times);
+    if !slow(&key.0, mid) && timeouts == 0 {
+        return None;
+    }
+    let max = times.iter().max().copied().unwrap_or(0);
+    let name = if key.1.is_empty() { &key.0 } else { &key.1 };
+    let whose = if own.is_some() { "Wisply's " } else { "" };
+    let mut text = format!("{whose}{name} median {mid} ms, max {max} ms over {} runs", times.len());
+    if timeouts > 0 {
+        text.push_str(&format!(", {timeouts} timed out"));
+    }
+    let Some(Some(work)) = own else {
+        return Some(row(
+            Level::Warn,
+            "hooks",
+            text,
+            "make it async, cache its output, narrow its matcher or remove it (no change made)",
+        ));
+    };
+    text.push_str(&format!(
+        ": Wisply itself works ~{work} ms, the other ~{} ms is process start (shell, PC load, antivirus)",
+        mid.saturating_sub(work)
+    ));
+    Some(row(
+        Level::Warn,
+        "hooks",
+        text,
+        "exclude ~/.wisply/bin from the antivirus scan or check what loads the PC (no change made)",
+    ))
+}
+
 fn hook_rows(scan: &Scan) -> Vec<Row> {
-    let mut keys: Vec<&(String, String)> = scan.hooks.keys().chain(scan.timeouts.keys()).collect();
+    let mut keys: Vec<&(String, String)> =
+        scan.hooks.keys().chain(scan.own.keys()).chain(scan.timeouts.keys()).collect();
     keys.sort();
     keys.dedup();
     let mut rows = Vec::new();
     for key in keys {
         let times = scan.hooks.get(key).map_or(&[][..], Vec::as_slice);
         let timeouts = scan.timeouts.get(key).copied().unwrap_or(0);
-        let mid = median(times);
-        if !slow(&key.0, mid) && timeouts == 0 {
-            continue;
+        rows.extend(hook_row(key, times, timeouts, None));
+        if let Some(own) = scan.own.get(key) {
+            let work = (key.0 == "PostToolUse" && !scan.inner.is_empty()).then(|| median(&scan.inner));
+            rows.extend(hook_row(key, own, 0, Some(work)));
         }
-        let max = times.iter().max().copied().unwrap_or(0);
-        let name = if key.1.is_empty() { &key.0 } else { &key.1 };
-        let mut text = format!("{name} median {mid} ms, max {max} ms over {} runs", times.len());
-        if timeouts > 0 {
-            text.push_str(&format!(", {timeouts} timed out"));
-        }
-        rows.push(row(
-            Level::Warn,
-            "hooks",
-            text,
-            "make it async, cache its output, narrow its matcher or remove it (no change made)",
-        ));
     }
     if rows.is_empty() {
-        let runs: usize = scan.hooks.values().map(Vec::len).sum();
+        let runs: usize = scan.hooks.values().chain(scan.own.values()).map(Vec::len).sum();
         rows.push(row(
             Level::Ok,
             "hooks",
@@ -305,5 +347,30 @@ mod tests {
         assert!(slow("SessionStart", 10_001) && !slow("SessionStart", 9000));
         assert_eq!(median(&[5, 1, 3]), 3);
         assert_eq!(median(&[]), 0);
+    }
+
+    #[test]
+    fn wisply_hooks_split_work_from_start() {
+        let mut scan = Scan::default();
+        let attach = |cmd: &str, ms: u64| {
+            json!({"type":"attachment","attachment":{"type":"hook_success","hookEvent":"PostToolUse",
+                "hookName":"PostToolUse:Bash","command":cmd,"durationMs":ms}})
+        };
+        for ms in [3000, 3200, 2900] {
+            hook(&attach("L=\"C:/u/.wisply/bin/wisply.exe\"; \"$L\" hook post", ms), &mut scan);
+        }
+        hook(&attach("rtk hook claude", 100), &mut scan);
+        scan.inner = vec![4, 6, 5];
+        let all: String = rows(&scan).iter().map(|r| format!("{}\n", r.text)).collect();
+        assert!(
+            all.contains("Wisply's PostToolUse:Bash median 3000 ms, max 3200 ms over 3 runs: Wisply itself works ~5 ms, the other ~2995 ms is process start"),
+            "{all}"
+        );
+        assert_eq!(all.lines().filter(|l| l.contains("PostToolUse")).count(), 1, "{all}");
+        let dir = std::env::temp_dir().join(format!("lt-cd-inner-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("log.jsonl"), "{\"t\":1,\"ms\":7}\n{\"act\":\"error\"}\n{\"ms\":12,\"in\":3}\n").unwrap();
+        assert_eq!(inner_times(&dir), vec![7, 12]);
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

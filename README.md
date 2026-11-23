@@ -617,7 +617,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 | **Script** | `codemode "<js>"` · `codemode --file x.js --arg k=v` · `codemode help` · MCP `code` argument |
 | **Long output** | `more <hr-id> --grep "word"` · `grep <pattern> [folder]` · `peek <file|folder> ...` · `secure` |
 | **Own tools** | `kit add <name> "what it does" [--rust x.rs] -- <program> [args]` · `kit run <name>` · `skill find <words>` · `skill new` |
-| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs) · `config compact 250k` |
+| **Your numbers** | `tokens` · `bench` · `status` · `doctor --fix` · `doctor ai` (Claude Code, Codex, Gemini ...; for Claude Code also unused servers, skills, oversized memory files and old hooks with token costs; a weekly report with failed tool calls, repeated errors and tokens per session) · `doctor ai --fix` / `--undo` (quotes broken skill frontmatter, keeps a backup) · `config compact 250k` |
 | **Agents** | `agents` · `mobile pair` · `notify event done "title"` |
 | **Headless** | `headless start` · `headless stop` · `headless status` · `headless install` |
 | **Updates** | `update` · `update --check` · `update --rollback` · `config update auto\|notify\|off` |

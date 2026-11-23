@@ -72,6 +72,10 @@ pub fn names_line(names: &[String]) -> String {
     shown.join(", ")
 }
 
+pub fn front_files() -> Vec<PathBuf> {
+    files::front_files(&Env::detect())
+}
+
 pub fn installed() -> bool {
     let env = Env::detect();
     env.claude.is_dir() || install::find_on_path().is_some()
@@ -79,16 +83,19 @@ pub fn installed() -> bool {
 
 pub fn rows() -> (Vec<Row>, String) {
     let env = Env::detect();
-    let scan = transcripts::scan(&env, WINDOW);
+    let mut scan = transcripts::scan(&env, WINDOW);
+    scan.inner = transcripts::inner_times(&wisply_proto::home().join("headroom"));
     let mut rows: Vec<Row> = Vec::new();
     rows.extend(install::rows(&env));
     rows.extend(files::rows(&env));
     rows.extend(usage::rows(&env, &scan));
-    rows.extend(tokens::rows(&env, &tokens_scan::scan(&env)));
+    let tokens = tokens_scan::scan(&env);
+    rows.extend(tokens::rows(&env, &tokens));
     rows.extend(transcripts::rows(&scan));
     rows.extend(context::rows(&env));
     rows.extend(window::rows(&env));
     rows.extend(mode::rows(&env));
+    rows.extend(super::grade::rows(&tokens.weeks));
     (rows, scan.window())
 }
 

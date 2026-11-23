@@ -238,29 +238,37 @@ fn doc_rows(ctx: &Ctx, c: &Cli) -> Vec<Row> {
     rows
 }
 
-fn skill_rows(ctx: &Ctx, c: &Cli) -> Vec<Row> {
+fn skill_list(ctx: &Ctx, c: &Cli) -> Vec<PathBuf> {
     if c.skills.is_empty() {
         return Vec::new();
     }
     let base = dir_of(ctx, c).join(c.skills);
-    let mut dirs: Vec<PathBuf> = fs::read_dir(&base)
+    let mut files: Vec<PathBuf> = fs::read_dir(&base)
         .into_iter()
         .flatten()
         .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.join("SKILL.md").is_file())
+        .map(|e| e.path().join("SKILL.md"))
+        .filter(|p| p.is_file())
         .collect();
-    dirs.sort();
+    files.sort();
+    files
+}
+
+pub fn skill_files(ctx: &Ctx, id: &str) -> Vec<PathBuf> {
+    cli(id).map(|c| skill_list(ctx, c)).unwrap_or_default()
+}
+
+fn skill_rows(ctx: &Ctx, c: &Cli) -> Vec<Row> {
+    let dirs = skill_list(ctx, c);
     let mut rows = Vec::new();
-    for dir in &dirs {
-        let file = dir.join("SKILL.md");
-        let checked = fs::read_to_string(&file).map_err(|e| e.to_string()).and_then(|t| frontmatter::parse(&t));
+    for file in &dirs {
+        let checked = fs::read_to_string(file).map_err(|e| e.to_string()).and_then(|t| frontmatter::parse(&t));
         if let Err(why) = checked {
             rows.push(row(
                 Level::Warn,
                 "skills",
                 format!("{}: {why}", file.display()),
-                "fix the frontmatter line named above (quote the value)",
+                "wisply doctor ai --fix quotes it (backup kept, --undo puts it back)",
             ));
         }
     }
@@ -276,6 +284,9 @@ pub fn rows(ctx: &Ctx, id: &str) -> Vec<Row> {
     rows.extend(config_rows(ctx, c));
     rows.extend(doc_rows(ctx, c));
     rows.extend(skill_rows(ctx, c));
+    if super::sessions::reads(id) {
+        rows.extend(super::grade::rows(&super::sessions::weeks(ctx, id)));
+    }
     rows
 }
 
