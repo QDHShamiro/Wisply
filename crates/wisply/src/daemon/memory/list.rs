@@ -9,7 +9,7 @@ use super::{LINE, TASK_SHORT, ident, is_ident, project, todo_list, with_store};
 
 pub const TODO_HELP: &str = "wisply todo | todo add \"task\" [--kind bug|feature|task|idea] [--prio high|mid|low] [--list name] \
      | todo done|doing|drop|open <id> [note] | todo wait <id> restart|you | todo prio|kind <id> <value> \
-     | todo note <id> \"text\" | todo undo <id>";
+     | todo note <id> \"text\" | todo undo <id> | todo tidy [--done 3,7] [--drop 4]";
 const BUG_HELP: &str = "wisply bug add <server> \"what is broken\" [--prio high|mid|low] | wisply bug [server]";
 const LIST_HELP: &str = "wisply list [--server s] [--kind bug] [--warn] [--done] | list servers | list check [server] \
      | list ignore <id> | list on|off <server> | list log <server> <path> | list accept|reject <id>";
@@ -134,7 +134,7 @@ fn alert_new(d: &Daemon, t: &Todo, who: &str) {
     }
 }
 
-fn set(d: &Daemon, ctx: &Ctx, which: &str, field: &str, value: &str, note: &str) -> Result<Todo, Fail> {
+pub(super) fn set(d: &Daemon, ctx: &Ctx, which: &str, field: &str, value: &str, note: &str) -> Result<Todo, Fail> {
     let id = ident(which)?;
     let value = checked(field, value)?;
     let (who, _) = author(ctx);
@@ -213,6 +213,7 @@ pub fn todo(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
                 done.iter().map(|c| format!("#{id} {} back to '{}'", c.field, oneline(&c.old, TASK_SHORT))).collect();
             Ok(lines.join("\n"))
         }
+        "tidy" | "stale" => super::stale::tidy(d, ctx, c, &here),
         "" => {
             let scope = if c.on("all") { None } else { Some(here.as_str()) };
             let mut rows = with_store(d, |s| s.todos(scope, true))?;

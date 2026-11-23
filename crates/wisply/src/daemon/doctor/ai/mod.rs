@@ -1,8 +1,8 @@
 mod claude;
 mod fix;
 mod generic;
-mod grade;
-mod sessions;
+pub(crate) mod grade;
+pub(crate) mod sessions;
 
 use std::env;
 use std::path::PathBuf;

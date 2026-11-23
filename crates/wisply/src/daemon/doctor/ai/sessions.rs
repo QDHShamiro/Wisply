@@ -32,7 +32,7 @@ fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
-fn modified(path: &Path) -> Option<u64> {
+pub fn modified(path: &Path) -> Option<u64> {
     let meta = fs::metadata(path).ok()?;
     (meta.len() <= MAX_FILE).then_some(())?;
     Some(meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_secs())
@@ -60,7 +60,7 @@ fn walk(dir: &Path, depth: usize, codex: bool, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn open(path: &Path) -> Option<Box<dyn Read>> {
+pub fn open(path: &Path) -> Option<Box<dyn Read>> {
     let file = File::open(path).ok()?;
     if path.extension().is_some_and(|e| e == "zst") {
         return Some(Box::new(zstd::stream::read::Decoder::new(file).ok()?.take(MAX_FILE)));
@@ -192,15 +192,23 @@ fn chat(path: &Path) -> Tally {
     tally
 }
 
-pub fn weeks_in(user: &Path, id: &str, now: u64) -> [Tally; 2] {
-    let mut weeks: [Tally; 2] = Default::default();
-    let Some(source) = SOURCES.iter().find(|s| s.id == id) else { return weeks };
+fn files_of(user: &Path, source: &Source) -> Vec<PathBuf> {
     let mut files = Vec::new();
     for root in source.roots {
         let dir = root.iter().fold(user.to_path_buf(), |p, part| p.join(part));
         walk(&dir, DEPTH, source.codex, &mut files);
     }
-    for path in files {
+    files
+}
+
+pub fn codex_files(user: &Path) -> Vec<PathBuf> {
+    SOURCES.iter().filter(|s| s.codex).flat_map(|s| files_of(user, s)).collect()
+}
+
+pub fn weeks_in(user: &Path, id: &str, now: u64) -> [Tally; 2] {
+    let mut weeks: [Tally; 2] = Default::default();
+    let Some(source) = SOURCES.iter().find(|s| s.id == id) else { return weeks };
+    for path in files_of(user, source) {
         let Some(w) = modified(&path).and_then(|secs| week(now, secs)) else { continue };
         let one = if source.codex { codex(&path) } else { chat(&path) };
         weeks[w].add(&one);

@@ -1,4 +1,4 @@
-mod ai;
+pub(crate) mod ai;
 pub(crate) mod install;
 
 use std::fs;

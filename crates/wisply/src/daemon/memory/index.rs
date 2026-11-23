@@ -28,6 +28,7 @@ static SOON: AtomicBool = AtomicBool::new(false);
 struct Last {
     vault: Option<Instant>,
     claude: Option<Instant>,
+    coach: Option<Instant>,
     early: early::Seen,
 }
 
@@ -119,6 +120,10 @@ fn pass(
     }
     learner::tick(home, store, SOON.swap(false, Ordering::Relaxed));
     super::tidy::tick(home, store);
+    if due(last.coach, TICK) {
+        super::coach::tick(home, store);
+        last.coach = Some(Instant::now());
+    }
     store.warm();
     embed_some(home, store);
     super::code::background(home);

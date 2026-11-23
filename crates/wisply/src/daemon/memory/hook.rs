@@ -120,8 +120,9 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     let text = with_store(d, |s| start_text(s, &here, commits, &sid))?;
     let cleared =
         if data_text(&data, "source") == "clear" { super::handoff::take_cleared(&d.home, &cwd) } else { None };
+    let coach = super::coach::line(&d.home, &here);
     let parts: Vec<String> =
-        [cleared, Some(text), codemode_line(d), crate::update::notice(&d.home)].into_iter().flatten().collect();
+        [cleared, Some(text), coach, codemode_line(d), crate::update::notice(&d.home)].into_iter().flatten().collect();
     Ok(parts.join("\n"))
 }
 
@@ -173,6 +174,24 @@ fn distinct(rows: Vec<(i64, String)>, n: usize) -> Vec<(i64, String)> {
         .collect()
 }
 
+fn todo_lines(s: &Store, here: &str) -> DbResult<Vec<String>> {
+    let open = s.todos(Some(here).filter(|h| !h.is_empty()), true)?;
+    if open.is_empty() {
+        return Ok(Vec::new());
+    }
+    let stale = super::stale::count(&open);
+    let tidy = (stale > 0).then(|| format!("{stale} look stale: wisply todo tidy"));
+    if here.is_empty() {
+        let extra = tidy.map(|t| format!(", {t}")).unwrap_or_default();
+        return Ok(vec![format!("Open to-dos: {} (wisply todo --all lists them{extra})", open.len())]);
+    }
+    let shown: Vec<_> = open.into_iter().take(START_TODOS).collect();
+    let mut lines = vec!["Open to-dos:".to_string()];
+    lines.extend(todo_list(&shown, true).lines().map(|l| format!("  {l}")));
+    lines.extend(tidy.map(|t| format!("  {t}")));
+    Ok(lines)
+}
+
 pub(super) fn start_text(s: &mut Store, here: &str, commits: Vec<String>, sid: &str) -> DbResult<String> {
     let mut ids = Vec::new();
     let mut lines = vec![format!(
@@ -191,18 +210,7 @@ pub(super) fn start_text(s: &mut Store, here: &str, commits: Vec<String>, sid: &
     if !about.is_empty() {
         lines.push(format!("About: {}", oneline(&about.join(" "), ABOUT_CHARS)));
     }
-    if here.is_empty() {
-        let open = s.todos(None, true)?.len();
-        if open > 0 {
-            lines.push(format!("Open to-dos: {open} (wisply todo --all lists them)"));
-        }
-    } else {
-        let todos: Vec<_> = s.todos(Some(here), true)?.into_iter().take(START_TODOS).collect();
-        if !todos.is_empty() {
-            lines.push("Open to-dos:".into());
-            lines.extend(todo_list(&todos, true).lines().map(|l| format!("  {l}")));
-        }
-    }
+    lines.extend(todo_lines(s, here)?);
     let recent = s.sessions(here, START_SESSIONS)?;
     if !recent.is_empty() {
         lines.push("Last sessions:".into());

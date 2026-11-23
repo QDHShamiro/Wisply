@@ -103,7 +103,7 @@ fn handle(msg: &Value, call: &Daemon<'_>) -> Option<Value> {
                     "protocolVersion": version,
                     "capabilities": {"tools": {"listChanged": false}},
                     "serverInfo": {"name": "wisply", "title": "Wisply", "version": env!("CARGO_PKG_VERSION")},
-                    "instructions": INSTRUCTIONS
+                    "instructions": instructions()
                 }),
             )
         }
@@ -264,6 +264,12 @@ fn blocked(first: &str) -> String {
         _ => "help".to_string(),
     };
     format!("err: {first} is not available through MCP -> try: {hint}")
+}
+
+fn instructions() -> String {
+    let cwd = env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
+    let coach = crate::daemon::memory::coach::line(&wisply_proto::home(), &wisply_memory::project_of(&cwd));
+    coach.map_or_else(|| INSTRUCTIONS.to_string(), |c| format!("{INSTRUCTIONS} {c}"))
 }
 
 fn call_daemon(argv: &[String], secret: Option<&str>) -> Value {

@@ -181,6 +181,12 @@ vault/
   while 30 wait, so the inbox never floods.
 - **Wikilinks and backlinks** work in the window's editor, the same `[[Note]]` syntax as in Obsidian.
 - **`open obsidian://open?vault=V&file=Note`** starts Obsidian through Wisply when you want to look at a note yourself.
+- **Session coach.** Once a session has been quiet for 10 minutes, Wisply reads its transcript (Claude Code, Codex)
+  and keeps up to 3 hints for that project: the same file read three times, the same error twice, code edited and never
+  built or tested, huge tool outputs. The next session of any AI in that project starts with them. `config coach off`
+  turns it off.
+- **`todo tidy`** lists to-dos whose date has passed or that sat untouched for 14 days. It never closes anything on its
+  own: `todo tidy --done 3,7` or `--drop 4` does that, `todo undo 4` takes it back.
 - Keys and passwords are cut out before anything is saved. Everything stays on your computer.
 
 ### Code map: know the project before reading it
@@ -662,7 +668,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 |---|---|
 | Use | `routines [-f word]` · `run <name> param=value` · `routine show <name>` |
 | Teach | learned by itself on repeat · working code mode scripts · `routine save <name> [param=value]` · `record start <name>` … `record stop [param=value]` |
-| Tidy | `routine rm\|rename <name>` · `routine forget` · `config learn off` · `config codemode_save off` |
+| Tidy | `routine rm\|rename <name>` · `routine forget` · `config learn off` · `config codemode_save off` · `config coach off` (no session coach line) |
 
 **Memory** (one file on your computer, `~/.wisply/memory`)
 
@@ -670,7 +676,7 @@ Want every agent on your PC to prefer it? Put this in `CLAUDE.md` or `AGENTS.md`
 |---|---|
 | Keep | `remember "fact" [--kind decision] [--global]` · "merk dir …" / "remember …" in a prompt · learned from finished sessions |
 | Find | `recall "words" [--all]` · `recall 42` · `forget 42` |
-| To-dos | `todo [--all]` · `todo add "task" [--kind bug\|feature\|task\|idea] [--prio high\|mid\|low] [--list x]` · `todo doing\|done\|drop\|open 12` · `todo wait 12 restart\|you` · `todo note 12 "text"` · `todo undo 12` · `config list_tidy on\|off` (local model tidies open entries) |
+| To-dos | `todo [--all]` · `todo add "task" [--kind bug\|feature\|task\|idea] [--prio high\|mid\|low] [--list x]` · `todo doing\|done\|drop\|open 12` · `todo wait 12 restart\|you` · `todo note 12 "text"` · `todo undo 12` · `todo tidy [--done 3,7] [--drop 4]` (lists to-dos with a passed date or no change for 14 days, closes only on ask) · `config list_tidy on\|off` (local model tidies open entries) |
 | Bugs | `bug add <server> "what is broken"` · `bug [server]` · `list [--warn] [--done]` · `list servers` · `list check [server]` · `list on\|off <server>` · `list log <server> <path>` · `list ignore 12` · `list accept\|reject 12` · `config servers_file <path>` |
 | Notes | `wiki` · `wiki show 3` · `wiki accept 3 [folder]` · `wiki drop 3` · `config vault <folder>` · `config vault_inbox Inbox` |
 | Model | `memory` · `memory model` · `memory learn` · `memory lessons` · `memory import claude-mem` · `config memory_api <url>` · `memory off` · `memory bench` · `memory slim [--dry\|--undo]` (Claude's project lines load only when a project comes up) |
