@@ -21,6 +21,8 @@ use wisply_core::{Call, Fail, Flag, out_file};
 use super::channels::ledger;
 use super::ctx::Ctx;
 use super::{Daemon, Out, Pending, config, route, web};
+#[cfg(windows)]
+pub(crate) use listen::transcribe;
 use listen::{Job as ListenJob, Live, Src};
 #[cfg(windows)]
 pub use listen::{multipart, spoken, whisper_service};

@@ -68,6 +68,8 @@ pub use imp::{cleanup, keep, run};
 pub use rec::Recorder;
 #[cfg(windows)]
 pub use tab::{find_tab, tab_text};
+#[cfg(windows)]
+pub(crate) use win::clip_get;
 
 #[cfg(windows)]
 pub enum Halt {

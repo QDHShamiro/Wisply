@@ -5,6 +5,9 @@ mod ears;
 mod mouth;
 mod run;
 
+pub(crate) use audio::{Kind as AudioKind, RATE as AUDIO_RATE, record};
+pub(crate) use run::{ASR_RATE, clean, wav};
+
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};

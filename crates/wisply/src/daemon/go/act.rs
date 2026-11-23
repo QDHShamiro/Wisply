@@ -1,0 +1,301 @@
+use std::path::Path;
+use std::sync::LazyLock;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::time::{Duration, Instant};
+
+use regex::Regex;
+use wisply_core::Fail;
+
+use super::super::ctx::Ctx;
+use super::super::{Daemon, Out, agents, routines, system, web};
+use super::contacts::{self, Found, Person};
+use super::parse::Act;
+
+const RETRY_FOR: Duration = Duration::from_secs(5);
+const RETRY_EVERY: Duration = Duration::from_millis(300);
+const PLAY_WAIT: Duration = Duration::from_secs(6);
+const WEB_SEARCH: &str = "google";
+const NOT_WEB: &[&str] = &["exe", "lnk", "bat", "cmd", "msi", "txt", "png", "jpg", "pdf", "json", "yml", "jar"];
+const YT_FIRST: &str = r#"return (async () => {
+  for (let t = 0; t < 8000; t += 200) {
+    const a = document.querySelector("ytd-video-renderer a#video-title, ytd-rich-item-renderer a#video-title-link");
+    if (a) { a.click(); return a.title || a.textContent.trim(); }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return "";
+})();"#;
+
+static DM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"https://discord\.com/channels/@me/\d+").expect("dm"));
+static LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(https?://|www\.)\S+").expect("link"));
+static URLISH: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^[a-z0-9-]+(\.[a-z0-9-]+)*\.([a-z]{2,10})(/\S*)?$").expect("url"));
+
+struct To {
+    person: Person,
+    app: String,
+}
+
+fn argv(parts: &[&str]) -> Vec<String> {
+    parts.iter().map(|p| (*p).to_string()).collect()
+}
+
+fn stopped(d: &Daemon) -> bool {
+    d.abort.load(Ordering::SeqCst)
+}
+
+fn once(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<String, Fail> {
+    match system::run_one(d, ctx, argv)? {
+        (Out::Wait(p), _) => p.settle(d, ctx),
+        (Out::Text(t) | Out::Stop(t), _) => Ok(t),
+    }
+}
+
+pub fn step(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<String, Fail> {
+    let end = Instant::now() + RETRY_FOR;
+    loop {
+        if stopped(d) {
+            return Err(Fail::new("stopped"));
+        }
+        match once(d, ctx, argv) {
+            Err(f) if routines::transient(&f.msg) && Instant::now() < end => thread::sleep(RETRY_EVERY),
+            other => return other,
+        }
+    }
+}
+
+fn pick(people: &[Person], who: &str, yes: bool) -> Result<Person, String> {
+    match contacts::find(people, who) {
+        Found::One(p) => Ok(p),
+        Found::Maybe(list) if !yes => {
+            Err(format!("{who}? could be {}", list.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" / ")))
+        }
+        Found::Nobody if !yes => Err(format!("{who} is not in your contacts yet")),
+        _ => Ok(Person { name: who.to_string(), ..Person::default() }),
+    }
+}
+
+fn resolve(home: &Path, who: &[String], asked: Option<&str>, yes: bool) -> Result<Vec<To>, Fail> {
+    let people = contacts::load(home);
+    let mut out = Vec::new();
+    let mut unsure = Vec::new();
+    for w in who {
+        match pick(&people, w, yes) {
+            Ok(person) => match person.app_for(asked) {
+                Some(app) => out.push(To { person, app }),
+                None => unsure.push(format!("which app for {}? say \"auf discord\" or \"auf whatsapp\"", person.name)),
+            },
+            Err(why) => unsure.push(why),
+        }
+    }
+    if unsure.is_empty() {
+        return Ok(out);
+    }
+    Err(Fail::hint(
+        format!("nothing sent: {}", unsure.join("; ")),
+        "wisply contact add <name> discord=<user> whatsapp=\"<chat name>\", or add --yes to use the chat with exactly that name",
+    ))
+}
+
+fn partial(sent: &[String], f: Fail) -> Fail {
+    if sent.is_empty() {
+        return f;
+    }
+    Fail { msg: format!("{} (already sent to {})", f.msg, sent.join(", ")), ..f }
+}
+
+fn guard(text: &str, yes: bool) -> Result<(), Fail> {
+    if LINK.is_match(text) && !yes {
+        return Err(Fail::hint("nothing sent: the text has a link", "add --yes if the link is meant"));
+    }
+    Ok(())
+}
+
+fn send_one(d: &Daemon, ctx: &mut Ctx, t: &To, text: &str) -> Result<String, Fail> {
+    let handle = t.person.handle(&t.app);
+    let mut parts = vec![
+        "run".to_string(),
+        "send-message".into(),
+        format!("to={handle}"),
+        format!("text={text}"),
+        format!("app={}", t.app),
+    ];
+    if t.app == "discord" && !t.person.dm.is_empty() {
+        parts.push(format!("dm={}", t.person.dm));
+    }
+    let out = step(d, ctx, &parts)?;
+    let dm = DM.find(&out).map(|m| m.as_str().to_string());
+    contacts::learn(&d.home, &t.person.name, &t.app, &handle, dm.as_deref());
+    let shaky = if out.contains("not visible") { ", not seen yet" } else { "" };
+    Ok(format!("{} ({}{shaky})", t.person.name, t.app))
+}
+
+fn message(
+    d: &Daemon,
+    ctx: &mut Ctx,
+    who: &[String],
+    app: Option<&str>,
+    text: &str,
+    yes: bool,
+) -> Result<String, Fail> {
+    guard(text, yes)?;
+    let to = resolve(&d.home, who, app, yes)?;
+    let mut sent = Vec::new();
+    for t in &to {
+        if stopped(d) {
+            return Err(partial(&sent, Fail::new("stopped")));
+        }
+        match send_one(d, ctx, t, text) {
+            Ok(line) => sent.push(line),
+            Err(f) => return Err(partial(&sent, f)),
+        }
+    }
+    Ok(format!("sent to {}", sent.join(", ")))
+}
+
+fn spotify(d: &Daemon, ctx: &mut Ctx, q: &str) -> Result<String, Fail> {
+    step(d, ctx, &argv(&["launch", &format!("spotify:search:{q}")]))?;
+    let labels = [format!("{q} wiedergeben"), format!("Play {q}")];
+    let end = Instant::now() + PLAY_WAIT;
+    loop {
+        for label in &labels {
+            if once(d, ctx, &argv(&["click", label, "--on=app"])).is_ok() {
+                return Ok(format!("playing \"{q}\" on spotify"));
+            }
+        }
+        if Instant::now() >= end || stopped(d) {
+            return Err(Fail::hint(
+                format!("spotify shows the search for \"{q}\", but no play button matched"),
+                "say the exact song name, or press play in spotify",
+            ));
+        }
+        thread::sleep(RETRY_EVERY);
+    }
+}
+
+fn youtube(d: &Daemon, ctx: &mut Ctx, q: &str) -> Result<String, Fail> {
+    step(d, ctx, &argv(&["search", "youtube", q, "--new"]))?;
+    let out = step(d, ctx, &argv(&["js", YT_FIRST]))?;
+    let title = out.trim().trim_matches('"').trim();
+    if title.is_empty() {
+        return Err(Fail::hint(format!("youtube found no video for \"{q}\""), "try other words"));
+    }
+    Ok(format!("playing \"{title}\" on youtube"))
+}
+
+fn media(d: &Daemon, ctx: &mut Ctx, key: &str, times: u32) -> Result<String, Fail> {
+    for _ in 0..times {
+        step(d, ctx, &argv(&["press", key]))?;
+    }
+    Ok(if times > 1 { format!("pressed {key} x{times}") } else { format!("pressed {key}") })
+}
+
+fn url_of(home: &Path, what: &str) -> Option<String> {
+    let low = what.to_lowercase();
+    if low.starts_with("http://") || low.starts_with("https://") {
+        return Some(what.to_string());
+    }
+    if let Some(m) = URLISH.captures(&low)
+        && !NOT_WEB.contains(&&m[2])
+    {
+        return Some(format!("https://{what}"));
+    }
+    web::site(home, &low).map(|host| format!("https://{host}"))
+}
+
+fn open(d: &Daemon, ctx: &mut Ctx, what: &str) -> Result<String, Fail> {
+    match url_of(&d.home, what) {
+        Some(url) => {
+            step(d, ctx, &argv(&["open", &url, "--new"]))?;
+            Ok(format!("opened {url}"))
+        }
+        None => {
+            step(d, ctx, &argv(&["launch", what]))?;
+            Ok(format!("started {what}"))
+        }
+    }
+}
+
+fn search(d: &Daemon, ctx: &mut Ctx, site: Option<&str>, q: &str) -> Result<String, Fail> {
+    let site = site.unwrap_or(WEB_SEARCH);
+    step(d, ctx, &argv(&["search", site, q, "--new"]))?;
+    Ok(format!("searched {site} for \"{q}\""))
+}
+
+fn shot(d: &Daemon, ctx: &mut Ctx, of: Option<&str>) -> Result<String, Fail> {
+    let target = of.map_or_else(|| "screen".to_string(), |o| format!("app:{o}"));
+    step(d, ctx, &argv(&["shot", &target]))
+}
+
+pub fn run(d: &Daemon, ctx: &mut Ctx, act: &Act, yes: bool) -> Result<String, Fail> {
+    match act {
+        Act::Msg { who, app, text } => message(d, ctx, who, app.as_deref(), text, yes),
+        Act::Play { app, q } if app.as_deref() == Some("youtube") => youtube(d, ctx, q),
+        Act::Play { q, .. } => spotify(d, ctx, q),
+        Act::Media { key, times } => media(d, ctx, key, *times),
+        Act::Open { what } => open(d, ctx, what),
+        Act::Search { site, q } => search(d, ctx, site.as_deref(), q),
+        Act::Remind { text } => {
+            agents::remind(&d.home, text, "Wisply");
+            Ok(format!("reminded: {text}"))
+        }
+        Act::Shot { of } => shot(d, ctx, of.as_deref()),
+        Act::Remember { text } => step(d, ctx, &argv(&["remember", text])),
+        Act::Recall { q } => step(d, ctx, &argv(&["recall", q])),
+    }
+}
+
+pub fn preview(home: &Path, act: &Act, yes: bool) -> Result<String, Fail> {
+    let Act::Msg { who, app, text } = act else { return Ok(String::new()) };
+    guard(text, yes)?;
+    let to = resolve(home, who, app.as_deref(), yes)?;
+    let rows: Vec<String> = to
+        .iter()
+        .map(|t| {
+            let dm = if t.app == "discord" && !t.person.dm.is_empty() { ", dm link known" } else { "" };
+            format!("{} via {} \"{}\"{dm}", t.person.name, t.app, t.person.handle(&t.app))
+        })
+        .collect();
+    Ok(format!("to {}", rows.join(", ")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn urls_apps_and_links() {
+        let home = std::env::temp_dir();
+        assert_eq!(url_of(&home, "youtube.com").as_deref(), Some("https://youtube.com"));
+        assert_eq!(url_of(&home, "https://x.org/a").as_deref(), Some("https://x.org/a"));
+        assert_eq!(url_of(&home, "github.com/QDH").as_deref(), Some("https://github.com/QDH"));
+        assert_eq!(url_of(&home, "notepad.exe"), None);
+        assert_eq!(url_of(&home, "Minecraft"), None);
+        assert!(url_of(&home, "youtube").is_some_and(|u| u.contains("youtube.com")));
+        assert!(guard("schau mal https://x.de", false).is_err());
+        assert!(guard("schau mal www.x.de", false).is_err());
+        assert!(guard("schau mal https://x.de", true).is_ok());
+        assert!(guard("bin gleich da", false).is_ok());
+    }
+
+    #[test]
+    fn unknown_people_block_unless_yes() {
+        let home = std::env::temp_dir().join(format!("wisply-go-act-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&home);
+        let _ = std::fs::remove_file(home.join("contacts.json"));
+        contacts::learn(&home, "Franz", "discord", "Froxotron", None);
+        let who = |w: &[&str]| w.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        let ok = resolve(&home, &who(&["franz"]), None, false).expect("franz");
+        assert_eq!((ok[0].app.as_str(), ok[0].person.handle("discord").as_str()), ("discord", "Froxotron"));
+        let err = resolve(&home, &who(&["franz", "olaf"]), None, false).err().expect("olaf blocks");
+        assert!(err.msg.starts_with("nothing sent") && err.msg.contains("olaf"));
+        assert!(resolve(&home, &who(&["olaf"]), None, true).is_err());
+        let forced = resolve(&home, &who(&["olaf"]), Some("whatsapp"), true).expect("forced");
+        assert_eq!(forced[0].person.handle("whatsapp"), "olaf");
+        assert!(
+            preview(&home, &Act::Msg { who: who(&["franz"]), app: None, text: "hi".into() }, false)
+                .is_ok_and(|p| p.contains("Franz via discord \"Froxotron\""))
+        );
+        let _ = std::fs::remove_dir_all(&home);
+    }
+}

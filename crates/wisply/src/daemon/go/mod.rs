@@ -1,0 +1,111 @@
+mod act;
+mod contacts;
+#[cfg(windows)]
+mod input;
+mod later;
+mod parse;
+mod teach;
+mod words;
+
+use std::path::PathBuf;
+use std::time::Instant;
+
+use wisply_core::{Call, Fail};
+
+use super::ctx::{Ctx, now};
+use super::{Daemon, Out, web};
+use parse::{Know, Plan, describe, label};
+
+pub const USAGE: &str = "wisply go \"schreib Franz bin gleich da\" [--dry] [--yes] [--now] · wisply go --list · \
+wisply go --cancel N · wisply go --teach \"<sentence>\" · wisply contacts";
+
+pub fn start(home: PathBuf) {
+    #[cfg(windows)]
+    input::start(home.clone());
+    later::start(home);
+}
+
+pub fn hotkey() -> &'static str {
+    #[cfg(windows)]
+    return input::NAME;
+    #[cfg(not(windows))]
+    return "none";
+}
+
+fn timed(out: &str, t0: Instant) -> String {
+    let out = out.trim();
+    let took = format!("in {:.1} s", t0.elapsed().as_secs_f64());
+    if out.contains('\n') { format!("{out}\n({took})") } else { format!("{out} {took}") }
+}
+
+fn cancel(d: &Daemon, c: &Call) -> Result<Out, Fail> {
+    let raw = c.val("cancel").or_else(|| c.pos.first().map(String::as_str)).unwrap_or("");
+    let id = raw
+        .trim_start_matches('#')
+        .parse()
+        .map_err(|_| Fail::hint("--cancel needs the number from the list", "wisply go --list"))?;
+    later::cancel(&d.home, id).map(Out::Text)
+}
+
+fn taught(d: &Daemon, ctx: &mut Ctx, said: &str, dry: bool, t0: Instant) -> Option<Result<Out, Fail>> {
+    let hit = teach::find(&d.home, said)?;
+    if dry {
+        return Some(Ok(Out::Text(
+            format!("would run routine {} {}", hit.name, hit.pairs.join(" ")).trim().to_string(),
+        )));
+    }
+    let mut argv = vec!["run".to_string(), hit.name];
+    argv.extend(hit.pairs);
+    Some(act::step(d, ctx, &argv).map(|out| Out::Text(timed(&out, t0))))
+}
+
+fn plan(d: &Daemon, said: &str, t: f64) -> Result<Plan, Fail> {
+    let people = contacts::load(&d.home);
+    let person = |w: &str| contacts::knows(&people, w);
+    let site = |w: &str| web::site(&d.home, w).is_some();
+    parse::parse(said, t, &Know { person: &person, site: &site })?.ok_or_else(|| teach::unknown(said))
+}
+
+fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
+    let t0 = Instant::now();
+    let (yes, dry) = (c.on("yes"), c.on("dry"));
+    if let Some(done) = taught(d, ctx, said, dry, t0) {
+        return done;
+    }
+    let t = now();
+    let plan = plan(d, said, t)?;
+    let later_at = plan.when.filter(|at| !c.on("now") && *at > t);
+    if dry {
+        let who = act::preview(&d.home, &plan.act, yes)?;
+        let shown = Plan { act: plan.act, when: later_at };
+        let tail = if who.is_empty() { String::new() } else { format!(" · {who}") };
+        return Ok(Out::Text(format!("would do: {}{tail}", describe(&shown, t))));
+    }
+    if let Some(at) = later_at {
+        act::preview(&d.home, &plan.act, yes)?;
+        let what = describe(&Plan { act: plan.act, when: None }, t);
+        let id = later::add(&d.home, at, said, &what)?;
+        return Ok(Out::Text(format!("planned #{id} for {}: {what}", label(t, at))));
+    }
+    act::run(d, ctx, &plan.act, yes).map(|out| Out::Text(timed(&out, t0)))
+}
+
+pub fn command(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
+    if c.name != "go" {
+        return contacts::command(&d.home, c).map(Out::Text);
+    }
+    if c.on("list") || c.flags.contains_key("list") {
+        return Ok(Out::Text(later::list(&d.home)));
+    }
+    if c.flags.contains_key("cancel") {
+        return cancel(d, c);
+    }
+    let said = c.pos.join(" ").trim().to_string();
+    if said.is_empty() {
+        return Err(Fail::hint("say what to do", USAGE));
+    }
+    if c.on("teach") {
+        return teach::learn(d, ctx, &said).map(Out::Text);
+    }
+    go(d, ctx, c, &said)
+}

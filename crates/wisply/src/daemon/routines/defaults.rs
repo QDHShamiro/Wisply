@@ -9,7 +9,7 @@ use wisply_core::local_now;
 use super::script::hash;
 use super::store::{file, save, text};
 
-const VERSION: u64 = 1;
+const VERSION: u64 = 2;
 
 struct Shipped {
     name: &'static str,
@@ -26,8 +26,8 @@ struct Shipped {
 const SHIPPED: [Shipped; 4] = [
     Shipped {
         name: "send-message",
-        about: "send a chat message (WhatsApp Web, Telegram Web, or a chat app on the desktop)",
-        guide: "to = the exact chat name, text = the message, app = whatsapp (default) | telegram | any chat app",
+        about: "send a chat message (WhatsApp Web, Telegram Web, Discord Web, or a chat app on the desktop)",
+        guide: "to = the exact chat name (Discord: user name), text = the message, app = whatsapp (default) | telegram | discord | any chat app, dm = a known Discord DM link",
         tags: &[
             "send",
             "message",
@@ -42,7 +42,7 @@ const SHIPPED: [Shipped; 4] = [
             "schreiben",
             "schreib",
         ],
-        params: &["to", "text", "app"],
+        params: &["to", "text", "app", "dm"],
         code: include_str!("defaults/send-message.js"),
         check: include_str!("defaults/send-message.check.js"),
         before_ms: 120_000,

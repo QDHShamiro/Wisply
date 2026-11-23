@@ -2,6 +2,9 @@ use crate::{Fail, close_match};
 
 const SYSTEM: &[&str] = &[
     "do",
+    "go",
+    "contact",
+    "contacts",
     "channels",
     "ping",
     "stop",
