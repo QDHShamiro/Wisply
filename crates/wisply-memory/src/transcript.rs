@@ -239,10 +239,23 @@ pub fn condense_as(path: &Path, offset: u64, limit: Option<usize>, style: Style)
 }
 
 pub fn chunks(text: &str) -> Vec<String> {
-    let (mut out, mut cur, mut size) = (Vec::new(), Vec::new(), 0usize);
-    for line in text.split('\n') {
+    chunks_of(text, CHUNK_CHARS)
+}
+
+pub fn chunks_of(text: &str, limit: usize) -> Vec<String> {
+    let limit = limit.max(1);
+    let (mut out, mut cur, mut size) = (Vec::new(), Vec::<String>::new(), 0usize);
+    let pieces = text.split('\n').flat_map(|line| {
+        let chars: Vec<char> = line.chars().collect();
+        if chars.len() <= limit {
+            vec![line.to_string()]
+        } else {
+            chars.chunks(limit).map(|c| c.iter().collect()).collect()
+        }
+    });
+    for line in pieces {
         let n = line.chars().count();
-        if size + n > CHUNK_CHARS && !cur.is_empty() {
+        if size + n > limit && !cur.is_empty() {
             out.push(cur.join("\n"));
             cur.clear();
             size = 0;
@@ -309,6 +322,9 @@ mod tests {
         let long = format!("{}\n{}", "a".repeat(CHUNK_CHARS - 5), "b".repeat(10));
         assert_eq!(chunks(&long).len(), 2);
         assert_eq!(chunks("x\ny"), ["x\ny"]);
+        assert_eq!(chunks_of("abcdefg\nhi", 3), ["abc", "def", "g", "hi"]);
+        assert_eq!(chunks_of("ab\ncd\nefgh", 6), ["ab\ncd", "efgh"]);
+        assert!(chunks_of(&"ü".repeat(25), 10).iter().all(|p| p.chars().count() <= 10));
         let lean = condense(&path, 0, None).unwrap();
         assert_eq!(
             lean.text,

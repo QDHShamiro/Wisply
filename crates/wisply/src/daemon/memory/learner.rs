@@ -1,15 +1,17 @@
+use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde_json::{Value, json};
 use wisply_memory::{
-    Due, NewNote, Record, Store, WIKI_KINDS, chunks, condense, now, oneline, points, project_of_files, render_page,
+    Due, NewNote, Record, Store, WIKI_KINDS, chunks_of, condense, now, oneline, points, project_of_files, render_page,
     scrub, similar, template, titled, write_draft, write_session,
 };
 
-use super::super::{config, game};
-use super::chat::{self, ChatError, Provider};
+use super::super::config;
+use super::chain::{self, Halt, Links};
+use super::chat::Provider;
 use super::index::vault;
 
 const KINDS: &[&str] = &["decision", "preference", "bugfix", "feature", "fact", "discovery", "change"];
@@ -32,6 +34,11 @@ const BACKOFF_STEPS: u32 = 4;
 const DUP_SIM: f64 = 0.7;
 const DRAFT_TITLE: usize = 100;
 const INBOX: &str = "Inbox";
+const TICK_S: f64 = 600.0;
+const PRIVATE_WAIT_S: f64 = 3600.0;
+const PRIVATE_NO_LOCAL_S: f64 = 21_600.0;
+const NO_LOCAL: &str =
+    "private session learns only with a model on this PC (wisply config memory_api + memory_api_model)";
 
 #[derive(Default, Clone)]
 pub struct State {
@@ -88,15 +95,16 @@ fn backoff() -> f64 {
 }
 
 enum Stop {
-    Wait(String),
+    Wait(String, Option<f64>),
+    Hold(String, f64),
     Fail(String),
 }
 
-impl From<ChatError> for Stop {
-    fn from(e: ChatError) -> Stop {
-        match e {
-            ChatError::NotReady(why) => Stop::Wait(why),
-            ChatError::Failed(why) => Stop::Fail(why),
+impl From<Halt> for Stop {
+    fn from(h: Halt) -> Stop {
+        match h {
+            Halt::Wait(why, until) => Stop::Wait(why, until),
+            Halt::Fail(why) => Stop::Fail(why),
         }
     }
 }
@@ -106,7 +114,8 @@ fn inbox(home: &Path) -> std::path::PathBuf {
     vault(home).join(if name.trim().is_empty() { INBOX } else { name.trim() })
 }
 
-fn draft(home: &Path, store: &mut Store, p: &Provider, lesson: &Value, project: &str, sid: &str, r: &Record) {
+fn draft(home: &Path, store: &mut Store, links: &mut Links, lesson: &Value, project: &str, sid: &str, r: &Record) {
+    let Some(i) = links.last else { return };
     let (kind, title, body) = (field(lesson, "kind"), field(lesson, "title"), field(lesson, "body"));
     let known = store.search(&title, project, 5, None, 0.0).unwrap_or_default();
     if known.iter().any(|h| h.note.source == "vault" && similar(&h.note.title, &title) >= DUP_SIM) {
@@ -120,7 +129,7 @@ fn draft(home: &Path, store: &mut Store, p: &Provider, lesson: &Value, project: 
     let shown = if project.is_empty() { "-" } else { project };
     let user =
         format!("Project: {shown}\nKind: {kind}\nLesson: {title}\n{body}\n\nSession: {}\n{}", r.title, r.summary);
-    let Ok(answer) = chat::chat(p, DRAFT_SYSTEM, &user, &schema) else { return };
+    let Some(answer) = links.ask(i, DRAFT_SYSTEM, &user, &schema) else { return };
     let Some(out) = parse(&answer) else { return };
     let sections: Vec<(String, String)> = out
         .get("sections")
@@ -145,7 +154,69 @@ fn known_titles(store: &mut Store, project: &str, title: &str, part: &str, sid: 
     if lines.is_empty() { String::new() } else { format!("Known notes:\n{}\n", lines.join("\n")) }
 }
 
-fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usize, Stop> {
+struct Step<'a> {
+    project: &'a str,
+    sid: &'a str,
+    hidden: bool,
+}
+
+fn next_link(links: &Links, hidden: bool) -> Result<usize, Stop> {
+    match links.pick() {
+        Ok(i) => Ok(i),
+        Err(Halt::Wait(why, until)) if hidden => {
+            Err(Stop::Hold(format!("private, {why}"), until.unwrap_or(now() + PRIVATE_WAIT_S)))
+        }
+        Err(h) => Err(h.into()),
+    }
+}
+
+fn answer(links: &mut Links, i: usize, user: &str, schema: &Value) -> Option<Value> {
+    let out = parse(&links.ask(i, SYSTEM, user, schema)?);
+    if out.is_none() {
+        let name = links.all[i].name();
+        links.refuse(i, format!("{name} sent no JSON object"));
+    }
+    out
+}
+
+fn read_parts(
+    store: &mut Store,
+    links: &mut Links,
+    step: &Step,
+    text: String,
+    r: &mut Record,
+) -> Result<(usize, Vec<Value>), Stop> {
+    let db = |e: wisply_memory::DbError| Stop::Fail(format!("memory.db: {e}"));
+    let (mut added, mut lessons) = (0, Vec::new());
+    let schema = schema();
+    let mut parts = VecDeque::from([text]);
+    while let Some(part) = parts.pop_front() {
+        let i = next_link(links, step.hidden)?;
+        let size = links.all[i].chars;
+        if part.chars().count() > size {
+            chunks_of(&part, size).into_iter().rev().for_each(|p| parts.push_front(p));
+            continue;
+        }
+        let shown = if step.project.is_empty() { "-" } else { step.project };
+        let title = if r.title.is_empty() { "-" } else { r.title.as_str() };
+        let known = known_titles(store, step.project, &r.title, &part, step.sid);
+        let user = format!("Project: {shown}\nSession title: {title}\n{known}\nSession log:\n{part}");
+        let Some(out) = answer(links, i, &user, &schema) else {
+            parts.push_front(part);
+            continue;
+        };
+        links.done();
+        added += keep_notes(store, &out, step.project, step.sid).map_err(db)?;
+        let found = out.get("lessons").and_then(Value::as_array).into_iter().flatten();
+        lessons.extend(
+            found.filter(|n| WIKI_KINDS.contains(&field(n, "kind").as_str()) && !field(n, "title").is_empty()).cloned(),
+        );
+        absorb(r, &out);
+    }
+    Ok((added, lessons))
+}
+
+fn learn(home: &Path, store: &mut Store, all: &[Provider], words: &[Vec<String>], row: &Due) -> Result<usize, Stop> {
     let path = Path::new(&row.transcript);
     if !path.exists() {
         store.session_gone(&row.id).map_err(|e| Stop::Fail(e.to_string()))?;
@@ -170,28 +241,17 @@ fn learn(home: &Path, store: &mut Store, p: &Provider, row: &Due) -> Result<usiz
         rejected: row.rejected.clone(),
         next: row.next.clone(),
     };
-    let (mut added, mut lessons) = (0, Vec::new());
-    let schema = schema();
-    for part in chunks(&c.text) {
-        if p.local() && !game::running().is_empty() {
-            return Err(Stop::Wait("a game started".into()));
-        }
-        let shown = if project.is_empty() { "-" } else { project.as_str() };
-        let title = if r.title.is_empty() { "-" } else { r.title.as_str() };
-        let known = known_titles(store, &project, &r.title, &part, &row.id);
-        let user = format!("Project: {shown}\nSession title: {title}\n{known}\nSession log:\n{part}");
-        let answer = chat::chat(p, SYSTEM, &user, &schema)?;
-        let out = parse(&answer).ok_or_else(|| Stop::Fail(format!("{} sent no JSON object", p.name())))?;
-        added += keep_notes(store, &out, &project, &row.id).map_err(db)?;
-        let found = out.get("lessons").and_then(Value::as_array).into_iter().flatten();
-        lessons.extend(
-            found.filter(|n| WIKI_KINDS.contains(&field(n, "kind").as_str()) && !field(n, "title").is_empty()).cloned(),
-        );
-        absorb(&mut r, &out);
+    let paths = c.paths.join(" ");
+    let hidden = chain::private(words, &[&project, &row.project, &row.transcript, &paths, &r.title, &c.text]);
+    let mut links = Links::new(home, all.iter().filter(|p| p.local || !hidden).cloned().collect());
+    if hidden && links.all.is_empty() {
+        return Err(Stop::Hold(NO_LOCAL.into(), now() + PRIVATE_NO_LOCAL_S));
     }
+    let step = Step { project: &project, sid: &row.id, hidden };
+    let (added, lessons) = read_parts(store, &mut links, &step, c.text, &mut r)?;
     let room = if store.drafts_full().unwrap_or(true) { 0 } else { WIKI_PER_SESSION };
     for lesson in lessons.iter().take(room) {
-        draft(home, store, p, lesson, &project, &row.id, &r);
+        draft(home, store, &mut links, lesson, &project, &row.id, &r);
     }
     let open_since = if c.more { 0.0 } else { began };
     store.session_learned(&row.id, c.end, open_since, &r).map_err(db)?;
@@ -261,17 +321,18 @@ pub fn tick(home: &Path, store: &mut Store, soon: bool) {
     if due.is_empty() {
         return;
     }
-    let Some(p) = chat::provider(home) else {
-        set(|s| {
-            s.error = "no model to learn with (GEMINI_API_KEY, or wisply config memory_api + memory_api_model)".into()
-        });
-        return;
-    };
-    if p.local() && !game::running().is_empty() {
-        return;
+    let all = chain::links(home);
+    match Links::new(home, all.clone()).pick() {
+        Ok(_) => {}
+        Err(Halt::Wait(..)) => return,
+        Err(Halt::Fail(why)) => return set(|s| s.error = why),
     }
+    let words = chain::private_words(home);
     for row in &due {
-        match learn(home, store, &p, row) {
+        if now() - t > TICK_S {
+            return;
+        }
+        match learn(home, store, &all, &words, row) {
             Ok(n) => set(|s| {
                 WAITS.store(0, Ordering::Relaxed);
                 s.learned += n;
@@ -282,10 +343,14 @@ pub fn tick(home: &Path, store: &mut Store, soon: bool) {
                 );
                 s.error.clear();
             }),
-            Err(Stop::Wait(why)) => {
-                let _ = store.session_retry(&row.id, now() + backoff(), false);
+            Err(Stop::Wait(why, until)) => {
+                let _ = store.session_retry(&row.id, until.unwrap_or_else(|| now() + backoff()), false);
                 set(|s| s.error = why);
                 return;
+            }
+            Err(Stop::Hold(why, until)) => {
+                let _ = store.session_retry(&row.id, until, false);
+                set(|s| s.error = format!("{}: {why}", row.id.chars().take(8).collect::<String>()));
             }
             Err(Stop::Fail(why)) => {
                 let _ = store.session_retry(&row.id, now() + RETRY_S, true);

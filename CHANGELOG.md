@@ -7,6 +7,18 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 
 ## [Unreleased]
 
+### Added
+- Session learning runs through a chain of models (`config memory_chain`, default `gemini,local`, presets `groq` and
+  `openrouter` with their free models). When Gemini's free quota was used up, all learning stopped; one real queue
+  held 213 sessions. Now a link that answers 429, a daily quota or an error pauses for the time it names (or 15 min,
+  then longer each time, up to 6 h) and the next link takes over. Daily limits are counted per link, a prompt that is
+  too large for a link is split smaller instead of failing, and `wisply memory` lists every link with its pause and
+  asks today.
+- `config memory_private "words"`: sessions whose project, folder, title or text has one of these words learn only
+  with a model on this computer and are never sent to a cloud; a word of 4 or more letters also hits longer words
+  that start with it, so `Konto` keeps `Kontoauszug` and `Kontonummer` private too. Without such a model they wait. The words stay in the
+  local config; `wisply memory` shows only how many there are.
+
 ### Changed
 - Headroom keeps command output that is data (script results, tables, lists where most lines differ) whole when it
   fits in about 1,500 tokens, instead of hiding its middle behind "... N lines". Over a week of real Bash output the

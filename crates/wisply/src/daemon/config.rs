@@ -63,6 +63,8 @@ fn defaults() -> Map<String, Value> {
         ("memory_server", json!("")),
         ("memory_model", json!("")),
         ("memory_embed", json!("")),
+        ("memory_chain", json!("gemini,local")),
+        ("memory_private", json!("")),
         ("gemini", json!(true)),
         ("gemini_model", json!("gemini-2.5-flash")),
         ("models_dir", json!("")),
