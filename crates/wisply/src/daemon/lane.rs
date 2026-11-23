@@ -159,7 +159,8 @@ pub fn add_notes(d: &Daemon, ctx: &mut Ctx, out: &mut String) {
 
 fn finish(d: &Daemon, ctx: &mut Ctx, req: Req, name: &str, mut out: String, code: i32, stop: bool) {
     system::watch(d, ctx, req.used.as_deref().unwrap_or(&req.argv), &out, code == 0);
-    super::memory::learn::after(d, ctx, name, &req.argv, code, &mut out);
+    let lesson = super::memory::learn::after(d, ctx, name, &req.argv, code, &mut out);
+    super::memory::warn::after(d, ctx, name, &req.argv, code, lesson, &mut out);
     if code == 0 && route::foreign(name) {
         out = route::ai_note(out);
     }

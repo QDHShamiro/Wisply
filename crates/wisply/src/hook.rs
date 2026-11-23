@@ -73,7 +73,8 @@ pub fn post() {
     if let Ok(event) = &parsed
         && event["hook_event_name"].as_str().is_some_and(|n| n != "PostToolUse")
     {
-        if let Some(text) = crate::reads::other_event(&paths.state, event) {
+        let text = crate::prewarn::hint(&root, event).or_else(|| crate::reads::other_event(&paths.state, event));
+        if let Some(text) = text {
             let mut out = io::stdout().lock();
             let _ = out.write_all(text.as_bytes());
             let _ = out.flush();

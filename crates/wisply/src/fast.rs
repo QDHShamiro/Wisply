@@ -16,6 +16,8 @@ mod junk;
 mod more;
 #[path = "peek.rs"]
 mod peek;
+#[path = "prewarn.rs"]
+mod prewarn;
 #[path = "progress.rs"]
 mod progress;
 #[path = "reads.rs"]

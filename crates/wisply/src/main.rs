@@ -13,6 +13,7 @@ mod mcp;
 mod more;
 mod peek;
 mod pipe;
+mod prewarn;
 mod progress;
 mod pupil;
 mod reads;
