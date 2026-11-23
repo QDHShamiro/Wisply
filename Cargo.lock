@@ -5780,6 +5780,7 @@ dependencies = [
  "wisply-video",
  "x11rb",
  "xa11y",
+ "zstd",
 ]
 
 [[package]]

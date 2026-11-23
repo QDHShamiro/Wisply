@@ -47,6 +47,13 @@ pub fn skill_dirs(env: &Env) -> Vec<PathBuf> {
     out
 }
 
+pub fn front_files(env: &Env) -> Vec<PathBuf> {
+    let mut out = markdown_files(&env.claude.join("agents"), false);
+    out.extend(markdown_files(&env.cwd.join(".claude").join("agents"), true));
+    out.extend(skill_dirs(env).into_iter().map(|d| d.join("SKILL.md")));
+    out
+}
+
 pub fn front_of(path: &Path) -> Result<Option<Front>, String> {
     let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
     frontmatter::parse(&text)
@@ -93,7 +100,7 @@ fn skill_rows(env: &Env) -> Vec<Row> {
                 Level::Warn,
                 "skills",
                 format!("{}: {why}, so every field is dropped", file.display()),
-                "fix the frontmatter line named above (quote the value)",
+                "wisply doctor ai --fix quotes it (backup kept, --undo puts it back)",
             ));
         }
     }

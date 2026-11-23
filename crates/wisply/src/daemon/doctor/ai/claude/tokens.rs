@@ -351,6 +351,7 @@ mod tests {
         let found = scan_with(&env, Some(&env.user));
         let took = start.elapsed();
         assert_eq!((found.sessions, found.requests, found.skills_used["s"]), (200, 200, 200));
+        assert_eq!((cold.weeks[0].calls, found.weeks[0].calls, found.weeks[0].sessions), (200, 200, 200));
         assert!(took < std::time::Duration::from_secs(1), "{took:?}");
         fs::remove_dir_all(env.user).unwrap();
     }

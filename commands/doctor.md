@@ -4,8 +4,9 @@ disable-model-invocation: true
 ---
 Run `wisply doctor` and show its lines unchanged.
 If its last line says `wisply doctor --fix repairs N`, run `wisply doctor --fix` and show that output unchanged too.
-Then run `wisply doctor ai` and show its lines unchanged (it checks Claude Code, Codex, Gemini, Qwen and the other AI CLIs it finds, read-only).
+Then run `wisply doctor ai` and show its lines unchanged (it checks Claude Code, Codex, Gemini, Qwen and the other AI CLIs it finds, read-only; its `report` lines compare this week with last week).
 For every line that still says `warn` or `FAIL`:
+- `-> fix: wisply doctor ai --fix ...`: ask the user once, then run `wisply doctor ai --fix` and show its lines (it keeps a backup, `wisply doctor ai --undo` puts the old files back).
 - `-> fix: wisply setup ...`: run it and report its last line.
 - a fix in another tool's settings (Claude Code, Codex, Gemini ...): tell the user the exact edit in one line and apply it only after the user says yes. Never edit `env`, `headers` or hook commands, never add allow rules for commands.
 - any other `-> fix:` (installing ffmpeg or uv, updating the plugin, Windows settings, `/wisply:setup`): tell the user that exact step in one line, do not do it yourself.

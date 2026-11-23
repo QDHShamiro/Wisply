@@ -1,4 +1,5 @@
 const FENCE: &str = "---";
+const UNQUOTED: &str = "an unquoted value contains ': '";
 const KEY_CHARS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
 const NOT_PLAIN: [char; 9] = ['|', '>', '[', '{', '&', '*', '!', '"', '\''];
 
@@ -50,7 +51,7 @@ fn value_problem(value: &str) -> Option<&'static str> {
     if value.starts_with(NOT_PLAIN) || value.starts_with('#') {
         return None;
     }
-    (value.contains(": ") || value.ends_with(':')).then_some("an unquoted value contains ': '")
+    (value.contains(": ") || value.ends_with(':')).then_some(UNQUOTED)
 }
 
 pub fn parse(text: &str) -> Result<Option<Front>, String> {
@@ -83,6 +84,38 @@ pub fn parse(text: &str) -> Result<Option<Front>, String> {
     Err("the opening --- has no closing ---".into())
 }
 
+fn quoted(key: &str, value: &str) -> String {
+    format!("{key}: \"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+pub fn repair(text: &str) -> Option<String> {
+    let mut out = String::with_capacity(text.len() + 16);
+    let mut changed = false;
+    let mut open = false;
+    for (n, piece) in text.split_inclusive('\n').enumerate() {
+        let line = piece.trim_end_matches(['\n', '\r']);
+        let ending = &piece[line.len()..];
+        if n == 0 {
+            if line.trim_start_matches('\u{feff}').trim_end() != FENCE {
+                return None;
+            }
+            open = true;
+        } else if open && line.trim_end() == FENCE {
+            open = false;
+        } else if open
+            && !line.starts_with([' ', '\t', '-', '#'])
+            && let Some((key, value)) = split_key(line)
+            && value_problem(value) == Some(UNQUOTED)
+        {
+            out.push_str(&quoted(key, value));
+            out.push_str(ending);
+            changed = true;
+            continue;
+        }
+        out.push_str(piece);
+    }
+    (changed && matches!(parse(&out), Ok(Some(_)))).then_some(out)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,5 +140,19 @@ mod tests {
         assert_eq!(parse("---\nname: x\n").unwrap_err(), "the opening --- has no closing ---");
         assert_eq!(parse("---\n\tname: x\n---\n").unwrap_err(), "line 2 starts with a tab");
         assert!(parse("---\nname: \"say \\\"hi\\\"\"\n---\n").is_ok());
+    }
+
+    #[test]
+    fn repair_quotes_only_broken_values_and_keeps_the_rest() {
+        let crlf = |s: &str| s.replace('\n', "\r\n");
+        let text =
+            crlf("---\nname: x\ndescription: Use when: it \"breaks\" C:\\x\nmodel: \"ok\"\n---\nbody: stays: as is\n");
+        let fixed = repair(&text).unwrap();
+        let want = r#"description: "Use when: it \"breaks\" C:\\x""#;
+        assert_eq!(fixed, crlf(&format!("---\nname: x\n{want}\nmodel: \"ok\"\n---\nbody: stays: as is\n")));
+        assert_eq!(parse(&fixed).unwrap().unwrap().value("description"), Some(r#"Use when: it \"breaks\" C:\\x"#));
+        assert_eq!(repair("---\nname: fine\n---\n"), None);
+        assert_eq!(repair("no fence: here\n"), None);
+        assert_eq!(repair("---\nname: \"x\n---\n"), None);
     }
 }

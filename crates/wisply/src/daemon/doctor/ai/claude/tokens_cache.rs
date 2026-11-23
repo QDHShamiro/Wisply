@@ -6,9 +6,10 @@ use std::time::UNIX_EPOCH;
 use serde_json::{Map, Value, json};
 
 use super::tokens_scan::{Cost, TokenScan};
+use crate::daemon::doctor::ai::grade::Tally;
 
 const FILE: &str = "doctor-tokens-cache.json";
-const VERSION: u64 = 1;
+const VERSION: u64 = 2;
 
 pub struct Cache {
     path: Option<PathBuf>,
@@ -40,6 +41,27 @@ fn encode(one: &TokenScan) -> Value {
         "skill_cost": counts(&one.skill_cost),
         "mcp_cost": cost,
         "legacy": legacy,
+        "tally": {
+            "sessions": one.tally.sessions,
+            "calls": one.tally.calls,
+            "errors": one.tally.errors,
+            "tokens": one.tally.tokens,
+            "fails": counts(&one.tally.fails),
+        },
+    })
+}
+
+fn number(v: &Value, key: &str) -> Option<usize> {
+    usize::try_from(v.get(key)?.as_u64()?).ok()
+}
+
+fn read_tally(v: &Value) -> Option<Tally> {
+    Some(Tally {
+        sessions: number(v, "sessions")?,
+        calls: number(v, "calls")?,
+        errors: number(v, "errors")?,
+        tokens: v.get("tokens")?.as_u64()?,
+        fails: read_counts(v.get("fails")),
     })
 }
 
@@ -60,6 +82,7 @@ fn decode(v: &Value) -> Option<TokenScan> {
     for (k, c) in v.get("legacy")?.as_object()? {
         one.legacy_runs.insert(k.clone(), pair(c)?);
     }
+    one.tally = read_tally(v.get("tally")?)?;
     Some(one)
 }
 

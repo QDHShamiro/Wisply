@@ -1,5 +1,8 @@
 mod claude;
+mod fix;
 mod generic;
+mod grade;
+mod sessions;
 
 use std::env;
 use std::path::PathBuf;
@@ -69,14 +72,20 @@ fn tag(rows: Vec<Row>, id: &str) -> Vec<Row> {
 }
 
 pub fn run(first: &str, rest: &[String]) -> ExitCode {
-    let names = match wanted(first, rest) {
+    let (mode, rest) = fix::split(rest);
+    let names = match wanted(first, &rest) {
         Ok(names) => names,
         Err(why) => {
             eprintln!("err: {why}");
             return ExitCode::from(2);
         }
     };
+    if mode == fix::Mode::Undo {
+        println!("wisply doctor ai {} {}", env!("CARGO_PKG_VERSION"), fix::UNDO);
+        return print(&fix::undo(&wisply_proto::home()));
+    }
     let ctx = Ctx::detect();
+    let mut files: Vec<PathBuf> = Vec::new();
     let explicit = !names.is_empty();
     let mut rows: Vec<Row> = Vec::new();
     let (mut found, mut missing, mut window) = (Vec::new(), Vec::new(), String::new());
@@ -95,6 +104,10 @@ pub fn run(first: &str, rest: &[String]) -> ExitCode {
             continue;
         }
         found.push(id);
+        if mode == fix::Mode::Fix {
+            files.extend(if id == CLAUDE { claude::front_files() } else { generic::skill_files(&ctx, id) });
+            continue;
+        }
         let got = if id == CLAUDE {
             let (rows, win) = claude::rows();
             window = win;
@@ -103,6 +116,11 @@ pub fn run(first: &str, rest: &[String]) -> ExitCode {
             generic::rows(&ctx, id)
         };
         rows.extend(tag(got, id));
+    }
+    if mode == fix::Mode::Fix {
+        println!("wisply doctor ai {} {} | found: {}", env!("CARGO_PKG_VERSION"), fix::FIX, found.join(", "));
+        rows.extend(fix::fix_files(&wisply_proto::home(), &files));
+        return print(&rows);
     }
     let seen = if missing.is_empty() { String::new() } else { format!(" | not found: {}", missing.join(", ")) };
     let win = if window.is_empty() { String::new() } else { format!(" | claude window: {window}") };
