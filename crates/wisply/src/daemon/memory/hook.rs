@@ -97,7 +97,7 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         let handoff = super::handoff::take(&d.home, &sid);
         let told = handoff.as_deref().unwrap_or("");
         let here = if here.is_empty() { super::handoff::project_in(told).unwrap_or_default() } else { here };
-        let text = with_store(d, |s| compact_text(s, &here, &super::handoff::goal_in(told)))?;
+        let text = with_store(d, |s| compact_text(s, &here, &super::handoff::goal_in(told), &sid))?;
         return Ok(match handoff {
             Some(handoff) => format!(
                 "{handoff}
@@ -114,7 +114,7 @@ pub fn hook(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         ));
     }
     let commits = if here.is_empty() || cwd.is_empty() { Vec::new() } else { commits(&cwd) };
-    let text = with_store(d, |s| start_text(s, &here, commits))?;
+    let text = with_store(d, |s| start_text(s, &here, commits, &sid))?;
     let cleared =
         if data_text(&data, "source") == "clear" { super::handoff::take_cleared(&d.home, &cwd) } else { None };
     let parts: Vec<String> =
@@ -126,7 +126,8 @@ fn codemode_line(d: &Daemon) -> Option<String> {
     config::on(&config::load(&d.home), "codemode").then(|| CODEMODE_START.to_string())
 }
 
-fn listed(head: &str, rows: Vec<(i64, String)>) -> Vec<String> {
+fn listed(head: &str, rows: Vec<(i64, String)>, ids: &mut Vec<i64>) -> Vec<String> {
+    ids.extend(rows.iter().map(|(id, _)| *id));
     if rows.is_empty() {
         return Vec::new();
     }
@@ -135,12 +136,13 @@ fn listed(head: &str, rows: Vec<(i64, String)>) -> Vec<String> {
     out
 }
 
-fn compact_text(s: &mut Store, here: &str, goal: &str) -> DbResult<String> {
+fn compact_text(s: &mut Store, here: &str, goal: &str, sid: &str) -> DbResult<String> {
+    let mut ids = Vec::new();
     let mut lines = vec![format!(
         "Wisply after the summary ({}): wisply recall \"<words>\" searches your notes, wisply todo tracks work.",
         if here.is_empty() { "no project" } else { here }
     )];
-    lines.extend(listed("Project rules:", s.titles(here, true, START_RULES)?));
+    lines.extend(listed("Project rules:", s.titles(here, true, START_RULES)?, &mut ids));
     let mut notes: Vec<(i64, String)> = Vec::new();
     if !goal.trim().is_empty() {
         let hits = s.search(goal, here, GOAL_NOTES, None, 0.0)?;
@@ -152,7 +154,8 @@ fn compact_text(s: &mut Store, here: &str, goal: &str) -> DbResult<String> {
         );
     }
     notes.extend(s.titles(here, false, START_NOTES)?);
-    lines.extend(listed("Remembered:", distinct(notes, START_NOTES)));
+    lines.extend(listed("Remembered:", distinct(notes, START_NOTES), &mut ids));
+    s.used(&ids, sid, "start")?;
     Ok(lines.join("\n"))
 }
 
@@ -167,7 +170,8 @@ fn distinct(rows: Vec<(i64, String)>, n: usize) -> Vec<(i64, String)> {
         .collect()
 }
 
-pub(super) fn start_text(s: &mut Store, here: &str, commits: Vec<String>) -> DbResult<String> {
+pub(super) fn start_text(s: &mut Store, here: &str, commits: Vec<String>, sid: &str) -> DbResult<String> {
+    let mut ids = Vec::new();
     let mut lines = vec![format!(
         "Wisply memory ({}): wisply recall \"<words>\" searches {} notes (vault, session notes and Claude memory \
          included), wisply remember \"<fact>\" keeps one, wisply todo tracks work.",
@@ -206,8 +210,9 @@ pub(super) fn start_text(s: &mut Store, here: &str, commits: Vec<String>) -> DbR
         }
     }
     lines.extend(commits);
-    lines.extend(listed("Project rules:", s.titles(here, true, START_RULES)?));
-    lines.extend(listed("Remembered:", s.titles(here, false, START_NOTES)?));
+    lines.extend(listed("Project rules:", s.titles(here, true, START_RULES)?, &mut ids));
+    lines.extend(listed("Remembered:", s.titles(here, false, START_NOTES)?, &mut ids));
+    s.used(&ids, sid, "start")?;
     let drafts = s.drafts()?;
     let today = date(now());
     if drafts > 0 && s.meta(DRAFTS_SHOWN)?.as_deref() != Some(today.as_str()) {
@@ -341,7 +346,7 @@ fn memory_tip(d: &Daemon, ctx: &mut Ctx, prompt: String) -> Result<String, Fail>
     };
     let vec = vecs.pop();
     let hits = with_store(d, |s| hints(s, &prompt, &here, vec.as_deref()))?;
-    let mut out = Vec::new();
+    let (mut out, mut ids) = (Vec::new(), Vec::new());
     for n in hits.iter().map(|h| &h.note) {
         let key = format!("m:{}", n.id);
         if ctx.told.contains_key(&key) {
@@ -349,10 +354,12 @@ fn memory_tip(d: &Daemon, ctx: &mut Ctx, prompt: String) -> Result<String, Fail>
         }
         ctx.told.insert(key, now());
         out.push(format!("#{} {}", n.id, oneline(&n.title, 100)));
+        ids.push(n.id);
         if out.len() >= HINTS {
             break;
         }
     }
+    with_store(d, |s| s.used(&ids, &ctx.sid, "hint"))?;
     Ok(if out.is_empty() {
         String::new()
     } else {
@@ -450,10 +457,10 @@ mod tests {
         };
         s.add_note(&draft).unwrap();
         let line = "1 wiki drafts wait for a yes or no: wisply wiki";
-        assert!(start_text(&mut s, "", Vec::new()).unwrap().ends_with(line));
-        assert!(!start_text(&mut s, "", Vec::new()).unwrap().contains("wiki drafts"));
+        assert!(start_text(&mut s, "", Vec::new(), "").unwrap().ends_with(line));
+        assert!(!start_text(&mut s, "", Vec::new(), "").unwrap().contains("wiki drafts"));
         s.set_meta(DRAFTS_SHOWN, "2000-01-01").unwrap();
-        assert!(start_text(&mut s, "", Vec::new()).unwrap().ends_with(line));
+        assert!(start_text(&mut s, "", Vec::new(), "").unwrap().ends_with(line));
         for _ in 1..DRAFTS_MAX {
             s.add_note(&draft).unwrap();
         }
@@ -462,7 +469,7 @@ mod tests {
         let full = format!(
             "{DRAFTS_MAX} wiki drafts wait for a yes or no: wisply wiki, no new ones until fewer than {DRAFTS_MAX} are open"
         );
-        assert!(start_text(&mut s, "", Vec::new()).unwrap().ends_with(&full));
+        assert!(start_text(&mut s, "", Vec::new(), "").unwrap().ends_with(&full));
         drop(s);
         let _ = std::fs::remove_dir_all(&home);
     }

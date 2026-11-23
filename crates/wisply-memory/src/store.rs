@@ -58,10 +58,15 @@ create index if not exists todos_project on todos(project, status);
 create table if not exists meta(k text primary key, v text);
 create table if not exists lessons(sig text primary key, cmd text, target text, kind text, fix text,
   ups integer default 1, downs integer default 0, created real, updated real);
+create table if not exists uses(note integer, session text, how text, n integer default 1, t real,
+  primary key(note, session, how));
+create index if not exists uses_t on uses(t);
+create trigger if not exists notes_uses_ad after delete on notes begin delete from uses where note = old.id; end;
 ";
 const MIGRATE: &[&str] = &[
     "alter table sessions add column why text default ''",
     "alter table sessions add column rejected text default ''",
+    "alter table notes add column via text default ''",
 ];
 
 #[derive(Debug, Clone, Default)]

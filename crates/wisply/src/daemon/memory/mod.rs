@@ -14,6 +14,8 @@ pub mod learn;
 mod learner;
 mod list;
 mod listview;
+mod room;
+mod seen;
 mod status;
 mod tidy;
 mod watch;
@@ -159,6 +161,7 @@ fn recall(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
             let n = s.note(id)?;
             if n.is_some() {
                 s.touch(&[id])?;
+                s.used(&[id], &ctx.sid, "open")?;
             }
             Ok(n)
         })?;
@@ -176,7 +179,9 @@ fn recall(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     let scope = if c.on("all") { "" } else { here.as_str() };
     let found = with_store(d, |s| {
         let hits = s.search(&text, scope, limit, vec.as_deref(), 0.0)?;
-        s.touch(&hits.iter().map(|h| h.note.id).collect::<Vec<_>>())?;
+        let ids: Vec<i64> = hits.iter().map(|h| h.note.id).collect();
+        s.touch(&ids)?;
+        s.used(&ids, &ctx.sid, "search")?;
         Ok(hits)
     })?;
     let note = if why.is_empty() { String::new() } else { format!("words only, {why}") };
