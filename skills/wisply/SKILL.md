@@ -11,7 +11,7 @@ description: Drives the user's logged-in browser and desktop apps (read, click, 
 More than one step = one `wisply codemode --file x.js` (MCP: `code`): look, decide, act and check inside the script, return only the result. Values that change go in as `--arg pr=100` (`args.pr`), never into the code: a working script is kept as a routine and replays as `wisply run <name> pr=101`. A single call only when the task is one command. `references/codemode.md`
 
 ## Cheapest first
-1. `Wisply routine fits ...` in the prompt, or done before: `wisply run <name or words> k=v`.
+1. `Wisply skill|routine fits ...` in the prompt, or done before: `wisply run <name or words> k=v`. Messages: `wisply run send-message to="Exact Chat" text="hi"`.
 2. Public page: `read <url>` (no browser, PDFs too). Question: `research "q" "q en"`. Data: `fetch <url> --pick a.b`, `net`.
 3. `open <url> -f "a|b"` finds, `--text` reads, plain is the first look.
 4. `-f "word"` on an action shows its result: `click "Merge" -f merged`. Then `snap -f`, `text -f`, `shot` last. A repeated `snap` lists changes (`--full` all).
@@ -29,7 +29,7 @@ Secrets never inline: `type e3 --env PASS`, `fill "Password=@secret" --env PASS`
 - Apps: `snap app:spotify` or `launch spotify`, then `click d5|"Save"`, `type`, `press`, `read app:spotify` (OCR); `--on web` back. `references/apps.md`
 - Chats: `reply "@Name" "text" --wait`, `inbox "@Name"`, `unread`. `references/chats.md`
 - Video, sound: `watch url|file|e40`, `pupil watch <youtube>` (as text), `listen`. `references/video.md`
-- Routines: `! routine X can finish this` = `wisply run X`; `routine save <intent-name> [k=v]` keeps the task just done. `references/routines.md`
+- Routines: `! routine X can finish this` = `wisply run X`; `routine save <intent-name> [k=v]` keeps the task just done. A task that repeats: `wisply learn "<task>"` teaches it as a checked skill. `references/routines.md`
 - Memory, code: `recall "words"` (`recall 42` full), `remember "fact"`, `todo add "task" [--kind bug]`, `list`; from the project folder `code Name`, `code "what it does"`, `peek <files>` before reading. `references/memory.md`
 - Snapshots, frames, tabs, page data: `references/web.md`. Settings, tokens, `kit`, skills, `secure`, trouble: `references/system.md`. Login, form, upload, dashboard, game: `references/recipes.md`.
 

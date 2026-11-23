@@ -11,6 +11,7 @@ use wisply_core::{Call, Fail, local_now};
 use super::super::Daemon;
 use super::super::ctx::{Ctx, now};
 use super::learn::{TAGS, prompt_at, prompt_words, stamp};
+use super::skills;
 use super::store::{self, file, load_all, name_slug, save, stem, text, usage};
 
 static QUOTED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""[^"\n]*"|'[^'\n]*'|`[^`]*`"#).expect("quoted"));
@@ -163,7 +164,7 @@ struct Fresh<'a> {
 }
 
 fn renew(d: &Daemon, name: &str, new: &Fresh, word: &str) -> Option<String> {
-    let mut r = store::load(&d.home, name).ok().filter(is_script)?;
+    let mut r = store::load(&d.home, name).ok().filter(|r| is_script(r) && !skills::is_skill(r))?;
     let version = r["version"].as_u64().unwrap_or(1) + 1;
     r["version"] = json!(version);
     r["script"]["code"] = json!(new.code);
@@ -187,12 +188,43 @@ fn grew_from(old: &str, new: &str) -> bool {
     !a.is_empty() && b.len() > a.len() && shared as f64 >= GREW_SHARE * a.len() as f64
 }
 
+fn alike(a: &str, b: &str) -> bool {
+    let set = |c: &str| store::words(c).into_iter().collect::<HashSet<String>>();
+    let (a, b) = (set(a), set(b));
+    let small = a.len().min(b.len());
+    small > 0 && a.intersection(&b).count() as f64 >= GREW_SHARE * small as f64
+}
+
+pub fn absorb(home: &Path, ctx: &mut Ctx, skill: &Value) -> Vec<String> {
+    let code = text(&skill["script"]["code"]);
+    let mine = [hash(&code), hash(&text(&skill["learn"]["check"]))];
+    let last = ctx.last_script.as_ref().filter(|(_, at, _)| recent(*at)).map(|(n, _, _)| n.clone());
+    let mut gone = Vec::new();
+    for r in load_all(home).into_iter().filter(|r| is_script(r) && !skills::is_skill(r)) {
+        let (name, old) = (text(&r["name"]), text(&r["script"]["code"]));
+        let same = mine.iter().any(|h| r["script"]["hash"] == h.as_str() || hash(&old) == *h);
+        let tried = last.as_deref() == Some(name.as_str()) && alike(&old, &code);
+        if (same || tried) && fs::remove_file(file(home, &name)).is_ok() {
+            gone.push(name);
+        }
+    }
+    if last.is_some_and(|n| gone.contains(&n)) {
+        ctx.last_script = None;
+    }
+    gone
+}
+
 fn drop_outgrown(d: &Daemon, ctx: &Ctx, code: &str) -> Option<String> {
     let (name, at, _) = ctx.last_script.as_ref()?;
     let path = file(&d.home, name);
     let old: Value = serde_json::from_str(&fs::read_to_string(&path).ok()?).ok()?;
     let unused = old["stats"]["runs"].as_u64().unwrap_or(0) == 0;
-    if !(recent(*at) && is_script(&old) && unused && grew_from(&text(&old["script"]["code"]), code)) {
+    if !(recent(*at)
+        && is_script(&old)
+        && !skills::is_skill(&old)
+        && unused
+        && grew_from(&text(&old["script"]["code"]), code))
+    {
         return None;
     }
     fs::remove_file(&path).ok()?;
@@ -205,10 +237,16 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
         return Err(Fail::new("routine script needs the code"));
     }
     let h = hash(&code);
-    if let Some(mut same) = load_all(&d.home).into_iter().find(|r| r["script"]["hash"] == h.as_str()) {
+    let same = load_all(&d.home).into_iter().filter(|r| r["script"]["hash"] == h.as_str()).max_by_key(skills::is_skill);
+    if let Some(mut same) = same {
         same["stats"]["seen"] = json!(same["stats"]["seen"].as_u64().unwrap_or(1) + 1);
+        let note = skills::offer_note(&mut same).map(|n| format!("\n{n}")).unwrap_or_default();
         save(&d.home, &same)?;
-        return Ok(format!("this script is saved as routine {} {}", text(&same["name"]), next_time(&same)));
+        let name = text(&same["name"]);
+        if skills::is_skill(&same) {
+            return Ok(format!("this script is the skill {name} -> next time: {}", skills::usage_of(&same)));
+        }
+        return Ok(format!("this script is saved as routine {name} {}{note}", next_time(&same)));
     }
     let t0 = now() - body["ms"].as_f64().unwrap_or(0.0) / 1000.0;
     let prompts = d.prompts_of(&ctx.sid);
@@ -253,6 +291,9 @@ fn saved(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
 
 fn ran(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
     let mut r = store::load(&d.home, &text(&body["routine"]))?;
+    if skills::is_skill(&r) {
+        return Ok(skills::ran(&d.home, r, body));
+    }
     let name = text(&r["name"]);
     let ok = body["ok"] == true;
     let typed = usage(&r, &BTreeMap::new()).chars().count() / 4 + 1;
@@ -260,7 +301,11 @@ fn ran(d: &Daemon, ctx: &mut Ctx, body: &Value) -> Result<String, Fail> {
     store::record(&d.home, &mut r, ok, body["ms"].as_f64().unwrap_or(0.0), typed, err);
     if ok {
         ctx.broken_script = None;
-        return Ok(String::new());
+        let note = skills::offer_note(&mut r);
+        if note.is_some() {
+            let _ = save(&d.home, &r);
+        }
+        return Ok(note.unwrap_or_default());
     }
     ctx.broken_script = Some((name.clone(), now()));
     Ok(format!(
@@ -303,7 +348,7 @@ pub fn show(r: &Value) -> Vec<String> {
 pub fn prune(home: &Path) {
     let few = stamp(now() - FEW_RUNS_DAYS * DAY_S);
     let many = stamp(now() - MANY_RUNS_DAYS * DAY_S);
-    for r in load_all(home).into_iter().filter(is_script) {
+    for r in load_all(home).into_iter().filter(|r| is_script(r) && !skills::is_skill(r)) {
         let last =
             r["stats"]["last"].as_str().filter(|l| !l.is_empty()).map_or_else(|| text(&r["created"]), str::to_string);
         let limit = if r["stats"]["runs"].as_u64().unwrap_or(0) >= MANY_RUNS { &many } else { &few };

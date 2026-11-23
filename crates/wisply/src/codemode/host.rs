@@ -144,7 +144,9 @@ fn perform(setup: &Setup, shared: &Shared, task: Work) -> Result<(String, usize)
 
 fn wisply(setup: &Setup, shared: &Shared, argv: &[String], secret: Option<&str>) -> Result<(i32, String), String> {
     let first = argv.first().map(String::as_str).unwrap_or("");
-    let own = OWN.contains(&first) || (first == "memory" && argv.get(1).is_some_and(|a| a == "bench"));
+    let own = OWN.contains(&first)
+        || (first == "memory" && argv.get(1).is_some_and(|a| a == "bench"))
+        || crate::waitfor::wanted(argv);
     if own {
         let exe = env::current_exe().map_err(|e| format!("cannot find wisply itself ({e})"))?;
         let mut cmd = Command::new(exe);

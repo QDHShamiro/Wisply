@@ -5,11 +5,23 @@ const READ_MAX: u64 = 16 << 20;
 const GLOB_MAX: usize = 5_000;
 const SKIP_DIRS: &[&str] = &[".git", "node_modules", "target", ".venv", "__pycache__", ".next", "dist"];
 
+fn bash_path(path: &str) -> Option<PathBuf> {
+    if !cfg!(windows) || !path.starts_with('/') || path.starts_with("//") {
+        return None;
+    }
+    let rest = &path[1..];
+    let (head, tail) = rest.split_once('/').unwrap_or((rest, ""));
+    if head.len() == 1 && head.chars().all(|c| c.is_ascii_alphabetic()) {
+        return Some(PathBuf::from(format!("{}:/{tail}", head.to_ascii_uppercase())));
+    }
+    (head == "tmp").then(|| std::env::temp_dir().join(tail))
+}
+
 pub fn resolve(cwd: &Path, path: &str) -> PathBuf {
     let path = path.trim();
     let raw = match path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\")) {
         Some(rest) => user_home().map(|h| h.join(rest)).unwrap_or_else(|| PathBuf::from(path)),
-        None => PathBuf::from(path),
+        None => bash_path(path).unwrap_or_else(|| PathBuf::from(path)),
     };
     let full = if raw.is_absolute() { raw } else { cwd.join(raw) };
     let mut out = PathBuf::new();
@@ -187,4 +199,18 @@ fn split_root(cwd: &Path, pattern: &str) -> (PathBuf, String) {
         resolve(cwd, if head.is_empty() { "." } else { &head })
     };
     (root, rest)
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn git_bash_paths_become_windows_paths() {
+        let cwd = Path::new("E:/work");
+        assert_eq!(shown(&resolve(cwd, "/c/Users/x/a.js")), "C:/Users/x/a.js");
+        assert_eq!(resolve(cwd, "/tmp/claude/a.js"), resolve(&std::env::temp_dir(), "claude/a.js"));
+        assert_eq!(shown(&resolve(cwd, "sub/../a.js")), "E:/work/a.js");
+        assert_eq!(shown(&resolve(cwd, "/usr/bin/x")), "E:/usr/bin/x");
+    }
 }

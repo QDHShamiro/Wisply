@@ -103,3 +103,19 @@ fn show_numbers_the_code_and_caps_it() {
     assert_eq!(shown[0], "  1 line 1");
     assert_eq!(shown[80], "... 5 more lines");
 }
+
+#[test]
+fn a_saved_skill_takes_the_routines_of_its_code_and_its_check() {
+    let home = scratch("absorb");
+    let mk = |name: &str, code: &str| json!({"name": name, "steps": [], "script": {"code": code, "hash": hash(code)}});
+    for r in [mk("count-run", "return 1"), mk("count-check", "return args.result == 1"), mk("other", "return 2")] {
+        save(&home, &r).unwrap();
+    }
+    let skill = json!({"name": "count", "source": "skill", "script": {"code": "return 1"},
+        "learn": {"state": "practice", "check": "return args.result == 1"}});
+    let mut gone = absorb(&home, &mut Ctx::scratch("t", "g"), &skill);
+    gone.sort();
+    assert_eq!(gone, ["count-check", "count-run"]);
+    assert_eq!(load_all(&home).iter().map(|r| text(&r["name"])).collect::<Vec<_>>(), ["other"]);
+    let _ = fs::remove_dir_all(&home);
+}

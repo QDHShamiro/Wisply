@@ -24,8 +24,22 @@ pub fn old_home() -> PathBuf {
     user_dir().join(".lighting")
 }
 
-pub fn home_var() -> Option<PathBuf> {
+fn raw_var() -> Option<PathBuf> {
     ["WISPLY_HOME", "LIGHTING_HOME"].iter().filter_map(env::var_os).find(|h| !h.is_empty()).map(PathBuf::from)
+}
+
+fn full(path: PathBuf) -> PathBuf {
+    if path.is_relative() { std::path::absolute(&path).unwrap_or(path) } else { path }
+}
+
+pub fn home_var() -> Option<PathBuf> {
+    raw_var().map(full)
+}
+
+pub fn pin_home() {
+    if let Some(path) = raw_var().filter(|p| p.is_relative()) {
+        unsafe { env::set_var("WISPLY_HOME", full(path)) }
+    }
 }
 
 pub fn home() -> PathBuf {
@@ -144,6 +158,14 @@ mod tests {
         }
         assert!(same_token(&token, &token) && !same_token(&token, "ab") && !same_token("ab", "ac"));
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_relative_home_becomes_a_full_path() {
+        let here = env::current_dir().unwrap();
+        assert_eq!(full(PathBuf::from("home")), here.join("home"));
+        assert_eq!(full(here.join("x")), here.join("x"));
+        assert!(full(PathBuf::from("a/b")).is_absolute());
     }
 
     #[test]

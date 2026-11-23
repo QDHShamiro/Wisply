@@ -8,6 +8,19 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply learn`: Wisply learns a task that repeats with other values as a skill. The AI writes the script and a check
+  once (`wisply learn "<task>"` prints the short how-to), `learn save` practices it right away with 3 dry runs that
+  stop before the last real step, each one checked, all without tokens. When all pass the AI asks the user and
+  `learn ok` makes it learned; from then on `wisply run <name> k=v` does the task in one call and checks the result
+  after every run. A failure is kept as a one-line hint for the next AI. `wisply learn` lists runs, time against by
+  hand and tokens saved, marks weak skills and names script routines that keep coming back.
+- Four default skills on every PC, local and editable: `send-message` (WhatsApp Web, Telegram Web or a chat app; sends
+  at once but only to an exact chat name, then checks the message is visible), `read-form`, `find-file` and `pr-ci`.
+  A WhatsApp message took about 2 minutes of single steps before; now it is one call. A dropped default stays away,
+  one you changed is never overwritten.
+- `reply --exact` (only that chat, then waits up to 12 s until the message is visible) and `reply --dry` (types the
+  text and clears it again).
+- `wait ci` and `wait until` run inside code mode scripts.
 - Session learning runs through a chain of models (`config memory_chain`, default `gemini,local`, presets `groq` and
   `openrouter` with their free models). When Gemini's free quota was used up, all learning stopped; one real queue
   held 213 sessions. Now a link that answers 429, a daily quota or an error pauses for the time it names (or 15 min,
@@ -40,7 +53,32 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   "thanks" ...) and fillers ("machst", "muss") no longer end up in routine names and match words, so names like
   `discord-los` are gone, and a prompt that starts with a machine tag such as `<cross-session-message ...>` (a message
   from another session) no longer counts as typed by the user, so it neither gets an offer nor fills a routine's
-  words; 17 of the 66 routines had words from such messages.
+  words; 17 of the 66 routines had words from such messages. A learned skill keeps its offer: it is offered with the
+  values of the request filled in (`month=2026-11`) and the hint to run it instead of doing the steps by hand; in a
+  live test the AI did the task by hand when the offer only showed `month=<…>`.
+- On Windows, code mode files (`--file`, `read()`, `write()`, `glob()`) and `learn save --file/--check` understand Git
+  Bash paths: `/tmp/x.js` is the temp folder and `/c/Users/x` is `C:/Users/x` (was read as `C:/tmp/x.js`).
+- In code mode the output of `$` has plain `\n` line ends (Windows programs print `\r\n`, and a check that split on
+  `\n` found no lines) and works like a string: `(await $\`cmd\`).trim()`, `.split()`, `.includes()` and the other
+  string methods work on its stdout (they failed with "not a function").
+- `learn save --file count.py` is refused with a `run.js` line to copy that calls the script
+  (`return await $\`python count.py ${args.<name>}\``); a skill is code mode JavaScript, and the Python file was saved
+  and then failed every practice run. `wisply learn <skill name>` shows that skill instead of a brief for a new one.
+- An older `wisply` command that reaches a newer daemon with `codemode` is told it is older than the daemon and to run
+  `wisply update` (it said "code mode runs in the wisply command itself", and a live-test AI tried four other ways).
+- `learn save` removes the script routines that the test runs of the same code and of its check saved a moment
+  before, so the next request runs the skill and `wisply learn` no longer lists them as "could become a skill". Running the
+  code of a skill again in code mode says it is that skill.
+- A saved script that fits a request worse than a learned skill is not offered next to it (a "where is this file"
+  request got the counting script of the same folder, and the AI ran it instead of `find-file`).
+- `learn save` keeps an about text that contains `=` (like "call: month=YYYY-MM"); only `name=value` pairs with a
+  plain name are values now. The skill offer says to use the skill also for a small task (a live-test AI counted
+  two small files by hand "because they are so small").
+- A skill value the code gives a default (`args.root || "data"`, `args.app ?? "whatsapp"`) is optional: `learn save`
+  practices without it, the offer leaves it out so the command is ready to run, `wisply run` does not ask for it, and
+  the usage shows it as `[root=<…>]`.
+- A relative `WISPLY_HOME` is made a full path at start, so the daemon, which runs in the home folder, uses the same
+  folder as the command (it made `home/home` and kept running there).
 
 ## [3.5.1] - 2026-11-22
 

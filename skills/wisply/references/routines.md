@@ -12,6 +12,14 @@
 - Script routines: a working `wisply codemode` script with 2+ calls is saved whole (loops, shell, files, logic), once per script, offered only in its project. `wisply run X pr=101` hands the values to the script as `args.pr`; `--yes` is never saved. It is marked `| script` in the list, `routine show X` prints the code. A failed run: fix the script and run it with `wisply codemode`, the next working one replaces X (v2). Gone after 30 days unused, 90 days from 5 runs on; `config codemode_save off` stops saving.
 - Files: `~/.wisply/routines/<name>.json` and `~/.wisply/episodes.jsonl` (last 300 tasks, typed text included; `--env` values are stored as `@secret`).
 
+## Skills (taught once, then one call)
+- A skill is a task that repeats with other values (send a message, fill a form, check a PR). The AI writes it once, Wisply practices and checks it without tokens.
+- `wisply learn "<task>"` prints the short how-to and names skills that may do it already. Write `run.js` (values as `args.x`; with `args.dry === "1"` stop right before the last real step) and `check.js` (gets the same args plus `args.result`, throws or returns false when the outcome is wrong).
+- `wisply learn save <name> "<what it does>" --file run.js --check check.js [--guide "<args>"] [--before 2m] [--tokens 3000] k=v` saves it and practices at once: 3 dry runs, each checked. All green: ask the user, then `wisply learn ok <name>`. Red: the error is kept as a hint for the next AI (`learn show <name>`); fix and save again (v2).
+- Learned skills are offered in the prompt (`Wisply skill fits this request (one call, checked after every run): wisply run send-message to=<…> text=<…>`) and checked after every real run. `learn practice <name> [k=v]` practices again, `learn drop <name>` removes one.
+- `wisply learn` lists them with runs, time against by hand and tokens saved; `WEAK` (often fails or barely faster) = ask the user, then drop. Script routines that keep coming back are named as candidates.
+- Default skills on every PC, local and editable (`learn show`, then `learn save` with your own file): `send-message to= text= app=` (WhatsApp Web default, Telegram Web, chat apps; sends at once, only on an exact chat name, then checks the message is in the chat), `read-form url= fill="A=1;B=2" submit= find=`, `find-file name= in=`, `pr-ci pr= repo=`. A dropped default stays away; a changed one is never overwritten by updates.
+
 ## Recording (the user shows it once)
 - `wisply record start <name>` records the Wisply tab (clicks, form fields, keys, scrolling, typed-in URLs) and Windows apps (clicks by control name, typing, shortcuts). A red `REC` badge shows in the page and on the screen.
 - Browsers and terminals are skipped on the desktop side; password fields become `@secret`. Recording stops by itself after 15 minutes (`--max` minutes).

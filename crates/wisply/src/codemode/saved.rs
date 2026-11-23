@@ -18,6 +18,9 @@ pub struct Report<'a> {
     pub ok: bool,
     pub secret: bool,
     pub error: Option<&'a str>,
+    pub checked: bool,
+    pub rounds: usize,
+    pub dry: bool,
 }
 
 pub fn code_of(home: &Path, name: &str) -> Result<String, String> {
@@ -43,7 +46,10 @@ pub fn worth_saving(r: &Report<'_>) -> bool {
 
 pub fn tell(home: &Path, cwd: &Path, sid: &str, r: &Report<'_>) -> Option<String> {
     let body = match r.routine {
-        Some(name) => json!({"routine": name, "ok": r.ok, "ms": r.ms, "error": r.error}),
+        Some(name) => json!({
+            "routine": name, "ok": r.ok, "ms": r.ms, "error": r.error, "checked": r.checked, "rounds": r.rounds,
+            "dry": r.dry
+        }),
         None if worth_saving(r) && crate::daemon::config_on(&crate::daemon::load_config(home), "codemode_save") => {
             json!({
                 "code": r.code,
@@ -77,6 +83,9 @@ mod tests {
             ok: true,
             secret: false,
             error: None,
+            checked: false,
+            rounds: 0,
+            dry: false,
         };
         assert!(worth_saving(&base));
         assert!(!worth_saving(&Report { calls: 1, ..base }));

@@ -143,6 +143,82 @@ fn a_failed_routine_is_repaired_from_the_steps_done_by_hand() {
 }
 
 #[test]
+fn a_skill_is_saved_practiced_with_its_check_approved_and_then_runs_in_one_call() {
+    let home = Home::new("skills");
+    let run = home.0.join("run.js");
+    let check = home.0.join("check.js");
+    fs::write(&run, "if (args.who === 'boom') throw new Error('no such chat');\nawait wisply`ping`;\nawait wisply`ping`;\nreturn 'hello ' + args.who").unwrap();
+    fs::write(&check, "return args.result.includes('hello ' + args.who)").unwrap();
+    let (run, check) = (run.display().to_string(), check.display().to_string());
+    let (_, out) = home.run(&["codemode", "--file", &run, "--arg", "who=Mum"]);
+    assert!(out.contains("hello Mum\nsaved as routine ping"), "{out}");
+    let (c, out) =
+        home.run(&["learn", "save", "greet", "say hello to someone", "--file", &run, "--check", &check, "who=Mum"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("hello Mum\npractice: 3/3 dry runs passed the check"), "{out}");
+    assert!(out.contains("skill greet passed 3 checks -> ask the user, then: wisply learn ok greet"), "{out}");
+    assert!(
+        out.ends_with("saved skill greet v1 (the dry runs above are its practice); it replaces routine ping"),
+        "{out}"
+    );
+    assert!(!home.run(&["routines"]).1.contains("ping"));
+    let (_, out) = home.run(&["codemode", "--file", &run, "--arg", "who=Mum"]);
+    assert!(out.contains("this script is the skill greet -> next time: wisply run greet who=<…>"), "{out}");
+    let (c, out) = home.run(&["learn", "ok", "greet"]);
+    assert_eq!((c, out.as_str()), (0, "learned skill greet -> from now on one call: wisply run greet who=<…>"));
+    let (c, out) = home.run(&["run", "greet", "who=Opa"]);
+    assert!(c == 0 && out.contains("hello Opa") && !out.contains("skill greet"), "{out}");
+    let (c, out) = home.run(&["run", "greet", "who=boom"]);
+    assert!(c == 1 && out.contains("skill greet failed: ") && out.contains("no such chat"), "{out}");
+    let (_, out) = home.run(&["learn", "show", "greet"]);
+    assert!(
+        out.contains("\nskill: learned | say hello to someone\n")
+            && out.contains("last failure (hint for the next AI): "),
+        "{out}"
+    );
+    let (_, out) = home.run(&["learn", "greet"]);
+    assert!(out.starts_with("greet v1 (skill, ") && out.contains("\nuse: wisply run greet who=<…>"), "{out}");
+    let (_, out) = home.run(&["learn", "gree"]);
+    assert!(out.contains("\ntask: gree"), "{out}");
+    let (_, out) = home.run(&["learn"]);
+    assert!(out.starts_with("find-file name= in= | learned | not run yet (by hand ~"), "{out}");
+    assert!(
+        out.contains("\ngreet who= | learned | 1/2 ok | ") && out.contains("send-message to= text= app= | learned"),
+        "{out}"
+    );
+    let root = format!("in={}", home.0.display());
+    let (c, out) = home.run(&["run", "find-file", "name=check", &root]);
+    assert!(c == 0 && out.ends_with("check.js") && !out.contains("run.js"), "{out}");
+    let (c, out) = home.run(&["run", "find-file", "name=nothing-like-this", &root]);
+    assert!(c == 0 && out.starts_with("nothing named *nothing-like-this* under "), "{out}");
+    let (_, out) = home.run(&["learn", "drop", "find-file"]);
+    assert_eq!(out, "removed skill find-file (a default skill: it stays away until wisply learn save find-file)");
+    assert!(!home.run(&["learn"]).1.contains("find-file"));
+    let ask = json!({"prompt": "schick eine whatsapp nachricht an Mum"}).to_string();
+    let (_, offered) = home.run(&["suggest", &ask]);
+    let line = "Wisply skill fits this request. Run it instead of doing the steps by hand, also for a small task (one call, checked after every run, fewer tokens): wisply run send-message to=<…> text=<…> (";
+    assert!(offered.contains(line), "{offered}");
+    let (_, out) = home.run(&["learn", "send a whatsapp message to Mum"]);
+    assert!(out.contains("there already, maybe it does this: wisply run send-message"), "{out}");
+}
+
+#[test]
+fn a_skill_that_fits_better_hides_a_weaker_saved_script() {
+    let home = Home::new("skill-first");
+    assert_eq!(home.run(&["learn"]).0, 0);
+    home.run(&["suggest", &json!({"prompt": "Zaehle die Zeilen der Datei vom Monat 2026-10"}).to_string()]);
+    let (_, out) =
+        home.run(&["codemode", "await wisply`ping`;\nawait wisply`ping`;\nreturn 'zeilen datei ' + \"2026-10\""]);
+    assert!(out.contains("saved as routine"), "{out}");
+    let ask = json!({"prompt": "Wo liegt die Datei laden-b.csv vom Monat 2026-11 hier im Ordner"}).to_string();
+    let (_, offered) = home.run(&["suggest", &ask]);
+    assert!(offered.contains("wisply run find-file") && !offered.contains("saved the script"), "{offered}");
+    let ask = json!({"prompt": "Zaehle die Zeilen der Datei vom Monat 2026-12"}).to_string();
+    let (_, offered) = home.run(&["suggest", &ask]);
+    assert!(offered.contains("saved the script") && offered.contains("month=2026-12"), "{offered}");
+}
+
+#[test]
 fn a_code_mode_script_is_saved_once_replayed_with_values_and_replaced_after_it_breaks() {
     let home = Home::new("scripts");
     let code = "await wisply`ping`;\nif (args.word === 'boom') throw new Error('boom');\nawait wisply`ping`;\nreturn 'word ' + args.word";

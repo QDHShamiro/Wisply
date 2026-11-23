@@ -1,7 +1,8 @@
 mod engine;
-mod files;
+pub(crate) mod files;
 mod gate;
 mod host;
+mod learned;
 mod saved;
 mod shell;
 
@@ -331,32 +332,31 @@ pub fn run(home: &Path, args: &[String]) -> ExitCode {
     let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let rules = gate::load(&cwd);
     let shell = shell::find();
-    if let Some(stop) = scan_first(&ask, &cwd, &rules, shell.kind != shell::Kind::Power) {
-        return emit(home, &for_routine(stop, &ask), 0, 1, started);
-    }
-    let (ran, shared) = execute(home, &ask, cwd.clone(), rules, shell);
-    let finished = shared.finished.load(Ordering::SeqCst);
-    let worked = finished.saturating_sub(shared.failed.load(Ordering::SeqCst));
-    let (text, ok) = explain(&ran, &ask.code, worked, ask.limit);
-    let mut text = for_routine(text, &ask);
-    if matches!(ran.verdict, Verdict::Halted(_)) {
-        return emit(home, &text, shared.seen.load(Ordering::Relaxed), 1, started);
+    let plan = learned::plan(home, &ask);
+    let done = learned::go(&learned::Env { home, cwd: &cwd, rules: &rules, shell: &shell }, &ask, &plan);
+    let mut text = for_routine(done.text, &ask);
+    if done.halted {
+        return emit(home, &text, done.seen, 1, started);
     }
     let report = saved::Report {
         code: &ask.code,
         args: &ask.args,
         routine: ask.routine.as_deref(),
-        calls: finished,
+        calls: done.calls,
         ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-        ok,
-        secret: shared.secret.load(Ordering::SeqCst),
-        error: (!ok).then(|| text.lines().next().unwrap_or("")),
+        ok: done.ok,
+        secret: done.secret,
+        error: (!done.ok).then(|| text.lines().next().unwrap_or("")),
+        checked: done.checked,
+        rounds: done.rounds,
+        dry: plan.dry,
     };
     let sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
-    if let Some(note) = saved::tell(home, &cwd, &sid, &report) {
+    let note = saved::tell(home, &cwd, &sid, &report);
+    if let Some(note) = note {
         text.push_str(&format!("\n{note}"));
     }
-    emit(home, &text, shared.seen.load(Ordering::Relaxed), if ok { 0 } else { 1 }, started)
+    emit(home, &text, done.seen, if done.ok { 0 } else { 1 }, started)
 }
 
 #[cfg(test)]

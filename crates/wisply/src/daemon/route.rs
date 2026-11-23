@@ -172,7 +172,7 @@ pub fn route(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         "demo" => super::check::demo(d, ctx, c).map(Out::Text),
         "access-prompt" => Ok(Out::Text(desk::access())),
         "do" => flow::run(d, ctx, c),
-        "run" | "routine" | "routines" => routines::command(d, ctx, c),
+        "run" | "routine" | "routines" | "learn" => routines::command(d, ctx, c),
         "channels" => channels::run(d, ctx, c),
         "brain" => brain::command(d, ctx, c),
         "improve" => brain::improve(d, c),

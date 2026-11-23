@@ -20,6 +20,7 @@ const SYSTEM: &[&str] = &[
     "run",
     "routine",
     "routines",
+    "learn",
     "record",
     "done",
     "keep",

@@ -31,3 +31,4 @@ run the same code again with --yes. A denied step never runs. Off switch: wisply
 Saved: a working script with 2+ calls becomes a routine on this PC (once per script, no secrets,
 --yes is never kept): wisply run <name> k=v replays it, wisply routine show <name> shows the code.
 A broken one is replaced by the next working script of the session. Off: wisply config codemode_save off
+A task that repeats with other values: wisply learn "<task>" makes it a checked skill (one call, no tokens).

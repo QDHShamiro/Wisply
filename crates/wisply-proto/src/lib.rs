@@ -9,8 +9,8 @@ mod words;
 
 pub use handoff::{HANDOFF, handoff, handoff_line};
 pub use home::{
-    address, default_home, home, home_var, is_default_home, key_token, make_key, old_home, random_token, same_token,
-    user, user_dir,
+    address, default_home, home, home_var, is_default_home, key_token, make_key, old_home, pin_home, random_token,
+    same_token, user, user_dir,
 };
 pub use l2::{Incoming, Reply, Request};
 pub use limits::hook_limit;

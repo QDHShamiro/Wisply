@@ -174,7 +174,7 @@ pub use media::{multipart, spoken, whisper_service};
 pub use memory::bench::run as memory_bench;
 #[cfg(windows)]
 pub use memory::chat::api_key;
-pub use routines::{script_code, script_project};
+pub use routines::{PRACTICE_ROUNDS, script_check, script_code, script_project};
 pub use squeeze::{MAX_BYTES as SQUEEZE_MAX_BYTES, USAGE as SQUEEZE_USAGE};
 pub use web::installed_browsers;
 
