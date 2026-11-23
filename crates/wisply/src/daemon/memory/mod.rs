@@ -19,6 +19,7 @@ mod room;
 mod seen;
 mod status;
 mod tidy;
+pub mod warn;
 mod watch;
 mod wiki;
 

@@ -67,6 +67,7 @@ const MIGRATE: &[&str] = &[
     "alter table sessions add column why text default ''",
     "alter table sessions add column rejected text default ''",
     "alter table notes add column via text default ''",
+    "alter table lessons add column last_sid text default ''",
 ];
 
 #[derive(Debug, Clone, Default)]

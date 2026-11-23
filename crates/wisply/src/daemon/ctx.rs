@@ -98,6 +98,7 @@ pub struct Ctx {
     pub broken_script: Option<(String, f64)>,
     pub last_script: Option<(String, f64, String)>,
     pub tab_urls: Vec<(String, String)>,
+    pub failed_cmds: Vec<crate::prewarn::Entry>,
 }
 
 impl Ctx {
@@ -135,6 +136,7 @@ impl Ctx {
             broken_script: None,
             last_script: None,
             tab_urls: Vec::new(),
+            failed_cmds: Vec::new(),
         }
     }
 
