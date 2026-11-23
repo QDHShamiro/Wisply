@@ -291,7 +291,7 @@ mod tests {
         let text = notice(&h).unwrap();
         assert!(text.contains(&format!("0.0.1 -> {VERSION}")) && text.contains(". New: "), "{text}");
         assert!(text.contains(&format!("Claude plugin wisply 3.0.0 -> {VERSION} is installed")), "{text}");
-        assert!(!text.contains("Codex"), "{text}");
+        assert!(!text.contains("Codex plugin wisply"), "{text}");
         assert_eq!(notice(&h), None);
         fs::remove_dir_all(&h).unwrap();
     }

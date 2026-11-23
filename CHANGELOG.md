@@ -5,7 +5,7 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
-## [Unreleased]
+## [3.6.1] - 2026-11-23
 
 ### Fixed
 - Updates install by themselves again. A downloaded update waited for 5 minutes without any wisply command, and
