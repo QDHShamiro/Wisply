@@ -100,7 +100,7 @@ fn a_v3_home_starts_its_daemon_and_answers_like_2x() {
         assert_eq!(home.run(&["type", "o74", "hi"]), (1, screen.into()));
     }
     let (code, help) = home.run(&[]);
-    assert!(code == 0 && help.starts_with("wisply 3.5 <command>"), "{help}");
+    assert!(code == 0 && help.starts_with("wisply 3.6 <command>"), "{help}");
     assert_eq!(home.run(&["abort"]), (0, "stopped the running and queued commands".into()));
     assert_eq!(home.run(&["stop"]), (0, "wisply daemon stopped".into()));
     assert!(!home.0.join("daemon.pid").exists());

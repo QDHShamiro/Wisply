@@ -5,7 +5,7 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
-## [Unreleased]
+## [3.6.0] - 2026-11-23
 
 ### Added
 - `wisply learn`: Wisply learns a task that repeats with other values as a skill. The AI writes the script and a check

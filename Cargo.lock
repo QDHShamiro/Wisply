@@ -5748,7 +5748,7 @@ dependencies = [
 
 [[package]]
 name = "wisply"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "base64",
  "encoding_rs",
@@ -5784,7 +5784,7 @@ dependencies = [
 
 [[package]]
 name = "wisply-code"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "half",
  "regex",
@@ -5796,14 +5796,14 @@ dependencies = [
 
 [[package]]
 name = "wisply-core"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "wisply-hear"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "ort",
  "rustfft",
@@ -5815,7 +5815,7 @@ dependencies = [
 
 [[package]]
 name = "wisply-memory"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "half",
  "regex",
@@ -5826,7 +5826,7 @@ dependencies = [
 
 [[package]]
 name = "wisply-pc"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "libc",
  "serde_json",
@@ -5835,11 +5835,11 @@ dependencies = [
 
 [[package]]
 name = "wisply-proto"
-version = "3.5.1"
+version = "3.6.0"
 
 [[package]]
 name = "wisply-pupil"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "base64",
  "regex",
@@ -5853,7 +5853,7 @@ dependencies = [
 
 [[package]]
 name = "wisply-servers"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "regex",
  "russh",
@@ -5864,7 +5864,7 @@ dependencies = [
 
 [[package]]
 name = "wisply-squeeze"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "proptest",
  "regex",
@@ -5873,14 +5873,14 @@ dependencies = [
 
 [[package]]
 name = "wisply-task"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "winresource",
 ]
 
 [[package]]
 name = "wisply-think"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "image",
  "libc",
@@ -5891,7 +5891,7 @@ dependencies = [
 
 [[package]]
 name = "wisply-ui"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "image",
  "serde_json",
@@ -5904,7 +5904,7 @@ dependencies = [
 
 [[package]]
 name = "wisply-video"
-version = "3.5.1"
+version = "3.6.0"
 dependencies = [
  "regex",
  "rusqlite",
