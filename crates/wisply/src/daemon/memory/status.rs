@@ -3,7 +3,7 @@ use wisply_memory::{now, oneline};
 
 use super::super::route::later;
 use super::super::{Daemon, config, game};
-use super::{chat, embed, index, learner, with_store};
+use super::{chain, embed, index, learner, with_store};
 
 const MEMORY_HELP: &str = "wisply memory [learn | on | off | lessons | unlearn <n> | bench]";
 const FIX_CHARS: usize = 80;
@@ -37,9 +37,12 @@ fn status(d: &Daemon) -> Result<String, Fail> {
         c.queued
     )];
     lines.push(format!("model: {}", embed::status(&d.home)));
-    let provider = chat::provider(&d.home);
-    let teacher = provider.as_ref().map_or_else(|| "none (GEMINI_API_KEY or memory_api_model)".into(), |p| p.name());
-    lines.push(format!("learns with: {teacher}"));
+    lines.push("learns with, in this order (wisply config memory_chain):".into());
+    lines.extend(chain::report(&d.home));
+    let private = chain::private_words(&d.home).len();
+    if private > 0 {
+        lines.push(format!("{private} private words: those sessions learn only on this PC (memory_private)"));
+    }
     let st = learner::state();
     if !st.last.is_empty() {
         lines.push(format!("last: {} ({} notes learned since the start)", st.last, st.learned));
@@ -47,7 +50,7 @@ fn status(d: &Daemon) -> Result<String, Fail> {
     if !st.error.is_empty() {
         lines.push(format!("learner problem: {}", st.error));
     }
-    let learning = c.queued > 0 && provider.is_some_and(|p| p.local());
+    let learning = c.queued > 0 && only_local(&d.home);
     let game = if learning || c.vecs < c.notes { game::running() } else { String::new() };
     if learning && !game.is_empty() {
         lines.push(format!("learning waits: {game} runs"));
@@ -70,10 +73,15 @@ fn status(d: &Daemon) -> Result<String, Fail> {
     Ok(lines.join("\n"))
 }
 
+fn only_local(home: &std::path::Path) -> bool {
+    let links = chain::links(home);
+    links.iter().any(|p| p.local) && !links.iter().any(|p| !p.local && chain::blocked(home, p).is_none())
+}
+
 fn learn(d: &Daemon) -> Result<String, Fail> {
     with_store(d, |s| s.sessions_retry_all())?;
     let queued = with_store(d, |s| s.counts())?.queued;
-    let local = queued > 0 && chat::provider(&d.home).is_some_and(|p| p.local());
+    let local = queued > 0 && only_local(&d.home);
     let game = if local { game::running() } else { String::new() };
     if !game.is_empty() {
         return Ok(format!(

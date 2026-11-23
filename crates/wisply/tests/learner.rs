@@ -1,8 +1,9 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -17,6 +18,8 @@ fn run(home: &Path, args: &[&str]) -> (i32, String) {
         .env("WISPLY_HOME", home)
         .env(if cfg!(windows) { "USERPROFILE" } else { "HOME" }, home)
         .env_remove("GEMINI_API_KEY")
+        .env_remove("GROQ_API_KEY")
+        .env_remove("OPENROUTER_API_KEY")
         .env("CLAUDE_CODE_SESSION_ID", "it-learn")
         .env_remove("MSYSTEM")
         .stdin(Stdio::null())
@@ -34,35 +37,46 @@ impl Drop for Gone {
     }
 }
 
-fn model(asked: Arc<Mutex<Vec<Value>>>) -> u16 {
+fn model(asked: Arc<Mutex<Vec<Value>>>, status: Arc<AtomicU16>) -> u16 {
     let server = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = server.local_addr().unwrap().port();
     thread::spawn(move || {
         for link in server.incoming().flatten() {
-            let mut reader = BufReader::new(link.try_clone().unwrap());
-            let (mut line, mut size) = (String::new(), 0usize);
-            while reader.read_line(&mut line).unwrap_or(0) > 0 && line != "\r\n" {
-                if let Some(n) = line.to_lowercase().strip_prefix("content-length:") {
-                    size = n.trim().parse().unwrap_or(0);
-                }
-                line.clear();
-            }
-            let mut body = vec![0; size];
-            let _ = reader.read_exact(&mut body);
-            asked.lock().unwrap().push(serde_json::from_slice(&body).unwrap_or(Value::Null));
-            let answer = json!({"title": "Cart work", "summary": "- moved the cart to redis", "why": "faster",
-                "rejected": "", "next": "write tests", "lessons": [],
-                "notes": [{"kind": "decision", "title": "cart uses redis", "body": "redis keeps carts across restarts"}]});
-            let reply = json!({"choices": [{"message": {"content": answer.to_string()}}]}).to_string();
-            let mut link = link;
-            let head = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                reply.len()
-            );
-            let _ = link.write_all(head.as_bytes()).and_then(|()| link.write_all(reply.as_bytes()));
+            serve(link, &asked, status.load(Ordering::Relaxed));
         }
     });
     port
+}
+
+fn body_of(reader: &mut BufReader<TcpStream>) -> Value {
+    let (mut line, mut size) = (String::new(), 0usize);
+    while reader.read_line(&mut line).unwrap_or(0) > 0 && line != "\r\n" {
+        if let Some(n) = line.to_lowercase().strip_prefix("content-length:") {
+            size = n.trim().parse().unwrap_or(0);
+        }
+        line.clear();
+    }
+    let mut body = vec![0; size];
+    let _ = reader.read_exact(&mut body);
+    serde_json::from_slice(&body).unwrap_or(Value::Null)
+}
+
+fn serve(mut link: TcpStream, asked: &Mutex<Vec<Value>>, code: u16) {
+    let body = body_of(&mut BufReader::new(link.try_clone().unwrap()));
+    asked.lock().unwrap().push(body);
+    let answer = json!({"title": "Cart work", "summary": "- moved the cart to redis", "why": "faster",
+        "rejected": "", "next": "write tests", "lessons": [],
+        "notes": [{"kind": "decision", "title": "cart uses redis", "body": "redis keeps carts across restarts"}]});
+    let reply = if code == 200 {
+        json!({"choices": [{"message": {"content": answer.to_string()}}]}).to_string()
+    } else {
+        json!({"error": {"message": "Rate limit reached. Please try again in 2m0s."}}).to_string()
+    };
+    let head = format!(
+        "HTTP/1.1 {code} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        reply.len()
+    );
+    let _ = link.write_all(head.as_bytes()).and_then(|()| link.write_all(reply.as_bytes()));
 }
 
 #[test]
@@ -74,7 +88,7 @@ fn sessions_are_learned_into_notes_and_vault_pages() {
     fs::write(home.join("v3"), "").unwrap();
     let _gone = Gone(home.clone());
     let asked = Arc::new(Mutex::new(Vec::new()));
-    let port = model(Arc::clone(&asked));
+    let port = model(Arc::clone(&asked), Arc::new(AtomicU16::new(200)));
     let cfg =
         json!({"memory_api": format!("http://127.0.0.1:{port}/v1"), "memory_api_model": "brain", "gemini": false});
     fs::write(home.join("config.json"), cfg.to_string()).unwrap();
@@ -135,5 +149,65 @@ learning waits: "
         "{text}"
     );
     let state = run(&home, &["memory"]).1;
-    assert!(state.contains("learns with: brain at 127.0.0.1:") && state.contains("0 sessions to learn"), "{state}");
+    assert!(state.contains("  local: brain at 127.0.0.1:") && state.contains("0 sessions to learn"), "{state}");
+}
+
+fn session(home: &Path, id: &str, words: &str) {
+    let lines = [
+        json!({"type": "user", "message": {"content": words}}),
+        json!({"type": "assistant", "message": {"content": [{"type": "text", "text": "On it."}, {"type": "tool_use", "name": "Edit", "input": {"file_path": "shop.rs"}}]}}),
+    ];
+    let transcript = home.join(format!("{id}.jsonl"));
+    fs::write(&transcript, lines.iter().map(|l| l.to_string() + "\n").collect::<String>()).unwrap();
+    let end = json!({"session_id": id, "transcript_path": transcript.display().to_string(), "cwd": home.display().to_string()});
+    assert_eq!(run(home, &["hook", "end", &end.to_string()]).0, 0);
+    assert_eq!(run(home, &["memory", "learn"]).0, 0);
+}
+
+fn until_asked(home: &Path, asked: &Arc<Mutex<Vec<Value>>>, n: usize) -> Option<String> {
+    for _ in 0..150 {
+        let state = run(home, &["memory"]).1;
+        if asked.lock().unwrap().len() >= n && state.contains("0 sessions to learn") {
+            return Some(state);
+        }
+        if state.contains(" runs and local is on this PC") {
+            return None;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    panic!("{n} asks expected, got {}\n{}", asked.lock().unwrap().len(), run(home, &["memory"]).1);
+}
+
+#[test]
+fn a_busy_cloud_hands_over_and_private_sessions_stay_on_this_pc() {
+    let base = if cfg!(windows) { std::env::temp_dir() } else { PathBuf::from("/tmp") };
+    let home = base.join(format!("ltd-chain-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&home);
+    fs::create_dir_all(&home).unwrap();
+    fs::write(home.join("v3"), "").unwrap();
+    let _gone = Gone(home.clone());
+    let (far, near) = (Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())));
+    let busy = Arc::new(AtomicU16::new(200));
+    let far_port = model(Arc::clone(&far), Arc::clone(&busy));
+    let near_port = model(Arc::clone(&near), Arc::new(AtomicU16::new(200)));
+    let url = format!("http://127.0.0.1:{far_port}/v1/chat/completions");
+    let cfg = json!({"memory_api": format!("http://127.0.0.1:{near_port}/v1"), "memory_api_model": "brain",
+        "gemini": false, "memory_private": "Secret Shop, holiday",
+        "memory_chain": [{"name": "far", "url": url, "model": "faraway", "cloud": true}, "local"]});
+    fs::write(home.join("config.json"), cfg.to_string()).unwrap();
+    assert!(run(&home, &["memory"]).1.starts_with("memory on: "));
+    let words = "please move the cart of the secret-shop over to redis so carts survive restarts ".repeat(12);
+    session(&home, "private0001", &words);
+    let Some(_) = until_asked(&home, &near, 1) else { return };
+    assert!(far.lock().unwrap().is_empty(), "a private session went to the cloud");
+    busy.store(429, Ordering::Relaxed);
+    let words = "please move the cart of the public shop over to redis so carts survive restarts ".repeat(12);
+    session(&home, "public00002", &words);
+    let Some(state) = until_asked(&home, &near, 2) else { return };
+    assert_eq!(far.lock().unwrap().len(), 1, "{state}");
+    assert_eq!(far.lock().unwrap()[0]["model"], "faraway");
+    let line = state.lines().find(|l| l.starts_with("  far: ")).unwrap_or_default();
+    assert!(line.starts_with(&format!("  far: faraway at 127.0.0.1:{far_port} (cloud), paused ")), "{state}");
+    assert!(line.contains("answered 429"), "{state}");
+    assert!(state.contains("  local: brain at 127.0.0.1:") && state.contains("2 private words"), "{state}");
 }

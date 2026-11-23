@@ -1,6 +1,7 @@
 pub mod bench;
 mod blind;
 mod board;
+pub mod chain;
 pub mod chat;
 mod code;
 mod early;

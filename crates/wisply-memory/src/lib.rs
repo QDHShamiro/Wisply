@@ -37,7 +37,7 @@ pub use rank::{mentions, snippet, terms, words};
 pub use start::{Counts, DRAFTS_MAX, Session};
 pub use store::{Hit, NewNote, Note, Store, VEC_DIM, date, day, now};
 pub use text::{fact, fts_query, oneline, scrub, short, similar, stop_word};
-pub use transcript::{CHUNK_CHARS, Condensed, Style, chunks, condense, condense_as, project_of_files};
+pub use transcript::{CHUNK_CHARS, Condensed, Style, chunks, chunks_of, condense, condense_as, project_of_files};
 pub use vault::{Page, claude_dirs, parse as parse_page};
 pub use wiki::{Draft, accept as accept_draft, drafts, drop_draft, rel_path};
 pub type DbResult<T> = rusqlite::Result<T>;
