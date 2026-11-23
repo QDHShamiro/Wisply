@@ -29,6 +29,7 @@ memory  recall \"words\" [--all] [--max n] | recall <id>   remember \"fact\" [--
         todo add \"task\" [--kind bug|feature|task|idea] [--prio high|mid|low] [--project p] | todo wait <id> restart|you | todo prio|kind <id> <value> | todo undo <id>
         bug add <server> \"what is broken\" [--prio high] | bug [server]   list [--server s] [--kind k] [--warn] [--done] | list servers | list check [server] | list ignore <id> | list accept|reject <id> (one list in wisply ui: bugs, features, tasks, ideas, server logs)
         memory [learn|on|off]   memory lessons | memory unlearn <n> (fixes learned from failed commands)
+        memory slim [--dry|--undo] [--dir d] (project lines of Claude's MEMORY.md move to PROJECTS.md, Wisply names the matching ones when a project comes up)
         memory (who learns: config memory_chain gemini,groq,openrouter,local, in order; a busy one pauses, the next takes over)   config memory_private \"word, word\" (those sessions never go to a cloud)
         memory bench [freeze | run | compare <old> <new> | open | judge] (measures the search on a frozen copy)
         wiki | wiki accept <n> [folder] | wiki drop <n> | wiki show <n> (drafts in the vault inbox)

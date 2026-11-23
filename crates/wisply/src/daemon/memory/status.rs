@@ -1,14 +1,15 @@
 use wisply_core::{Call, Fail};
 use wisply_memory::{now, oneline};
 
+use super::super::ctx::Ctx;
 use super::super::route::later;
 use super::super::{Daemon, config, game};
-use super::{chain, embed, index, learner, with_store};
+use super::{chain, embed, index, learner, projects, with_store};
 
-const MEMORY_HELP: &str = "wisply memory [learn | on | off | lessons | unlearn <n> | bench]";
+const MEMORY_HELP: &str = "wisply memory [learn | on | off | lessons | unlearn <n> | bench | slim [--dry|--undo]]";
 const FIX_CHARS: usize = 80;
 
-pub fn memory(d: &Daemon, c: &Call) -> Result<String, Fail> {
+pub fn memory(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
     let sub = c.pos.first().map(|s| s.to_lowercase()).unwrap_or_default();
     match sub.as_str() {
         "" => status(d),
@@ -19,6 +20,7 @@ pub fn memory(d: &Daemon, c: &Call) -> Result<String, Fail> {
         "lessons" => lessons(d),
         "unlearn" => unlearn(d, c),
         "learn" => learn(d),
+        "slim" => projects::slim(d, ctx, c),
         "import" | "model" => Err(later(&format!("memory {sub}"))),
         _ => Err(Fail::hint(format!("unknown memory command '{sub}'"), MEMORY_HELP)),
     }

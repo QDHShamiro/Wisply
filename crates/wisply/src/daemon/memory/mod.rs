@@ -14,6 +14,7 @@ pub mod learn;
 mod learner;
 mod list;
 mod listview;
+mod projects;
 mod room;
 mod seen;
 mod status;
@@ -61,7 +62,7 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
         "list" => list::list(d, ctx, c),
         "hook" => hook::hook(d, ctx, c),
         "suggest" => hook::suggest(d, ctx, c),
-        "memory" => status::memory(d, c),
+        "memory" => status::memory(d, ctx, c),
         "wiki" => wiki::wiki(d, c),
         "code" => code::code(d, ctx, c),
         "board" => board::board(d, ctx, c),

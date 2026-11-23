@@ -5,6 +5,19 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [Unreleased]
+
+### Added
+- `wisply memory slim [--dry|--undo] [--dir d]`: Claude loads its whole `MEMORY.md` at every session start, and most
+  of it is one line per project that only matters when that project comes up. `slim` moves the project lines to
+  `PROJECTS.md` next to it, leaves one pointer line and keeps a backup in `~/.wisply/archive`. When a prompt names a
+  project, Wisply adds its line (up to 3, each once per session, word match only, no model). New project lines move
+  over at session end, but only once `PROJECTS.md` exists. `--undo` puts everything back.
+
+### Fixed
+- Claude notes in the newer format (`metadata:` with an indented `type:`) get their real kind in recall instead of
+  the wrong one; `MEMORY.md` and `PROJECTS.md` are no longer indexed as notes.
+
 ## [3.6.2] - 2026-11-23
 
 ### Fixed
