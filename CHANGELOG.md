@@ -89,6 +89,11 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - A relative `WISPLY_HOME` is made a full path at start, so the daemon, which runs in the home folder, uses the same
   folder as the command (it made `home/home` and kept running there).
 
+### Fixed
+- A newer `wisply` talking to an older daemon that was still running got "unknown command" for every new command and
+  tried again and again (77 times in one session for `codemode` and `routine script`). It now says which version the
+  daemon runs and names `wisply stop`; the next command starts the new daemon. Typos keep their usual hint.
+
 ## [3.5.1] - 2026-11-22
 
 ### Fixed

@@ -14,6 +14,13 @@ const HOOK_INPUT_WAIT: Duration = Duration::from_millis(1000);
 const HOOK_INPUT_MAX: u64 = 64 * 1024;
 const THINK_INPUT_MAX: u64 = 4 * 1024 * 1024;
 const START_WAIT: Duration = Duration::from_secs(12);
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn explained(home: &Path, reply: Reply) -> (i32, String) {
+    let out = wisply_proto::older_daemon(home, reply.code, &reply.out, VERSION, wisply_core::built_later)
+        .unwrap_or(reply.out);
+    (reply.code, out)
+}
 
 pub fn run(raw: &[String]) -> ExitCode {
     let args: Vec<String> = match msys_root() {
@@ -177,7 +184,7 @@ pub fn send(home: &Path, args: &[String]) -> ExitCode {
         }
         return code;
     }
-    let mut out = reply.out;
+    let (code, mut out) = explained(home, reply);
     if stats {
         out.push_str(&format!("\n[{} ms, ~{} tokens]", started.elapsed().as_millis(), out.len() / 4 + 1));
     }
@@ -187,7 +194,7 @@ pub fn send(home: &Path, args: &[String]) -> ExitCode {
         let _ = so.write_all(b"\n");
         let _ = so.flush();
     }
-    ExitCode::from(u8::try_from(reply.code).unwrap_or(1))
+    ExitCode::from(u8::try_from(code).unwrap_or(1))
 }
 
 pub fn ask(home: &Path, argv: &[&str]) -> Result<(i32, String), String> {
@@ -195,8 +202,7 @@ pub fn ask(home: &Path, argv: &[&str]) -> Result<(i32, String), String> {
     let cwd = env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
     let argv: Vec<String> = argv.iter().map(|a| (*a).to_string()).collect();
     let req = Request { token: &token, cwd: &cwd, sid: "", secret: None, argv: &argv }.encode();
-    let reply = Reply::decode(&exchange(home, &req, None)?);
-    Ok((reply.code, reply.out))
+    Ok(explained(home, Reply::decode(&exchange(home, &req, None)?)))
 }
 
 pub fn ask_as(
@@ -209,8 +215,7 @@ pub fn ask_as(
     let token = wisply_proto::key_token(home).or_else(|| first_key(home)).ok_or("the daemon made no key")?;
     let cwd = cwd.display().to_string();
     let req = Request { token: &token, cwd: &cwd, sid, secret, argv }.encode();
-    let reply = Reply::decode(&exchange(home, &req, None)?);
-    Ok((reply.code, reply.out))
+    Ok(explained(home, Reply::decode(&exchange(home, &req, None)?)))
 }
 
 fn v2(home: &Path, raw: &[String]) -> ExitCode {

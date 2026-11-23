@@ -26,6 +26,7 @@ mod readstate;
 mod readview;
 
 const MARKER: &str = "v3";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const FULL: &str = if cfg!(windows) { "wisply-full.exe" } else { "wisply-full" };
 const HOOK_INPUT_WAIT: Duration = Duration::from_millis(1000);
 const HOOK_INPUT_MAX: u64 = 64 * 1024;
@@ -176,8 +177,11 @@ fn idle_text(args: &[String]) -> Option<&'static str> {
     }
 }
 
-fn show(buf: &[u8], stats: bool, started: Instant) -> ExitCode {
+fn show(home: &Path, buf: &[u8], stats: bool, started: Instant) -> ExitCode {
     let mut out = Reply::decode(buf);
+    if let Some(text) = wisply_proto::older_daemon(home, out.code, &out.out, VERSION, wisply_core::built_later) {
+        out.out = text;
+    }
     if stats {
         out.out.push_str(&format!("\n[{} ms, ~{} tokens]", started.elapsed().as_millis(), out.out.len() / 4 + 1));
     }
@@ -234,7 +238,7 @@ fn send(home: &Path, raw: &[String], args: &[String]) -> ExitCode {
         }
         return code;
     }
-    show(&buf, stats, started)
+    show(home, &buf, stats, started)
 }
 
 enum Got {
