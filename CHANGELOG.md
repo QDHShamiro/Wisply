@@ -31,6 +31,15 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   with a model on this computer and are never sent to a cloud; a word of 4 or more letters also hits longer words
   that start with it, so `Konto` keeps `Kontoauszug` and `Kontonummer` private too. Without such a model they wait. The words stay in the
   local config; `wisply memory` shows only how many there are.
+- `wisply ui` shows where each note came from and where it was used: the session that wrote it (title, project, AI),
+  the model that learned it, its files and when, and which sessions got it at start, as a hint, opened it or found it
+  in a search (the last 90 days, counted per kind).
+- A Headroom page in `wisply ui`: tokens saved by squeezing tool output today, over 7 or 30 days or all time, per day,
+  per tool and per action, how often the AI read a cut output again in full, hook time, errors and the biggest cuts.
+- The Live page shows what is being learned right now (session, part, model), what waits, the last learned sessions
+  with how many notes they added, the last error and the model chain.
+- The Learned page lists the skills: state, runs and how many passed, time against by hand, tokens saved, defaults,
+  weak skills and the last failure hint.
 
 ### Changed
 - Headroom keeps command output that is data (script results, tables, lists where most lines differ) whole when it

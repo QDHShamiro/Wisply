@@ -212,7 +212,10 @@ wisply ui
 ```
 
 Projects, notes (editor with wikilinks and backlinks), to-dos, search, what each session is doing, a graph of notes
-and code, and the **Blind** page where you pick between two versions in `wisply think`.
+and code, and the **Blind** page where you pick between two versions in `wisply think`. Each note shows where it came
+from (session, AI, project, files, the model that learned it) and which sessions got it. **Headroom** shows the tokens
+saved by squeezing tool output per day, tool and action; **Live** shows what is being learned right now; **Learned**
+lists the skills with runs, time and tokens saved.
 
 ## Compact earlier, keep the thread
 

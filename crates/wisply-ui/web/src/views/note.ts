@@ -8,6 +8,7 @@ import { board, save, type Note } from "../api";
 import { ago, enc, h, mount } from "../dom";
 import { render } from "../md";
 import { T } from "../text";
+import { seenPanel } from "./seen";
 
 const WATCH_MS = 3000;
 
@@ -153,6 +154,7 @@ export async function note(view: HTMLElement, spec: { id?: number; title?: strin
     n.links.map((l) => h("a", { href: `#/t/${enc(l)}` }, l)),
     n.tags.length ? h("h2", {}, T.note.tags) : null,
     n.tags.length ? h("div", { class: "chips" }, n.tags.map((t) => h("span", { class: "chip" }, `#${t}`))) : null,
+    ...seenPanel(n.seen),
   );
   mount(
     view,

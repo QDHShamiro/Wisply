@@ -45,9 +45,32 @@ pub struct State {
     pub last: String,
     pub error: String,
     pub learned: usize,
+    pub now: Option<Now>,
+    pub done: Vec<Done>,
 }
 
-static STATE: Mutex<State> = Mutex::new(State { last: String::new(), error: String::new(), learned: 0 });
+#[derive(Default, Clone)]
+pub struct Now {
+    pub sid: String,
+    pub title: String,
+    pub project: String,
+    pub via: String,
+    pub part: usize,
+    pub since: f64,
+}
+
+#[derive(Default, Clone)]
+pub struct Done {
+    pub sid: String,
+    pub title: String,
+    pub project: String,
+    pub added: usize,
+    pub t: f64,
+}
+
+const DONE_KEEP: usize = 12;
+static STATE: Mutex<State> =
+    Mutex::new(State { last: String::new(), error: String::new(), learned: 0, now: None, done: Vec::new() });
 
 pub fn state() -> State {
     STATE.lock().map(|s| s.clone()).unwrap_or_default()
@@ -201,12 +224,22 @@ fn read_parts(
         let title = if r.title.is_empty() { "-" } else { r.title.as_str() };
         let known = known_titles(store, step.project, &r.title, &part, step.sid);
         let user = format!("Project: {shown}\nSession title: {title}\n{known}\nSession log:\n{part}");
+        let via = links.all[i].name();
+        set(|s| {
+            if let Some(n) = s.now.as_mut() {
+                n.part += 1;
+                n.via.clone_from(&via);
+                if !r.title.is_empty() {
+                    n.title.clone_from(&r.title);
+                }
+            }
+        });
         let Some(out) = answer(links, i, &user, &schema) else {
             parts.push_front(part);
             continue;
         };
         links.done();
-        added += keep_notes(store, &out, step.project, step.sid).map_err(db)?;
+        added += keep_notes(store, &out, (step.project, step.sid), &via).map_err(db)?;
         let found = out.get("lessons").and_then(Value::as_array).into_iter().flatten();
         lessons.extend(
             found.filter(|n| WIKI_KINDS.contains(&field(n, "kind").as_str()) && !field(n, "title").is_empty()).cloned(),
@@ -259,7 +292,12 @@ fn learn(home: &Path, store: &mut Store, all: &[Provider], words: &[Vec<String>]
     Ok(added)
 }
 
-fn keep_notes(store: &mut Store, out: &Value, project: &str, session: &str) -> Result<usize, wisply_memory::DbError> {
+fn keep_notes(
+    store: &mut Store,
+    out: &Value,
+    (project, session): (&str, &str),
+    via: &str,
+) -> Result<usize, wisply_memory::DbError> {
     let mut added = 0;
     for n in out.get("notes").and_then(Value::as_array).into_iter().flatten() {
         let title = field(n, "title");
@@ -277,8 +315,11 @@ fn keep_notes(store: &mut Store, out: &Value, project: &str, session: &str) -> R
         let full = titled(project, &title);
         let body = field(n, "body");
         let note = NewNote { project, kind: &kind, title: &full, body: &body, source: "session", session };
-        if let Some((_, true)) = store.merge_note(&note, &files)? {
-            added += 1;
+        if let Some((id, new)) = store.merge_note(&note, &files)? {
+            if new || store.via(id)?.is_empty() {
+                store.set_via(id, via)?;
+            }
+            added += usize::from(new);
         }
     }
     Ok(added)
@@ -311,6 +352,22 @@ fn finish(home: &Path, store: &mut Store, row: &Due, project: &str, r: &Record) 
     Ok(())
 }
 
+fn watched<T>(row: &Due, run: impl FnOnce() -> T) -> (T, Now) {
+    set(|s| {
+        s.now = Some(Now {
+            sid: row.id.clone(),
+            title: row.title.clone(),
+            project: row.project.clone(),
+            since: now(),
+            ..Now::default()
+        });
+    });
+    let got = run();
+    let mut seen = None;
+    set(|s| seen = s.now.take());
+    (got, seen.unwrap_or_default())
+}
+
 pub fn tick(home: &Path, store: &mut Store, soon: bool) {
     let cfg = config::load(home);
     if !config::on(&cfg, "memory") || !(soon || config::on(&cfg, "memory_learn")) {
@@ -332,10 +389,14 @@ pub fn tick(home: &Path, store: &mut Store, soon: bool) {
         if now() - t > TICK_S {
             return;
         }
-        match learn(home, store, &all, &words, row) {
+        let (got, seen) = watched(row, || learn(home, store, &all, &words, row));
+        match got {
             Ok(n) => set(|s| {
                 WAITS.store(0, Ordering::Relaxed);
                 s.learned += n;
+                let title = if seen.title.is_empty() { row.title.clone() } else { seen.title };
+                s.done.insert(0, Done { sid: row.id.clone(), title, project: row.project.clone(), added: n, t: now() });
+                s.done.truncate(DONE_KEEP);
                 s.last = format!(
                     "{} learned {}",
                     wisply_core::local_now().get(11..16).unwrap_or(""),

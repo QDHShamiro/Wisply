@@ -149,7 +149,7 @@ pub fn offer_note(r: &mut Value) -> Option<String> {
     ))
 }
 
-fn weak(r: &Value) -> bool {
+pub fn weak(r: &Value) -> bool {
     let st = &r["stats"];
     let runs = count(&st["runs"]);
     if runs < WEAK_RUNS {

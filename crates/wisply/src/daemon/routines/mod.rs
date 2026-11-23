@@ -25,7 +25,7 @@ pub use align::{align, build, truthy};
 pub use episode::{close, observe};
 pub use run::run;
 pub use script::{code_of as script_code, project_of as script_project, values_in};
-pub use skills::{PRACTICE_ROUNDS, check_of as script_check};
+pub use skills::{PRACTICE_ROUNDS, check_of as script_check, is_skill, weak};
 pub use store::{load_all, step_line, words};
 
 const LIST_LINES: usize = 60;

@@ -1,6 +1,7 @@
 import { board, plain, type Live } from "../api";
 import { enc, h, mount } from "../dom";
 import { T } from "../text";
+import { learningBlock } from "./seen";
 
 export async function live(view: HTMLElement): Promise<() => void> {
   const list = h("div", { class: "list live" });
@@ -16,9 +17,12 @@ export async function live(view: HTMLElement): Promise<() => void> {
     },
     T.live.stop,
   );
-  mount(view, h("div", { class: "page" }, h("div", { class: "row" }, h("div", { class: "grow" }, h("h1", {}, T.live.title), h("div", { class: "sub" }, T.live.sub)), note, stop), list));
+  const learning = learningBlock();
+  mount(view, h("div", { class: "page" }, h("div", { class: "row" }, h("div", { class: "grow" }, h("h1", {}, T.live.title), h("div", { class: "sub" }, T.live.sub)), note, stop), list, learning.el));
   let poll = 2000;
+  let learnAt = 0;
   const draw = async () => {
+    if (Date.now() >= learnAt) learnAt = Date.now() + ((await learning.draw()) || poll);
     const data = await board<Live>("live").catch(() => null);
     if (!data) return;
     poll = data.poll_ms;

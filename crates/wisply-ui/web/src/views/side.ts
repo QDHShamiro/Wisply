@@ -1,6 +1,7 @@
 import { board, call, plain, type TokenData } from "../api";
 import { h, mount, pick } from "../dom";
 import { T } from "../text";
+import { skillsSection } from "./seen";
 
 type Lesson = { sig: string; cmd: string; target: string; kind: string; fix: string; ups: number; downs: number };
 type Field = { key: string; kind: "bool" | "text" | "pick" | "path"; options?: string[] };
@@ -25,18 +26,18 @@ const RANGES = ["today", "7", "30", "all"] as const;
 type Range = (typeof RANGES)[number] | "claude";
 const RANGE_KEY = "wisply.tokens";
 
-function short(n: number): string {
+export function short(n: number): string {
   for (const [size, unit] of [[1e9, "B"], [1e6, "M"], [1e3, "k"]] as const) {
     if (n >= size) return `${(n / size).toFixed(n >= 10 * size ? 0 : 1)}${unit}`;
   }
   return String(Math.round(n));
 }
 
-function pct(part: number, whole: number): number {
+export function pct(part: number, whole: number): number {
   return whole > 0 ? Math.round((100 * part) / whole) : 0;
 }
 
-function stat(label: string, value: string, note: string, tone = ""): HTMLElement {
+export function stat(label: string, value: string, note: string, tone = ""): HTMLElement {
   return h("div", { class: `stat ${tone}` }, h("div", { class: "label" }, label), h("div", { class: "value" }, value), h("div", { class: "note" }, note));
 }
 
@@ -176,7 +177,7 @@ export async function tokens(view: HTMLElement): Promise<void> {
 }
 
 export async function learned(view: HTMLElement): Promise<void> {
-  const { lessons } = await board<{ lessons: Lesson[] }>("lessons");
+  const [{ lessons }, skills] = await Promise.all([board<{ lessons: Lesson[] }>("lessons"), skillsSection()]);
   const redraw = () => void learned(view);
   mount(
     view,
@@ -201,6 +202,7 @@ export async function learned(view: HTMLElement): Promise<void> {
             )
           : h("div", { class: "empty" }, T.learned.none),
       ),
+      skills,
     ),
   );
 }

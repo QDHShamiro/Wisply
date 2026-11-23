@@ -180,10 +180,10 @@ fn tokens(text: &str) -> usize {
 
 fn start_info(s: &mut Store, asked: &[&Question]) -> Result<Value, DbError> {
     let projects: BTreeSet<&str> = asked.iter().map(|q| q.project.as_str()).chain([""]).collect();
-    hook::start_text(s, "", Vec::new())?;
+    hook::start_text(s, "", Vec::new(), "")?;
     let mut sizes = Vec::new();
     for p in &projects {
-        sizes.push((tokens(&hook::start_text(s, p, Vec::new())?), *p));
+        sizes.push((tokens(&hook::start_text(s, p, Vec::new(), "")?), *p));
     }
     let top = sizes.iter().max().copied().unwrap_or_default();
     let files: Vec<usize> = claude_dirs(&wisply_proto::user_dir())

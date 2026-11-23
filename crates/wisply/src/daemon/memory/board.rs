@@ -16,6 +16,7 @@ use super::{QUERY_BUDGET, embed, index, with_store};
 
 const USAGE: &str = "wisply board home | pulse | project <name> | note <id> | save <path> --mtime <ms> | todo <id> <status> | \
                      todo-add <project> <task> | search <words> | graph [project] | live | lessons | unlearn <sig> | settings | tokens [today|<days>|all] | blind | blind-pick <run> <n> 1|2|same | \
+                     headroom [today|<days>|all] | learning | skills | \
                      memory [--source s --project p --words w --offset n] | forget <id> | intelligence [days|all] | list | entry <id> | entry-set | entry-add | entry-undo | entry-note | mute | unmute | server";
 const MEMORY_PAGE: usize = 200;
 const SNIPPET: usize = 160;
@@ -125,6 +126,7 @@ fn note_view(d: &Daemon, c: &Call) -> Result<Value, Fail> {
     out["links"] = json!(links(&body));
     out["tags"] = json!(tags(&body));
     out["backlinks"] = json!(back);
+    out["seen"] = super::seen::note(d, &n)?;
     Ok(out)
 }
 
@@ -323,7 +325,7 @@ fn unlearn(d: &Daemon, c: &Call) -> Result<Value, Fail> {
 }
 
 pub fn board(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
-    if let Some(out) = super::listview::board(d, ctx, c) {
+    if let Some(out) = super::listview::board(d, ctx, c).or_else(|| super::seen::board(d, c)) {
         return Ok(out?.to_string());
     }
     let what = c.pos.first().map(String::as_str).unwrap_or("");

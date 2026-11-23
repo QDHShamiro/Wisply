@@ -4,6 +4,7 @@ import { hashParts } from "./hash";
 import { T } from "./text";
 import { agents } from "./views/agents";
 import { blind } from "./views/blind";
+import { headroom } from "./views/headroom";
 import { home } from "./views/home";
 import { intel } from "./views/intel";
 import { list, type ListTab, TABS } from "./views/list";
@@ -35,6 +36,7 @@ const links: [string, string, string][] = [
   ["#/live", "live", T.nav.live],
   ["#/agents", "agents", T.nav.agents],
   ["#/tokens", "tokens", T.nav.tokens],
+  ["#/headroom", "headroom", T.nav.headroom],
   ["#/learned", "learned", T.nav.learned],
   ["#/blind", "blind", T.nav.blind],
   ["#/settings", "settings", T.nav.settings],
@@ -123,6 +125,7 @@ const PAGES: Record<string, Page> = {
   live: () => live(view),
   agents: () => agents(view),
   tokens: () => tokens(view),
+  headroom: () => headroom(view),
   learned: () => learned(view),
   blind: () => blind(view),
   settings: () => settings(view),
