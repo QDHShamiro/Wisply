@@ -5,6 +5,7 @@ mod limits;
 mod link;
 mod listen;
 mod pipe;
+mod skew;
 mod words;
 
 pub use handoff::{HANDOFF, handoff, handoff_line};
@@ -17,6 +18,7 @@ pub use limits::hook_limit;
 pub use link::Link;
 pub use listen::Listener;
 pub use pipe::{Conn, exchange_once};
+pub use skew::older_daemon;
 pub use words::words;
 
 pub const WINDOW_SID: &str = "wisply-ui";
