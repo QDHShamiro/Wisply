@@ -5,6 +5,28 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [Unreleased]
+
+### Fixed
+- Updates install by themselves again. A downloaded update waited for 5 minutes without any wisply command, and
+  with an AI or a watcher at work that gap never came (one real night had 4479 calls and not one 5 minute gap), so an
+  update could sit downloaded for days. Now an update that has waited 6 hours installs at the next free moment: no
+  command running, none in the last 10 s and no game. A command counts until it ends, not only when it starts.
+  Wisply looks for a new version every hour instead of once a day and checks every minute whether it may install.
+
+### Added
+- The Claude Code plugin updates with the program. After a new version is installed Wisply runs
+  `claude plugin marketplace update` and `claude plugin update wisply@<marketplace>`, hidden and with a 2 minute
+  limit; new Claude sessions get the new skills, hooks and commands. The marketplace now pins the plugin to the
+  release tag, so plugin and program always have the same version. A marketplace that is a local folder with another
+  version is left alone and `wisply status` says why. Each version gets at most 3 automatic tries.
+- The Codex plugin follows too: for an enabled wisply plugin from a git marketplace Wisply runs
+  `codex plugin marketplace upgrade` once per version.
+- `wisply status` has an `update` line (mode, the version that is ready and when it installs, last check, last
+  result) and a `plugins` line with the version of each installed plugin.
+- `wisply update --plugins` updates the plugins by hand and prints what it did.
+- The notice after an update names up to three new things from this changelog.
+
 ## [3.6.0] - 2026-11-23
 
 ### Added

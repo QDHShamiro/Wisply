@@ -39,7 +39,7 @@ use std::io;
 use std::panic;
 use std::path::PathBuf;
 use std::process::{self, ExitCode};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -59,6 +59,7 @@ const STOPPED: &str = "stopped (Ctrl+Alt+End or wisply abort)";
 const ABORTED: &str = "stopped the running and queued commands";
 const LANES: [Lane; 3] = [Lane::Main, Lane::Memory, Lane::Hook];
 const UPDATE_IDLE: u64 = 300;
+const UPDATE_CALM: u64 = 10;
 
 fn secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
@@ -79,6 +80,24 @@ pub struct Daemon {
     next_id: AtomicU64,
     generation: AtomicU64,
     last_cmd: AtomicU64,
+    busy: AtomicUsize,
+}
+
+struct Busy<'a>(&'a Daemon);
+
+impl<'a> Busy<'a> {
+    fn new(d: &'a Daemon) -> Self {
+        d.busy.fetch_add(1, Ordering::Relaxed);
+        d.last_cmd.store(secs(), Ordering::Relaxed);
+        Busy(d)
+    }
+}
+
+impl Drop for Busy<'_> {
+    fn drop(&mut self) {
+        self.0.last_cmd.store(secs(), Ordering::Relaxed);
+        self.0.busy.fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 pub enum Out {
@@ -164,9 +183,11 @@ enum Msg {
     Hello(Map<String, Value>),
 }
 
+pub(crate) use claude::{claude_exe, clean as clean_claude_env};
 pub use config::{load as load_config, on as config_on};
 pub(crate) use doctor::install as net;
 pub use doctor::run as doctor;
+pub(crate) use media::tools::run_cmd;
 #[cfg(windows)]
 pub use media::tools::{ffmpeg, run as run_tool, which};
 #[cfg(windows)]
@@ -229,19 +250,13 @@ pub fn serve() -> ExitCode {
         next_id: AtomicU64::new(0),
         generation: AtomicU64::new(0),
         last_cmd: AtomicU64::new(secs()),
+        busy: AtomicUsize::new(0),
     });
     memory::index::start(d.home.clone());
     pc::start(d.home.clone());
     agents::start(d.home.clone());
     servers::start(d.home.clone());
-    {
-        let quiet = Arc::clone(&d);
-        let gate = crate::update::Gate {
-            game: Box::new(|| !game::running().is_empty()),
-            idle: Box::new(move || quiet.idle_for(UPDATE_IDLE)),
-        };
-        crate::update::start(d.home.clone(), gate);
-    }
+    start_update(&d);
     let mut sessions = Some(sessions);
     let mut senders = Vec::with_capacity(LANES.len());
     for lane in LANES {
@@ -272,6 +287,16 @@ pub fn serve() -> ExitCode {
     }
 }
 
+fn start_update(d: &Arc<Daemon>) {
+    let (quiet, calm) = (Arc::clone(d), Arc::clone(d));
+    let gate = crate::update::Gate {
+        game: Box::new(|| !game::running().is_empty()),
+        idle: Box::new(move || quiet.free_for(UPDATE_IDLE)),
+        free: Box::new(move || calm.free_for(UPDATE_CALM)),
+    };
+    crate::update::start(d.home.clone(), gate);
+}
+
 fn handle(d: &Daemon, link: Link, lanes: &[Sender<Work>]) {
     let Ok(raw) = link.recv_within(FIRST_MESSAGE) else { return };
     let (msg, fast) = match decode(&raw) {
@@ -289,7 +314,7 @@ fn handle(d: &Daemon, link: Link, lanes: &[Sender<Work>]) {
         return;
     }
     let name = msg.argv.first().map(|a| a.to_lowercase()).unwrap_or_default();
-    d.last_cmd.store(secs(), Ordering::Relaxed);
+    let _busy = Busy::new(d);
     let res = if name == "abort" {
         d.abort_all(lanes);
         Res::new(0, ABORTED)
@@ -362,6 +387,10 @@ fn decode(raw: &[u8]) -> Option<Msg> {
 impl Daemon {
     pub fn idle_for(&self, quiet: u64) -> bool {
         secs().saturating_sub(self.last_cmd.load(Ordering::Relaxed)) >= quiet
+    }
+
+    pub fn free_for(&self, quiet: u64) -> bool {
+        self.busy.load(Ordering::Relaxed) == 0 && self.idle_for(quiet)
     }
 
     pub fn prompts_of(&self, sid: &str) -> Prompts {

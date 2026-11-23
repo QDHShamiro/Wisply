@@ -1,5 +1,6 @@
 mod apply;
 mod auto;
+mod plugins;
 mod release;
 mod state;
 
@@ -10,9 +11,9 @@ use serde_json::json;
 
 pub use auto::{Gate, start};
 pub(crate) use release::unpack;
-pub use state::notice;
+pub use state::{notice, status_line};
 
-const USAGE: &str = "wisply update [--check | --rollback]   (config update auto|notify|off)";
+const USAGE: &str = "wisply update [--check | --plugins | --rollback]   (config update auto|notify|off)";
 
 fn say(text: impl AsRef<str>) -> ExitCode {
     println!("{}", text.as_ref());
@@ -31,6 +32,10 @@ pub fn run(home: &Path, args: &[String]) -> ExitCode {
         "--rollback" => match apply::rollback(home) {
             Ok(done) => say(done),
             Err(why) => err(why),
+        },
+        "--plugins" => match plugins::catch_up(home, true) {
+            said if said.is_empty() => say("no Claude or Codex plugin of wisply is installed"),
+            said => say(said.join("\n")),
         },
         "--check" | "" => now(home, flag.is_empty()),
         other => err(format!("unknown update option '{other}' -> try: {USAGE}")),

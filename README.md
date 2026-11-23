@@ -391,13 +391,18 @@ builds it once with `rustc -O` or `cargo build --release` and again only when th
 
 ## Updates
 
-Wisply keeps itself current. Once a day the daemon looks for a newer stable release on GitHub. When there is one it
+Wisply keeps itself current. Every hour the daemon looks for a newer stable release on GitHub. When there is one it
 downloads the archive for your system, checks its SHA-256 against `SHA256SUMS.txt`, and installs it in the background
-once nothing has talked to Wisply for 5 minutes. It never does this while a game runs.
+once nothing has talked to Wisply for 5 minutes. An update that has waited 6 hours installs at the next free moment
+(no command running, none in the last 10 s). It never does this while a game runs.
 
 - The install is the normal `setup`, run by a small helper. It starts the new daemon, checks that it answers as the new
   version and goes back to the old programs and extension by itself if it does not.
-- `wisply update` checks and installs now, `wisply update --check` only looks, `wisply update --rollback` goes back.
+- The Claude Code plugin follows (`claude plugin update wisply@<marketplace>`), and so does a Codex plugin from a git
+  marketplace (`codex plugin marketplace upgrade`). New sessions use the new skills and hooks.
+- `wisply status` shows the update and plugin state, the start info names what is new once.
+- `wisply update` checks and installs now, `wisply update --check` only looks, `wisply update --plugins` updates the
+  plugins, `wisply update --rollback` goes back.
 - `wisply config update notify` only tells you (once a day, in the start info), `config update off` turns it off.
 - Builds you run from a source checkout are never touched.
 
