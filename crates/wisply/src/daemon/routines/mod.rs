@@ -1,10 +1,12 @@
 mod align;
+mod defaults;
 mod diff;
 mod episode;
 mod learn;
 mod run;
 mod schedule;
 mod script;
+mod skills;
 mod store;
 
 use std::collections::{BTreeMap, HashSet};
@@ -23,6 +25,7 @@ pub use align::{align, build, truthy};
 pub use episode::{close, observe};
 pub use run::run;
 pub use script::{code_of as script_code, project_of as script_project, values_in};
+pub use skills::{PRACTICE_ROUNDS, check_of as script_check};
 pub use store::{load_all, step_line, words};
 
 const LIST_LINES: usize = 60;
@@ -67,6 +70,7 @@ pub fn offer(d: &Daemon, ctx: &mut Ctx, typed: Vec<String>) -> Vec<String> {
     if typed.iter().map(|w| stem(w)).collect::<HashSet<_>>().len() < 2 {
         return Vec::new();
     }
+    defaults::ensure(&d.home);
     let mut lines = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
     for mut r in fitting(d, ctx, &typed, t) {
@@ -87,21 +91,34 @@ fn fitting(d: &Daemon, ctx: &Ctx, typed: &[String], t: f64) -> Vec<Value> {
     let mut hits: Vec<(bool, usize, u64, Value)> = Vec::new();
     for r in load_all(&d.home) {
         let key = format!("r:{}", text(&r["name"]));
-        let ignored = r["stats"]["offered"].as_u64().unwrap_or(0) >= OFFER_IGNORED;
+        let ignored = !skills::is_skill(&r) && r["stats"]["offered"].as_u64().unwrap_or(0) >= OFFER_IGNORED;
         if r["flaky"] == true || ignored || t - ctx.told.get(&key).copied().unwrap_or(0.0) < OFFER_EVERY_S {
             continue;
         }
         let (app_hit, other) = score(typed, &r);
-        let hit = if script::is_script(&r) { script::fits(other, &r, &ctx.cwd) } else { app_hit && other >= 1 };
+        let hit = if skills::is_skill(&r) {
+            skills::fits(&r, other)
+        } else if script::is_script(&r) {
+            script::fits(other, &r, &ctx.cwd)
+        } else {
+            app_hit && other >= 1
+        };
         if hit {
             hits.push((app_hit, other, r["stats"]["ok"].as_u64().unwrap_or(0), r));
         }
     }
-    hits.sort_by_key(|h| std::cmp::Reverse((h.0, h.1, h.2)));
-    hits.into_iter().map(|h| h.3).collect()
+    hits.sort_by_key(|h| std::cmp::Reverse((h.0, h.1, skills::is_skill(&h.3), h.2)));
+    let best_skill = hits.iter().filter(|h| skills::is_skill(&h.3)).map(|h| (h.0, h.1)).max();
+    hits.into_iter()
+        .filter(|h| skills::is_skill(&h.3) || best_skill.is_none_or(|b| (h.0, h.1) >= b))
+        .map(|h| h.3)
+        .collect()
 }
 
 fn offer_line(r: &Value, typed: &[String]) -> String {
+    if skills::is_skill(r) {
+        return skills::offer_line(r, typed);
+    }
     if !script::is_script(r) {
         return format!("Wisply routine fits this request (one call, swap the values): {}", usage(r, &BTreeMap::new()));
     }
@@ -155,7 +172,13 @@ fn listing(d: &Daemon, ctx: &mut Ctx, c: &Call) -> String {
             let flaky = if r["flaky"].as_bool() == Some(true) { " | FLAKY" } else { "" };
             let saved = n(r, "saved");
             let saved = if saved > 0 { format!(" | ~{saved} tokens saved") } else { String::new() };
-            let kind = if script::is_script(r) { " | script" } else { "" };
+            let kind = if skills::is_skill(r) {
+                format!(" | skill {}", text(&r["learn"]["state"]))
+            } else if script::is_script(r) {
+                " | script".to_string()
+            } else {
+                String::new()
+            };
             format!("{}{args} | {rate}{extra}{saved}{kind}{flaky}", text(&r["name"]))
         })
         .collect();
@@ -181,6 +204,9 @@ fn show(r: &Value) -> String {
     }
     for (i, s) in r["steps"].as_array().into_iter().flatten().enumerate() {
         out.push(format!("{} {}", i + 1, step_line(s, None)));
+    }
+    if skills::is_skill(r) {
+        out.extend(skills::show_lines(r));
     }
     if script::is_script(r) {
         out.extend(script::show(r));
@@ -208,6 +234,9 @@ pub fn command(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
     }
     if c.name == "run" {
         return run(d, ctx, c);
+    }
+    if c.name == "learn" {
+        return skills::command(d, ctx, c);
     }
     let sub = c.pos.first().map_or("list".to_string(), |s| s.to_lowercase());
     let rest = c.pos.get(1..).unwrap_or(&[]);

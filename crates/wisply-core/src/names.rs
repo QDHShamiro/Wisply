@@ -20,6 +20,7 @@ const SYSTEM: &[&str] = &[
     "run",
     "routine",
     "routines",
+    "learn",
     "record",
     "done",
     "keep",
@@ -200,7 +201,7 @@ mod tests {
     fn the_known_names_are_the_2x_list_secure_and_the_window() {
         let want = "agents back bench brain bug call channels check claude click clip close code codemode config console demo desktop dialog \
                     dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames grep headless help \
-                    hover improve inbox js keep keys kit launch list listen log memory mobile more net notify open pc peek phone press progress read recall record \
+                    hover improve inbox js keep keys kit launch learn list listen log memory mobile more net notify open pc peek phone press progress read recall record \
                     reload remember reply research routine routines run scroll search secure select selftest shot skill snap squeeze \
                     status stop tab table tabs text think todo tokens tools type ui unread update upload version viewport voice wait watch \
                     wiki windows";

@@ -27,14 +27,19 @@
     else pair[1](placed(new Error(text), pair[2]));
   };
 
+  const lf = (text) => String(text === undefined || text === null ? "" : text).replace(/\r\n/g, "\n");
+
   class Output {
     constructor(r) {
-      this.stdout = r.stdout;
-      this.stderr = r.stderr;
+      this.stdout = lf(r.stdout);
+      this.stderr = lf(r.stderr);
       this.exitCode = r.code;
     }
     get ok() {
       return this.exitCode === 0;
+    }
+    get length() {
+      return this.stdout.length;
     }
     text() {
       return this.stdout;
@@ -52,6 +57,15 @@
       if (this.exitCode === 0 && !this.stderr.trim()) return this.stdout.trimEnd();
       return { exitCode: this.exitCode, stdout: this.stdout.trimEnd(), stderr: this.stderr.trimEnd() };
     }
+  }
+  for (const name of Object.getOwnPropertyNames(String.prototype)) {
+    const f = String.prototype[name];
+    if (typeof f !== "function" || name in Output.prototype) continue;
+    Object.defineProperty(Output.prototype, name, {
+      value(...a) {
+        return f.apply(this.stdout, a);
+      },
+    });
   }
 
   class ShellError extends Error {

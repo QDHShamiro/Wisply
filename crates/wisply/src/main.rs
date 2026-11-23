@@ -36,6 +36,7 @@ use std::env;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    wisply_proto::pin_home();
     let args: Vec<String> = env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     let first = args.first().map(String::as_str).unwrap_or("");
     match first {

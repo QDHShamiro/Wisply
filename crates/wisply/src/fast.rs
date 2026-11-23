@@ -71,6 +71,7 @@ fn runs_in_full(first: &str, raw: &[String]) -> bool {
 }
 
 fn main() -> ExitCode {
+    wisply_proto::pin_home();
     let raw: Vec<String> = env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     let first = raw.first().map(String::as_str).unwrap_or("");
     let local = runs_in_full(first, &raw);

@@ -271,18 +271,7 @@ fn leave(ctx: &mut Ctx, job: &Job, failed: bool) {
     }
 }
 
-pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
-    if c.pos.is_empty() {
-        return Err(Fail::hint("run needs a routine name", "wisply routines"));
-    }
-    let query: Vec<&str> = c.pos.iter().map(String::as_str).filter(|p| !p.contains('=')).collect();
-    let wanted = if query.is_empty() { c.pos[0].clone() } else { query.join("-") };
-    let r = match store::load(&d.home, &wanted) {
-        Ok(r) => r,
-        Err(_) if !query.is_empty() => store::find(&d.home, &query.join(" "))?,
-        Err(e) => return Err(e),
-    };
-    let name = text(&r["name"]);
+fn values_for(r: &Value, c: &Call) -> Result<BTreeMap<String, String>, Fail> {
     let mut params: BTreeMap<String, String> = if c.on("defaults") {
         r["params"].as_object().into_iter().flatten().map(|(k, v)| (k.clone(), text(v))).collect()
     } else {
@@ -293,12 +282,40 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
             params.insert(k.trim().to_string(), v.to_string());
         }
     }
-    let missing: Vec<&String> =
-        r["params"].as_object().into_iter().flatten().map(|(k, _)| k).filter(|k| !params.contains_key(*k)).collect();
-    if !missing.is_empty() {
-        let list: Vec<&str> = missing.iter().map(|k| k.as_str()).collect();
-        return Err(Fail::hint(format!("{name} needs {}", list.join(", ")), usage(&r, &BTreeMap::new())));
+    if super::skills::is_skill(r) {
+        super::skills::fill_missing(r, &mut params);
     }
+    let opt = super::skills::optional(r);
+    let missing: Vec<&str> = r["params"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(k, _)| k.as_str())
+        .filter(|k| !params.contains_key(*k) && !opt.contains(*k))
+        .collect();
+    if !missing.is_empty() {
+        return Err(Fail::hint(
+            format!("{} needs {}", text(&r["name"]), missing.join(", ")),
+            usage(r, &BTreeMap::new()),
+        ));
+    }
+    Ok(params)
+}
+
+pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
+    if c.pos.is_empty() {
+        return Err(Fail::hint("run needs a routine name", "wisply routines"));
+    }
+    super::defaults::ensure(&d.home);
+    let query: Vec<&str> = c.pos.iter().map(String::as_str).filter(|p| !p.contains('=')).collect();
+    let wanted = if query.is_empty() { c.pos[0].clone() } else { query.join("-") };
+    let r = match store::load(&d.home, &wanted) {
+        Ok(r) => r,
+        Err(_) if !query.is_empty() => store::find(&d.home, &query.join(" "))?,
+        Err(e) => return Err(e),
+    };
+    let name = text(&r["name"]);
+    let params = values_for(&r, c)?;
     if super::script::is_script(&r) {
         return super::script::handoff(ctx, c, &name, &params).map(Out::Text);
     }

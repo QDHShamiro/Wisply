@@ -1,0 +1,7 @@
+Teach Wisply this skill once, then it runs in one call with no tokens. First decide: is it a skill (a task that repeats with other values)? If not, just do it.
+1. Write run.js (code mode: $, wisply, read, write, edit, glob, sleep). Values come in as args.<name>, never inline. With args.dry === "1" stop right before the last real step (send, submit, buy, delete) and return a short result.
+2. Write check.js: it gets the same args plus args.result (what run.js gave back) and throws or returns false when the result is wrong. Check the real outcome (the message is in the chat, the file exists), not just "no error".
+3. Save: wisply learn save <name> "<what it does, when to use it>" --file run.js --check check.js [--guide "<one line per arg>"] [--before 2m] [--tokens 3000] k=v ...
+   k=v are example values for practice. --before and --tokens are the time and tokens the task took by hand.
+4. Wisply practices it 3 times with dry=1 and the check. All green: ask the user, then wisply learn ok <name>. Red: the error and a hint say why; fix and save again.
+5. From then on: wisply run <name> k=v. If it breaks later, the hint from the last failure is in: wisply learn show <name>.

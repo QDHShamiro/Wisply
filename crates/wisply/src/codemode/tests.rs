@@ -20,6 +20,9 @@ impl Host for Fake {
             "wisply" => Step::Now(true, format!(r#"{{"code":0,"out":"ran {}"}}"#, payload.len())),
             "sh" if payload.contains("risky") => Step::Halt("asks first".into()),
             "sh" if payload.contains("fails") => Step::Now(true, r#"{"code":3,"stdout":"","stderr":"bad\n"}"#.into()),
+            "sh" if payload.contains("crlf") => {
+                Step::Now(true, r#"{"code":0,"stdout":"2\r\nb\r\n","stderr":""}"#.into())
+            }
             "sh" => Step::Now(true, r#"{"code":0,"stdout":"a\nb\n","stderr":""}"#.into()),
             "read" => Step::Now(true, "file text".into()),
             _ => Step::Now(false, format!("no {kind} here")),
@@ -56,6 +59,13 @@ fn the_last_expression_is_the_result() {
     assert_eq!(value("await $`ls`.lines()"), "a\nb");
     assert_eq!(value("({ out: $`ls`, n: sleep(5).then(() => 3) })"), r#"{"out":"a\nb","n":3}"#);
     assert_eq!(value("shell + ' ' + os + ' ' + cwd"), "bash test /work");
+}
+
+#[test]
+fn shell_output_works_like_a_string_with_plain_line_ends() {
+    assert_eq!(value("Number((await $`crlf`).trim().split('\\n')[0])"), "2");
+    assert_eq!(value("const o = await $`crlf`; [o.includes('\\r'), o.startsWith('2'), o.length]"), "false\ntrue\n4");
+    assert_eq!(value("return await $`crlf`"), "2\nb");
 }
 
 #[test]

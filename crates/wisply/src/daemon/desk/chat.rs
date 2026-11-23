@@ -26,6 +26,7 @@ const PARSED_MAX: usize = 400;
 const SENT_KEPT: usize = 20;
 const BACK_ROWS: usize = 10;
 const CONFIRM: Duration = Duration::from_secs(3);
+const CONFIRM_EXACT: Duration = Duration::from_secs(12);
 const CONFIRM_POLL: Duration = Duration::from_millis(250);
 const TITLE: usize = 50;
 const MEMO: &str = "chat.json";
@@ -34,6 +35,8 @@ const CHAT_TITLE: usize = 40;
 
 static SWITCHER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)quick switcher|find a channel|jump to").expect("switcher"));
+static UNREAD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*\(\d+\+?\)\s*").expect("unread"));
+static PART: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+[-|–—•]\s+").expect("part"));
 
 #[derive(Default)]
 struct Chat {
@@ -205,6 +208,26 @@ fn resolve(x: &mut Desk, spec: Option<&str>) -> Res<isize> {
     Ok(w.hwnd)
 }
 
+fn bare(name: &str) -> String {
+    name.trim().trim_start_matches(['@', '#']).trim().to_lowercase()
+}
+
+fn segments(title: &str) -> Vec<String> {
+    PART.split(&UNREAD.replace(title, "")).map(bare).filter(|s| !s.is_empty()).collect()
+}
+
+fn exact(x: &mut Desk, spec: &str) -> Res<isize> {
+    if windowish(spec) {
+        return x.target(Some(spec));
+    }
+    let want = bare(spec);
+    let mut hits: Vec<win::Win> = win::windows().into_iter().filter(|w| segments(&w.title).contains(&want)).collect();
+    hits.sort_by_key(|w| (BROWSER_EXES.contains(&w.exe.to_lowercase().as_str()), !w.fg));
+    let Some(w) = hits.first() else { return Err(no_chat(x, spec).into()) };
+    choose(x, w.hwnd);
+    Ok(w.hwnd)
+}
+
 fn no_chat(x: &mut Desk, spec: &str) -> Fail {
     let chats: Vec<win::Win> =
         win::windows().into_iter().filter(|w| CHAT_EXES.contains(&w.exe.to_lowercase().as_str())).collect();
@@ -300,10 +323,10 @@ fn composer(hwnd: isize) -> Result<(El, String), Fail> {
     Ok((el, if name.is_empty() { "message field".into() } else { name }))
 }
 
-fn confirm(home: &Path, hwnd: isize, base: &Base, text: &str) -> Option<String> {
+fn confirm(home: &Path, hwnd: isize, base: &Base, text: &str, limit: Duration) -> Option<String> {
     let mine = [talk::norm(text)];
     let t0 = Instant::now();
-    while t0.elapsed() < CONFIRM {
+    while t0.elapsed() < limit {
         let rows = items(hwnd).unwrap_or_default();
         for i in talk::fresh(base, &rows).into_iter().rev() {
             let m = parsed(hwnd, &rows[i]);
@@ -322,6 +345,49 @@ fn confirm(home: &Path, hwnd: isize, base: &Base, text: &str) -> Option<String> 
     None
 }
 
+fn typing(c: &Call) -> Call {
+    let mut typed = Call { name: "type".into(), ..Call::default() };
+    if c.on("stay") {
+        typed.flags.insert("stay".into(), Flag::On);
+    }
+    typed
+}
+
+fn guard(c: &Call, hwnd: isize, text: &str, wref: &str) -> Result<(), Fail> {
+    let yes = c.on("yes");
+    if talk::has_link(text) && !yes {
+        return Err(Fail::hint(
+            "the message contains a link",
+            "send it only if the user asked for it: wisply reply ... --yes",
+        ));
+    }
+    let (unanswered, sent_t) = chat(hwnd, |st| (st.unanswered, st.sent_t));
+    if unanswered >= UNANSWERED && !yes {
+        return Err(Fail::hint(
+            format!("{unanswered} messages in a row without an answer"),
+            format!("wait for an answer (wisply inbox {wref}) or ask the user; --yes sends anyway"),
+        ));
+    }
+    let gap = GAP_S - (now() - sent_t);
+    if gap > 0.0 {
+        thread::sleep(Duration::from_secs_f64(gap));
+    }
+    Ok(())
+}
+
+fn dry_run(x: &mut Desk, c: &Call, hwnd: isize, text: &str) -> Res<String> {
+    let (el, label) = composer(hwnd)?;
+    let typed = typing(c);
+    x.put_text(hwnd, &el, &label, text, &typed)?;
+    x.clear_text(hwnd, &el, &typed)?;
+    Ok(format!(
+        "dry run: typed {} chars into [{}] {}, cleared, nothing sent",
+        text.chars().count(),
+        x.wref(hwnd),
+        title(hwnd)
+    ))
+}
+
 fn reply(x: &mut Desk, c: &Call, aim: Option<&str>, may_wait: bool) -> Res<Out> {
     let (spec, words) = match aim {
         Some(a) => (a, &c.pos[..]),
@@ -332,40 +398,21 @@ fn reply(x: &mut Desk, c: &Call, aim: Option<&str>, may_wait: bool) -> Res<Out> 
             );
         }
     };
-    let hwnd = resolve(x, Some(spec))?;
+    let hwnd = if c.on("exact") { exact(x, spec)? } else { resolve(x, Some(spec))? };
     let text = x.ctx.secret.clone().unwrap_or_else(|| words.join(" "));
     if text.trim().is_empty() {
         return Err(Fail::new("nothing to send").into());
     }
     let wref = x.wref(hwnd);
-    let yes = c.on("yes");
-    if talk::has_link(&text) && !yes {
-        return Err(Fail::hint(
-            "the message contains a link",
-            "send it only if the user asked for it: wisply reply ... --yes",
-        )
-        .into());
+    if c.on("dry") {
+        return dry_run(x, c, hwnd, &text).map(Out::Text);
     }
-    let (unanswered, sent_t) = chat(hwnd, |st| (st.unanswered, st.sent_t));
-    if unanswered >= UNANSWERED && !yes {
-        return Err(Fail::hint(
-            format!("{unanswered} messages in a row without an answer"),
-            format!("wait for an answer (wisply inbox {wref}) or ask the user; --yes sends anyway"),
-        )
-        .into());
-    }
-    let gap = GAP_S - (now() - sent_t);
-    if gap > 0.0 {
-        thread::sleep(Duration::from_secs_f64(gap));
-    }
+    guard(c, hwnd, &text, &wref)?;
     x.st.launched.remove(&hwnd);
     let base = talk::baseline(&items(hwnd)?, now());
     let (el, label) = composer(hwnd)?;
-    let mut typed = Call { name: "type".into(), ..Call::default() };
+    let mut typed = typing(c);
     typed.flags.insert("enter".into(), Flag::On);
-    if c.on("stay") {
-        typed.flags.insert("stay".into(), Flag::On);
-    }
     x.put_text(hwnd, &el, &label, &text, &typed)?;
     chat(hwnd, |st| {
         st.sent_t = now();
@@ -375,7 +422,17 @@ fn reply(x: &mut Desk, c: &Call, aim: Option<&str>, may_wait: bool) -> Res<Out> 
         st.sent.drain(..extra);
         st.base = Some(base.clone());
     });
-    let mid = confirm(&x.d.home, hwnd, &base, &text).map_or_else(|| " (not visible yet)".into(), |m| format!(" #{m}"));
+    let limit = if c.on("exact") { CONFIRM_EXACT } else { CONFIRM };
+    let mid = confirm(&x.d.home, hwnd, &base, &text, limit).map_or_else(
+        || {
+            if c.on("exact") {
+                format!(" (not visible after {} s)", limit.as_secs())
+            } else {
+                " (not visible yet)".into()
+            }
+        },
+        |m| format!(" #{m}"),
+    );
     let head = format!("sent to [{wref}] {}{mid}", title(hwnd));
     if !c.on("wait") {
         return Ok(Out::Text(head));
@@ -391,5 +448,16 @@ pub fn run(x: &mut Desk, c: &Call, aim: Option<&str>, may_wait: bool) -> Res<Out
         "inbox" => inbox(x, c, aim),
         "reply" => reply(x, c, aim, may_wait),
         _ => unread(x, c, aim).map(Out::Text),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn exact_chat_names_match_one_title_part() {
+        let parts = super::segments("(3) Discord | @Lukas_90 | Friends");
+        assert_eq!(parts, ["discord", "lukas_90", "friends"]);
+        assert!(super::segments("#general - Server – Discord").contains(&"general".to_string()));
+        assert!(!super::segments("Lukas Fan Club - Discord").contains(&"lukas".to_string()));
     }
 }

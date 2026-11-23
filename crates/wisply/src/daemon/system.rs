@@ -53,6 +53,8 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         notify event <done|waiting|ci_red|ci_green|limit|resumed|disk|bug> <title> [text] (Windows toast that never takes focus, plus the phone feed)
 code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many shell, file and wisply steps in one call, only the result comes back; wisply codemode help)
         mcp (MCP server on stdin/stdout for any AI: one tool \"wisply\" that takes a command or code mode code)
+        run <name|words> [k=v ...] [--yes]   routines [-f word]   routine save|show|rm|rename|forget <name> (tasks done before, replayed in one call)
+        learn [\"<task>\"] | learn save <name> \"<what it does>\" --file run.js --check check.js [k=v] | learn ok|practice|show|drop <name> (skills: taught once, practiced with a check, then one call; send-message, read-form, find-file, pr-ci come with Wisply)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
 Output is plain text, one line per action. Big results go to a file (path printed).
@@ -110,12 +112,7 @@ pub fn run_one(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<(Out, Strin
             ctx.singles.clear();
             "ok".into()
         }
-        "codemode" => {
-            return Err(Fail::hint(
-                "code mode runs in the wisply command itself, not in the daemon",
-                "wisply codemode help",
-            ));
-        }
+        "codemode" => return Err(old_client()),
         "keys" => {
             let text = web::keys::command(&d.home, ctx, &call)?;
             web::capped(d, ctx, &text, "keys", Some(KEYS_LINES), OUT_CHARS)
@@ -136,6 +133,15 @@ pub fn run_one(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<(Out, Strin
         }
     };
     Ok((Out::Text(text), call.name))
+}
+
+fn old_client() -> Fail {
+    Fail::hint(
+        format!(
+            "this wisply command is older than the daemon {VERSION} and cannot run code mode, skills or saved scripts"
+        ),
+        "wisply update, or call the wisply.exe next to wisply-full.exe",
+    )
 }
 
 fn help(name: Option<&str>) -> Result<String, Fail> {
@@ -267,6 +273,10 @@ mod tests {
         for name in ["unread", "inbox", "reply"] {
             assert!(about(name).is_some_and(|row| row.starts_with("unread [w5]")), "{name}");
         }
+        for name in ["run", "routines", "routine"] {
+            assert!(about(name).is_some_and(|row| row.starts_with("run <name|words>")), "{name}");
+        }
+        assert!(about("learn").is_some_and(|row| row.starts_with("learn [\"<task>\"]")));
     }
 
     #[test]
@@ -275,5 +285,15 @@ mod tests {
         let said = lines_of("abc").unwrap_err().text();
         assert_eq!(said, "err: log takes a number of lines, not 'abc' -> try: wisply log 30 | wisply log stats");
         assert!(lines_of("-3").is_err() && lines_of("").is_err());
+    }
+
+    #[test]
+    fn an_old_client_is_told_to_update() {
+        let said = old_client().text();
+        assert!(
+            said.contains(&format!("older than the daemon {VERSION}"))
+                && said.ends_with("-> try: wisply update, or call the wisply.exe next to wisply-full.exe"),
+            "{said}"
+        );
     }
 }

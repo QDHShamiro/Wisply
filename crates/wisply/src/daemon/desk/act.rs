@@ -206,6 +206,24 @@ impl Desk<'_> {
         pasted?;
         Ok(format!("ok {label} (pasted {shown}{plus}, window was briefly in front)"))
     }
+
+    pub(super) fn clear_text(&mut self, hwnd: isize, el: &El, c: &Call) -> Res<()> {
+        if !Desk::is_chromium(hwnd) && el.set_value("") {
+            return Ok(());
+        }
+        if self.bg(hwnd) {
+            focus::calm(hwnd)?;
+            let native = el.native();
+            let to = Keys::Behind(if native != 0 { native } else { hwnd });
+            press_keys(&to, "ctrl+a", false)?;
+            return Ok(press_keys(&to, "backspace", false)?);
+        }
+        focus::with_focus(false, hwnd, c.on("stay"), |to| {
+            el.focus();
+            press_keys(&to, "ctrl+a", false)?;
+            press_keys(&to, "backspace", false)
+        })
+    }
 }
 
 pub fn click(x: &mut Desk, c: &Call) -> Res<String> {
