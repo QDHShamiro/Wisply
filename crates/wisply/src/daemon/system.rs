@@ -6,7 +6,7 @@ use wisply_core::{Call, Fail, Flag, OUT_CHARS, ago, built_later, listing, parse,
 use super::ctx::Ctx;
 use super::{Daemon, Out, VERSION, config, media, route, web};
 
-const HELP: &str = "wisply 3.5 <command> [args]   browser, desktop apps, video and memory for AI agents
+const HELP: &str = "wisply 3.6 <command> [args]   browser, desktop apps, video and memory for AI agents
 refs: e12 web element | t77 tab | w3 window | d5 app element
 
 web     open <url> [-n] [-f \"a|b\"] [--text]   snap [-f \"a|b\"] [-s css|ref] [--all] [--full] [--diff] [--links]   text [-f txt] [--links]
