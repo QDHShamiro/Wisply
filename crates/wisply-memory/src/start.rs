@@ -81,6 +81,15 @@ impl Store {
         }
     }
 
+    pub fn quiet_sessions(&self, after: f64, until: f64) -> rusqlite::Result<Vec<(String, String, f64)>> {
+        let mut stmt = self.db.prepare(
+            "select project, transcript, last from sessions where coalesce(transcript, '') != '' \
+             and coalesce(project, '') != '' and last > ?1 and last <= ?2 order by last",
+        )?;
+        let rows = stmt.query_map(params![after, until], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        rows.collect()
+    }
+
     pub fn note_count(&self) -> rusqlite::Result<i64> {
         self.db.query_row("select count(*) from notes", [], |r| r.get(0))
     }
@@ -202,6 +211,11 @@ mod tests {
         assert_eq!((s.note_count().unwrap(), s.drafts().unwrap(), s.queued().unwrap()), (3, 0, 1));
         let c = s.counts().unwrap();
         assert_eq!((c.notes, c.vecs, c.todos, c.summaries, c.queued), (3, 0, 0, 1, 1));
+        s.session_seen("s2", "", "C:/", "C:/u.jsonl", false).unwrap();
+        let t = now();
+        let quiet = s.quiet_sessions(0.0, t + 1.0).unwrap();
+        assert_eq!(quiet.iter().map(|q| (q.0.as_str(), q.1.as_str())).collect::<Vec<_>>(), [("web", "C:/t.jsonl")]);
+        assert!(s.quiet_sessions(t + 1.0, t + 2.0).unwrap().is_empty());
         assert_eq!(s.meta("vault_indexed").unwrap(), None);
         assert_eq!(s.project_about("web").unwrap(), "");
         drop(s);

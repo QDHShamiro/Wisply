@@ -321,6 +321,13 @@ fn memory_keeps_notes_and_todos_in_memory_db() {
     let after = full.split("\nnotes:\n").nth(1).unwrap_or("");
     let notes: Vec<&str> = after.split('\n').take_while(|l| l.starts_with("  ")).collect();
     assert!(notes.len() == 2 && notes[0].ends_with("first step") && notes[1].ends_with("second step"), "{full}");
+    assert_eq!(home.run(&["todo", "tidy"]).1, "no stale to-dos among 1 open");
+    let late = "Abgabe bis 1.1.2020";
+    assert_eq!(home.run(&["todo", "add", late, "--list", "release"]).1, "to-do #2 added to release");
+    let (_, stale) = home.run(&["todo", "tidy"]);
+    let want = format!("1 of 2 open to-dos look stale (nothing closed):\n#2 date 2020-01-01 passed: {late}\n");
+    assert!(stale.starts_with(&want), "{stale}");
+    assert_eq!(home.run(&["todo", "tidy", "--drop", "2"]).1, format!("#2 is dropped: {late}"));
     assert_eq!(home.run(&["todo", "close", "1"]).1, "#1 is done: ship it");
     assert_eq!(home.run(&["todo", "reopen", "1"]).1, "#1 is todo: ship it");
     assert_eq!(home.run(&["todo", "done", "1", "all", "good"]).1, "#1 is done: ship it");

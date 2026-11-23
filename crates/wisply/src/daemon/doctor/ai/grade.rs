@@ -66,7 +66,7 @@ pub fn signature(text: &str) -> String {
     words.join(" ").chars().take(SIG_MAX).collect()
 }
 
-fn clean_word(word: &str) -> String {
+pub fn clean_word(word: &str) -> String {
     if !word.chars().all(|c| c.is_ascii_alphanumeric() || SIG_CHARS.contains(c)) {
         return "?".to_string();
     }
@@ -91,7 +91,7 @@ fn trend(now: f64, before: f64, lower_is_better: bool) -> &'static str {
     }
 }
 
-pub fn rows(weeks: &[Tally; 2]) -> Vec<Row> {
+pub(super) fn rows(weeks: &[Tally; 2]) -> Vec<Row> {
     let [now, before] = weeks;
     if now.sessions == 0 && before.sessions == 0 {
         return vec![row(Level::Ok, "report", "no sessions in the last 14 days", "")];

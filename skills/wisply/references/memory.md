@@ -3,10 +3,11 @@
 ## Recall and keep
 - `recall "words"` searches notes, the vault and session notes by words and meaning; notes of the current project rank first, `--all` shows other projects with `[project]`, `recall 42` prints one note in full, `--max n` limits the hits.
 - `remember "fact"` keeps a finding, `forget <id>` deletes one note.
-- `todo` lists the open steps, `todo add "task" --list x`, `todo done|doing|drop|open 12`, `todo note 12 "text"`.
+- `todo` lists the open steps, `todo add "task" --list x`, `todo done|doing|drop|open 12`, `todo note 12 "text"`, `todo tidy` lists stale ones (date passed, untouched 14 days), `todo tidy --done 3,7` or `--drop 4` closes them.
 - One list for bugs, features, tasks and ideas (`wisply ui` shows it): `todo add "text" --kind bug --prio high`, `todo wait 12 restart|you`, `todo undo 12`, `bug add <server> "what is broken"`, `list [--kind bug] [--server s]`, `list accept|reject 12` for suggestions. Server log errors come in as bugs by themselves once `config servers_file <path>` is set.
 - `wiki` lists drafts in the vault inbox, `wiki show 1`, `wiki accept|drop 1`.
 - By itself: the session start prints a summary, a prompt can show up to 2 fitting notes of the same project (`Wisply memory may help`), and a session is learned once it has been quiet for 10 minutes or ended.
+- Session coach: once a session has been quiet for 10 minutes Wisply reads its transcript (Claude, Codex) and keeps up to 3 hints for the project (same file read 3x, same error 2x, code edited but never built or tested, big tool outputs). The next start of any AI in that project shows them as `Coach (last session): ...`. `config coach off` stops it.
 
 ## Code, before reading many files
 - `code` (overview of the project), `code Name` (find a function or class by name), `code "what it does"` (closest by name and body), `code callers Name`, `code body Name`, `code outline file`, `code impact [--base main]` (what the changes against HEAD or a base touch). `--project <path>` for another folder; outside any project it uses the last used one and says which.
