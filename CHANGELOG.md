@@ -5,6 +5,49 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [3.8.0] - 2026-11-24
+
+### Added
+- `wisply go "<order>"` runs plain orders in one call without any model: `schreib Anna bin gleich da`, `erinner mich
+  um halb 8 ans Essen`, `screenshot`, `öffne youtube`. German and English, typos, slang, polite forms, the verb at
+  the end and its own time grammar (`halb 8`, `viertel nach`, `nächsten Freitag um 9`, `in ner halben Stunde`). It
+  sends only when every name is clear and lists the matches otherwise; links need `--yes`. `--dry` shows the plan,
+  `--list`/`--cancel` handle planned orders, `--teach` saves a sentence as a routine. Contacts live in
+  `contacts.json`, match without case and umlauts, allow one typo from 4 letters on (only when exactly one contact
+  fits) and learn the app on send. A 627-sentence corpus is checked in CI (100 %); a blind list of 30 new sentences
+  went from 13 to 24.
+- `wisply call ask "..." [--choices ja,nein] [--wait s]` rings your phone and waits for the answer: ntfy.sh by
+  default (no account, rings through do-not-disturb, yes/no buttons), optional Telegram call, Discord webhook or the
+  Wisply app. The answer can come from a button, a text, the voice call mode or `wisply call answer`, and works for
+  every AI. An optional Claude Code hook rings only while you are away (`call away on`), with a minimum gap and quiet
+  hours; `call schedule on HH:MM` adds a morning briefing.
+- `wisply local get|status|stop|rm` installs a small local speech and language model (whisper.cpp + Qwen3.5-0.8B,
+  pinned and sha256-checked). Both start on demand, stay under 1 GB RAM together and stop when idle or while a game
+  runs. `call set understand=auto` uses it for answers the word rules can't place (`mach mal, aber erst morgen`,
+  `die neuere`); if rules and model disagree the answer stays unclear instead of guessing. Doubt (`vielleicht`,
+  `not sure`, `egal`) is never a yes, a firm no (`auf keinen Fall`, `bloß nicht`) wins unless a yes comes after it,
+  and a model pick has to survive the choices in reverse order. `nicht discord` no longer counts as discord.
+- The `wisply go` box (Ctrl+Alt+Space) helps while typing: a grey line under the text shows what Enter would do (the
+  same logic as `wisply go --dry`, worked out on a background thread at most every 80 ms), arrow up/down walks the
+  last 50 orders and Tab completes a contact name when exactly one contact matches.
+- `wisply contacts scan` reads the Discord DM list and the WhatsApp Web chat list in the logged-in browser, read only
+  (no clicks, no typing, no chat opened), and lists the chats that are not contacts yet; `--add` saves them with name,
+  app and the Discord DM link. Groups are left out, so `schreib X` never hits a group, and existing contacts are never
+  changed. `contact add` takes `dm=<link>`.
+
+### Changed
+- `wisply go --dry` takes 1.2 ms instead of 159 ms on the daemon side (200 contacts, 100 routines): contacts,
+  routines, compiled `--teach` patterns and site hosts are cached and follow their files, so a hand edit counts on the
+  next call.
+- Shorter `go` help, usage, errors and dry lines; a message preview names the person once:
+  `dry: message to Anna (discord): "hi"`.
+
+### Fixed
+- `wisply --help` shows the real version instead of `3.6`, and the `local` and `call` help name
+  `call set understand=auto|off`.
+- `wisply contacts scan` right after an update no longer fails with `no saved script routine "list-chats"`: looking
+  up a shipped script writes the shipped routines first.
+
 ## [3.7.0] - 2026-11-24
 
 ### Added
