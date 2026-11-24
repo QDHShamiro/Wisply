@@ -1,7 +1,7 @@
 use super::*;
 
 const NOW: f64 = 1_795_000_000.0;
-const PEOPLE: &[&str] = &["franz", "lukas", "mama", "papa", "luis", "froxotron", "max mustermann"];
+const PEOPLE: &[&str] = &["jonas", "milo", "mama", "papa", "theo", "pixelfox", "max mustermann"];
 const SITES: &[&str] = &["youtube", "google", "amazon", "github", "reddit", "wikipedia", "twitch"];
 
 fn person(w: &str) -> bool {
@@ -41,27 +41,27 @@ fn media(key: &'static str) -> Act {
 #[test]
 fn messages_now() {
     let cases: &[(&str, Act)] = &[
-        ("schreib Franz ich komm später", m(&["Franz"], None, "ich komm später")),
-        ("schreib Franz und Lukas ich bin gleich da", m(&["Franz", "Lukas"], None, "ich bin gleich da")),
-        ("schreib Franz, Lukas: wir zocken", m(&["Franz", "Lukas"], None, "wir zocken")),
-        ("schreib Franz auf Discord bin gleich on", m(&["Franz"], Some("discord"), "bin gleich on")),
+        ("schreib Jonas ich komm später", m(&["Jonas"], None, "ich komm später")),
+        ("schreib Jonas und Milo ich bin gleich da", m(&["Jonas", "Milo"], None, "ich bin gleich da")),
+        ("schreib Jonas, Milo: wir zocken", m(&["Jonas", "Milo"], None, "wir zocken")),
+        ("schreib Jonas auf Discord bin gleich on", m(&["Jonas"], Some("discord"), "bin gleich on")),
         ("schreib auf whatsapp Mama ich komme", m(&["Mama"], Some("whatsapp"), "ich komme")),
-        ("schreib dem Lukas dass ich später komme", m(&["Lukas"], None, "ich später komme")),
-        ("sag Franz bescheid dass ich da bin", m(&["Franz"], None, "ich da bin")),
-        ("schick Lukas ne Nachricht: bin da", m(&["Lukas"], None, "bin da")),
-        ("nachricht an Franz: bin da", m(&["Franz"], None, "bin da")),
-        ("schreib Franz whatsapp: hi", m(&["Franz"], Some("whatsapp"), "hi")),
-        ("schreib Franz auf WhatsApp: hi", m(&["Franz"], Some("whatsapp"), "hi")),
+        ("schreib dem Milo dass ich später komme", m(&["Milo"], None, "ich später komme")),
+        ("sag Jonas bescheid dass ich da bin", m(&["Jonas"], None, "ich da bin")),
+        ("schick Milo ne Nachricht: bin da", m(&["Milo"], None, "bin da")),
+        ("nachricht an Jonas: bin da", m(&["Jonas"], None, "bin da")),
+        ("schreib Jonas whatsapp: hi", m(&["Jonas"], Some("whatsapp"), "hi")),
+        ("schreib Jonas auf WhatsApp: hi", m(&["Jonas"], Some("whatsapp"), "hi")),
         ("schreib Max Mustermann hallo", m(&["Max Mustermann"], None, "hallo")),
         ("bitte schreib mal Papa gute Nacht", m(&["Papa"], None, "gute Nacht")),
-        ("frag Luis ob er heute kann", m(&["Luis"], None, "ob er heute kann")),
-        ("schreib Franz auf geht's", m(&["Franz"], None, "auf geht's")),
-        ("schreib @Froxotron gg", m(&["Froxotron"], None, "gg")),
-        ("tell Lukas I'm on my way", m(&["Lukas"], None, "I'm on my way")),
+        ("frag Theo ob er heute kann", m(&["Theo"], None, "ob er heute kann")),
+        ("schreib Jonas auf geht's", m(&["Jonas"], None, "auf geht's")),
+        ("schreib @Pixelfox gg", m(&["Pixelfox"], None, "gg")),
+        ("tell Milo I'm on my way", m(&["Milo"], None, "I'm on my way")),
         ("text mom and dad: dinner's ready", m(&["mom", "dad"], None, "dinner's ready")),
-        ("message Franz on discord hey", m(&["Franz"], Some("discord"), "hey")),
-        ("dm froxotron gg", m(&["froxotron"], None, "gg")),
-        ("send Luis via dc the link", m(&["Luis"], Some("discord"), "the link")),
+        ("message Jonas on discord hey", m(&["Jonas"], Some("discord"), "hey")),
+        ("dm pixelfox gg", m(&["pixelfox"], None, "gg")),
+        ("send Theo via dc the link", m(&["Theo"], Some("discord"), "the link")),
     ];
     for (s, want) in cases {
         let p = plan(s);
@@ -73,11 +73,11 @@ fn messages_now() {
 #[test]
 fn time_words_inside_a_message_stay_text() {
     let cases: &[(&str, &str)] = &[
-        ("schreib Franz um 5 bin da", "um 5 bin da"),
-        ("schreib Franz in einer Stunde komme ich", "in einer Stunde komme ich"),
-        ("schreib Franz in der Schule ist frei", "in der Schule ist frei"),
-        ("schreib Lukas wir treffen uns um 18 Uhr", "wir treffen uns um 18 Uhr"),
-        ("schreib Franz um 18 Uhr bin auf dem Weg", "um 18 Uhr bin auf dem Weg"),
+        ("schreib Jonas um 5 bin da", "um 5 bin da"),
+        ("schreib Jonas in einer Stunde komme ich", "in einer Stunde komme ich"),
+        ("schreib Jonas in der Schule ist frei", "in der Schule ist frei"),
+        ("schreib Milo wir treffen uns um 18 Uhr", "wir treffen uns um 18 Uhr"),
+        ("schreib Jonas um 18 Uhr bin auf dem Weg", "um 18 Uhr bin auf dem Weg"),
     ];
     for (s, text) in cases {
         let p = plan(s);
@@ -88,28 +88,28 @@ fn time_words_inside_a_message_stay_text() {
 
 #[test]
 fn messages_later() {
-    let p = plan("in 10 min schreib Franz hallo");
-    assert_eq!((p.act, p.when), (m(&["Franz"], None, "hallo"), Some(NOW + 600.0)));
-    let p = plan("schreib Franz in 5 min: hallo");
-    assert_eq!((p.act, p.when), (m(&["Franz"], None, "hallo"), Some(NOW + 300.0)));
-    let p = plan("schreib Franz um 18 Uhr: bin auf dem Weg");
-    assert_eq!(p.act, m(&["Franz"], None, "bin auf dem Weg"));
+    let p = plan("in 10 min schreib Jonas hallo");
+    assert_eq!((p.act, p.when), (m(&["Jonas"], None, "hallo"), Some(NOW + 600.0)));
+    let p = plan("schreib Jonas in 5 min: hallo");
+    assert_eq!((p.act, p.when), (m(&["Jonas"], None, "hallo"), Some(NOW + 300.0)));
+    let p = plan("schreib Jonas um 18 Uhr: bin auf dem Weg");
+    assert_eq!(p.act, m(&["Jonas"], None, "bin auf dem Weg"));
     assert_eq!(p.when.map(hm), Some((18, 0)));
-    let p = plan("at 18:00 send franz on my way");
-    assert_eq!((p.act, p.when.map(hm)), (m(&["franz"], None, "on my way"), Some((18, 0))));
-    let p = plan("text Franz at 6pm: on my way");
-    assert_eq!((p.act, p.when.map(hm)), (m(&["Franz"], None, "on my way"), Some((18, 0))));
-    let p = plan("send franz hi at 18:00");
-    assert_eq!((p.act, p.when), (m(&["franz"], None, "hi at 18:00"), None));
-    let p = plan("schreib Lukas morgen um 9 dass er mich weckt");
-    assert_eq!(p.act, m(&["Lukas"], None, "er mich weckt"));
+    let p = plan("at 18:00 send jonas on my way");
+    assert_eq!((p.act, p.when.map(hm)), (m(&["jonas"], None, "on my way"), Some((18, 0))));
+    let p = plan("text Jonas at 6pm: on my way");
+    assert_eq!((p.act, p.when.map(hm)), (m(&["Jonas"], None, "on my way"), Some((18, 0))));
+    let p = plan("send jonas hi at 18:00");
+    assert_eq!((p.act, p.when), (m(&["jonas"], None, "hi at 18:00"), None));
+    let p = plan("schreib Milo morgen um 9 dass er mich weckt");
+    assert_eq!(p.act, m(&["Milo"], None, "er mich weckt"));
     let at = p.when.expect("when");
     assert!(at > NOW + 3600.0 && hm(at) == (9, 0));
-    let p = plan("morgen um 9 schreib Lukas aufstehen");
-    assert_eq!(p.act, m(&["Lukas"], None, "aufstehen"));
+    let p = plan("morgen um 9 schreib Milo aufstehen");
+    assert_eq!(p.act, m(&["Milo"], None, "aufstehen"));
     assert!(p.when.is_some_and(|at| at > NOW && hm(at) == (9, 0)));
-    let p = plan("at 6pm text lukas hi");
-    assert_eq!(p.act, m(&["lukas"], None, "hi"));
+    let p = plan("at 6pm text milo hi");
+    assert_eq!(p.act, m(&["milo"], None, "hi"));
     assert_eq!(p.when.map(hm), Some((18, 0)));
     let p = plan("um 20:15 schreib Mama auf whatsapp: komme gleich");
     assert_eq!(p.act, m(&["Mama"], Some("whatsapp"), "komme gleich"));
@@ -235,14 +235,14 @@ fn screenshots_memory_and_recall() {
     assert_eq!(act("screenshot von Discord"), Act::Shot { of: Some("Discord".into()) });
     assert_eq!(act("take a screenshot of chrome"), Act::Shot { of: Some("chrome".into()) });
     assert_eq!(plan("screenshot in 10 sek").when, Some(NOW + 10.0));
-    assert_eq!(act("merk dir Franz mag Pizza"), Act::Remember { text: "Franz mag Pizza".into() });
+    assert_eq!(act("merk dir Jonas mag Pizza"), Act::Remember { text: "Jonas mag Pizza".into() });
     let p = plan("merk dir Treffen um 18 Uhr");
     assert_eq!((p.act, p.when), (Act::Remember { text: "Treffen um 18 Uhr".into() }, None));
     assert_eq!(
         act("remember that the wifi password is on the fridge"),
         Act::Remember { text: "the wifi password is on the fridge".into() }
     );
-    assert_eq!(act("was weißt du über Franz"), Act::Recall { q: "franz".into() });
+    assert_eq!(act("was weißt du über Jonas"), Act::Recall { q: "jonas".into() });
     assert_eq!(act("what do you know about rust"), Act::Recall { q: "rust".into() });
     assert_eq!(act("erinnerst du dich an den Server"), Act::Recall { q: "den server".into() });
     assert!(go("merk dir").is_err());
@@ -254,13 +254,13 @@ fn unknown_and_broken() {
         assert_eq!(go(s).ok().flatten(), None, "{s}");
     }
     assert!(go("schreib").is_err());
-    assert!(go("schreib Franz").is_err());
-    assert!(go("schreib Franz und Lukas").is_err());
+    assert!(go("schreib Jonas").is_err());
+    assert!(go("schreib Jonas und Milo").is_err());
 }
 
 #[test]
 fn describe_reads_well() {
-    assert_eq!(describe(&plan("schreib Franz auf discord hi"), NOW), "message to Franz on discord: \"hi\"");
+    assert_eq!(describe(&plan("schreib Jonas auf discord hi"), NOW), "message to Jonas on discord: \"hi\"");
     assert_eq!(describe(&plan("lauter"), NOW), "media key volumeup x5");
     assert_eq!(describe(&plan("youtube katzen"), NOW), "search youtube for \"katzen\"");
     let later = describe(&plan("in 10 min screenshot"), NOW);
