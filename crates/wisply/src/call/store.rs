@@ -141,6 +141,51 @@ fn hits(spoken: &[String], list: &[String]) -> bool {
     })
 }
 
+fn spots(spoken: &[String], list: &[String]) -> Vec<usize> {
+    let mut at: Vec<usize> = list
+        .iter()
+        .map(|entry| words(entry))
+        .filter(|parts| !parts.is_empty())
+        .flat_map(|parts| {
+            spoken.windows(parts.len()).enumerate().filter(move |(_, w)| *w == parts.as_slice()).map(|(i, _)| i)
+        })
+        .collect();
+    at.sort_unstable();
+    at
+}
+
+pub fn said(cfg: &Map<String, Value>, key: &str, text: &str) -> bool {
+    hits(&words(text), &cfg::list(cfg, key))
+}
+
+pub fn sure_no(cfg: &Map<String, Value>, text: &str) -> bool {
+    let spoken = words(text);
+    let Some(&last_no) = spots(&spoken, &cfg::list(cfg, "sure_no_words")).last() else { return false };
+    spots(&spoken, &cfg::list(cfg, "yes_words")).iter().all(|&yes| yes < last_no)
+}
+
+pub fn refused(choices: &[String], text: &str) -> bool {
+    let spoken = words(text);
+    choices.iter().map(|c| words(c)).filter(|parts| !parts.is_empty()).any(|parts| {
+        spoken
+            .windows(parts.len() + 1)
+            .any(|w| w[1..] == parts[..] && super::understand::NEGATIONS.contains(&w[0].as_str()))
+    })
+}
+
+pub fn named(choices: &[String], text: &str) -> usize {
+    let spoken = words(text);
+    choices.iter().filter(|c| hits(&spoken, &[c.to_lowercase()])).count()
+}
+
+pub fn mapped(cfg: &Map<String, Value>, choices: &[String], want: bool) -> Option<String> {
+    let found: Vec<&String> = choices.iter().filter(|c| verdict(cfg, c) == Some(want)).collect();
+    match found.as_slice() {
+        [one] => Some((*one).clone()),
+        _ => None,
+    }
+}
+
 pub fn verdict(cfg: &Map<String, Value>, text: &str) -> Option<bool> {
     let spoken = words(text);
     let no = hits(&spoken, &cfg::list(cfg, "no_words"));
@@ -161,6 +206,9 @@ pub fn resolve(cfg: &Map<String, Value>, choices: &[String], text: &str) -> Opti
         return Some(trimmed.to_string());
     }
     let spoken = words(trimmed);
+    if refused(choices, trimmed) {
+        return None;
+    }
     let named: Vec<&String> = choices.iter().filter(|c| hits(&spoken, &[c.to_lowercase()])).collect();
     if let [one] = named.as_slice() {
         return Some((*one).clone());
@@ -169,11 +217,7 @@ pub fn resolve(cfg: &Map<String, Value>, choices: &[String], text: &str) -> Opti
         return None;
     }
     let want = verdict(cfg, trimmed)?;
-    let mapped: Vec<&String> = choices.iter().filter(|c| verdict(cfg, c) == Some(want)).collect();
-    match mapped.as_slice() {
-        [one] => Some((*one).clone()),
-        _ => None,
-    }
+    mapped(cfg, choices, want)
 }
 
 pub fn submit(home: &Path, which: &str, text: &str, via: &str) -> Result<Ask, Fail> {
@@ -238,6 +282,10 @@ mod tests {
         assert_eq!(resolve(&c, &ch, "lieber nicht"), Some("nein".into()));
         assert_eq!(resolve(&c, &ch, "ja nein"), None);
         assert_eq!(resolve(&c, &ch, "vielleicht morgen"), None);
+        let colors = vec!["rot".to_string(), "blau".to_string()];
+        assert_eq!(resolve(&c, &colors, "nicht rot"), None);
+        assert_eq!(resolve(&c, &colors, "not blau"), None);
+        assert_eq!(resolve(&c, &colors, "rot bitte"), Some("rot".into()));
         assert_eq!(resolve(&c, &ch, "   "), None);
         assert_eq!(resolve(&c, &[], "  frei geschrieben "), Some("frei geschrieben".into()));
         let colors = vec!["rot".to_string(), "blau".to_string()];

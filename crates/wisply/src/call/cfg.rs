@@ -67,8 +67,10 @@ fn hook() -> Value {
         "hook_stop_chars": 200,
         "hook_yes": "ja",
         "hook_no": "nein",
-        "yes_words": "ja,jo,jep,jap,klar,okay,ok,mach,genau,passt,gerne,yes,yep,sure,erlaubt,freigegeben,weiter,los,gut",
-        "no_words": "nein,nee,nö,noe,nope,no,stopp,stop,abbrechen,ablehnen,verboten,lieber nicht"
+        "yes_words": "ja,jo,jep,jap,jop,jup,jawohl,klar,okay,ok,mach,genau,passt,gerne,yes,yep,yup,yeah,sure,go ahead,go for it,do it,erlaubt,freigegeben,weiter,los,gut",
+        "no_words": "nein,nee,nene,nö,noe,nope,no,nah,never,niemals,don't,do not,stopp,stop,abbrechen,ablehnen,verboten,lieber nicht",
+        "sure_no_words": "auf keinen fall,auf gar keinen fall,keinesfalls,bloß nicht,bloss nicht,no way,absolutely not,on no account",
+        "unsure_words": "vielleicht,maybe,perhaps,nicht sicher,not sure,unsure,weiß nicht,weiss nicht,keine ahnung,no idea,don't know,dont know,idk,mal sehen,mal schauen,kommt drauf an,depends,egal,whatever,wer weiß,who knows"
     })
 }
 

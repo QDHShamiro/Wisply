@@ -4,7 +4,7 @@ use std::time::Duration;
 use serde_json::{Map, Value, json};
 
 use super::cfg;
-use super::store::resolve;
+use super::store::{mapped, named, refused, resolve, said, sure_no};
 
 const PROMPT: &str = include_str!("understand.txt");
 const UNCLEAR: &str = "unclear";
@@ -44,7 +44,8 @@ const CARDINALS: &[(&str, usize)] =
     &[("eins", 1), ("one", 1), ("zwei", 2), ("two", 2), ("drei", 3), ("three", 3), ("vier", 4), ("four", 4)];
 const LASTS: &[&str] = &["letzte", "letzten", "letztes", "letzter", "last"];
 const LABELS: &[&str] = &["nummer", "number", "nr", "no", "option", "wahl", "choice"];
-const NEGATIONS: &[&str] = &["nicht", "kein", "keine", "keinen", "niemals", "nie", "not", "dont", "never", "nein"];
+pub(super) const NEGATIONS: &[&str] =
+    &["nicht", "kein", "keine", "keinen", "niemals", "nie", "not", "dont", "never", "nein"];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Verdict {
@@ -130,6 +131,24 @@ pub fn ordinal(choices: &[String], text: &str) -> Option<String> {
     }
 }
 
+fn yes_no_like(settings: &Map<String, Value>, choices: &[String]) -> bool {
+    mapped(settings, choices, true).is_some() || mapped(settings, choices, false).is_some()
+}
+
+fn ambiguous(settings: &Map<String, Value>, choices: &[String], text: &str) -> bool {
+    if yes_no_like(settings, choices) {
+        return false;
+    }
+    if named(choices, text) > 1 || (choices.len() > 2 && refused(choices, text)) {
+        return true;
+    }
+    let words = tokens(text);
+    if words.len() > RULE_WORDS || words.iter().any(|w| NEGATIONS.contains(&w.as_str())) {
+        return false;
+    }
+    candidates(&words, choices.len()).is_none_or(|found| found.len() > 1 || found.iter().any(|&n| n > choices.len()))
+}
+
 fn first_try(settings: &Map<String, Value>, choices: &[String], text: &str) -> Option<(String, &'static str)> {
     if let Some(choice) = resolve(settings, choices, text) {
         return Some((choice, "words"));
@@ -197,6 +216,17 @@ pub fn decide(
     if choices.is_empty() {
         return sure.map(|(choice, how)| Verdict { choice, note: String::new(), how });
     }
+    if said(settings, "unsure_words", trimmed) {
+        return None;
+    }
+    if sure_no(settings, trimmed)
+        && let Some(choice) = mapped(settings, choices, false)
+    {
+        return Some(Verdict { choice, note: String::new(), how: "rules" });
+    }
+    if sure.is_none() && ambiguous(settings, choices, trimmed) {
+        return None;
+    }
     let asked = model.filter(|_| sure.is_none() || tokens(trimmed).len() > SURE_WORDS);
     let Some(model) = asked else {
         return sure.map(|(choice, how)| Verdict { choice, note: String::new(), how });
@@ -205,7 +235,13 @@ pub fn decide(
         (Some((choice, how)), Asked::Unavailable) => Some(Verdict { choice, note: String::new(), how }),
         (Some((choice, how)), Asked::Pick(got, note)) if got == choice => Some(Verdict { choice, note, how }),
         (Some(_), _) | (None, Asked::Unavailable | Asked::Unclear) => None,
-        (None, Asked::Pick(choice, note)) => Some(Verdict { choice, note, how: "model" }),
+        (None, Asked::Pick(choice, note)) => {
+            let flipped: Vec<String> = choices.iter().rev().cloned().collect();
+            match ask_model(model, question, &flipped, trimmed) {
+                Asked::Pick(again, _) if again == choice => Some(Verdict { choice, note, how: "model" }),
+                _ => None,
+            }
+        }
     }
 }
 
@@ -298,7 +334,7 @@ mod tests {
     #[test]
     fn an_unclear_reply_goes_to_the_model_and_its_note_is_kept() {
         let model = says("ja", "erst morgen");
-        let got = decide(&settings(), "Q", &yes_no(), "vielleicht, mal sehen wie es morgen ist", Some(&model)).unwrap();
+        let got = decide(&settings(), "Q", &yes_no(), "lass uns das morgen erledigen", Some(&model)).unwrap();
         assert_eq!((got.choice.as_str(), got.note.as_str(), got.how), ("ja", "erst morgen", "model"));
     }
 
@@ -312,7 +348,7 @@ mod tests {
     #[test]
     fn when_the_model_disagrees_with_the_rules_the_answer_is_unclear() {
         let no = says("nein", "");
-        assert_eq!(decide(&settings(), "Q", &yes_no(), "mach das bloß nicht", Some(&no)), None);
+        assert_eq!(decide(&settings(), "Q", &yes_no(), "ja mach das jetzt sofort", Some(&no)), None);
         let unsure = says("unclear", "");
         assert_eq!(decide(&settings(), "Q", &yes_no(), "ja mach das aber bitte vorsichtig", Some(&unsure)), None);
     }
@@ -338,6 +374,65 @@ mod tests {
         let never = |_: &str, _: &str, _: &Value| -> Result<Value, String> { panic!("asked") };
         let got = decide(&settings(), "Q", &[], "  irgendwas frei  ", Some(&never)).unwrap();
         assert_eq!((got.choice.as_str(), got.how), ("irgendwas frei", "words"));
+    }
+
+    #[test]
+    fn doubt_is_unclear_without_asking_the_model() {
+        let never = |_: &str, _: &str, _: &Value| -> Result<Value, String> { panic!("asked") };
+        for text in ["not sure yet", "i don't know", "hm ich weiß nicht", "vielleicht morgen", "keine Ahnung", "egal"]
+        {
+            assert_eq!(decide(&settings(), "Q", &yes_no(), text, Some(&never)), None, "{text}");
+        }
+        for text in ["den ersten oder den zweiten", "die fünfte", "nummer 7", "blau oder grün", "nicht rot"] {
+            assert_eq!(decide(&settings(), "Q", &colors(), text, Some(&never)), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn a_firm_no_wins_without_the_model_unless_a_yes_comes_after_it() {
+        let never = |_: &str, _: &str, _: &Value| -> Result<Value, String> { panic!("asked") };
+        for text in
+            ["auf gar keinen Fall, die Datenbank läuft noch", "mach das bloß nicht jetzt", "no way, the tests are red"]
+        {
+            let got = decide(&settings(), "Q", &yes_no(), text, Some(&never)).unwrap();
+            assert_eq!((got.choice.as_str(), got.how), ("nein", "rules"), "{text}");
+        }
+        let yes = says("ja", "");
+        let got = decide(&settings(), "Q", &yes_no(), "auf keinen fall warten, mach sofort", Some(&yes)).unwrap();
+        assert_eq!(got.choice, "ja");
+    }
+
+    #[test]
+    fn a_model_pick_must_survive_the_choices_in_reverse() {
+        let calls = Cell::new(0);
+        let fickle = |_: &str, user: &str, _: &Value| {
+            calls.set(calls.get() + 1);
+            let first = user.lines().nth(1).unwrap_or("").trim_start_matches("1. ").to_string();
+            Ok(json!({"choice": first, "note": ""}))
+        };
+        assert_eq!(decide(&settings(), "Q", &colors(), "gelb", Some(&fickle)), None);
+        assert_eq!(calls.get(), 2);
+        let steady = says("blau", "");
+        assert_eq!(decide(&settings(), "Q", &colors(), "die Farbe vom Himmel", Some(&steady)).unwrap().choice, "blau");
+    }
+
+    #[test]
+    fn the_rules_alone_are_never_sure_and_wrong_on_the_eval_rows() {
+        let mut text = include_str!("../../tests/data/call-answers.tsv").to_string();
+        if let Ok(extra) = std::env::var("CALL_EVAL_ROWS") {
+            text.push('\n');
+            text.push_str(&std::fs::read_to_string(extra).unwrap_or_default());
+        }
+        let mut wrong = Vec::new();
+        for line in text.lines().filter(|l| !l.trim().is_empty()) {
+            let cols: Vec<&str> = line.split('\t').collect();
+            let choices: Vec<String> = cols[1].split('|').filter(|c| !c.is_empty()).map(str::to_string).collect();
+            let got = decide(&settings(), cols[0], &choices, cols[2], None).map_or(UNCLEAR.to_string(), |v| v.choice);
+            if got != UNCLEAR && got != cols[3] {
+                wrong.push(format!("{} -> {got} (wanted {})", cols[2], cols[3]));
+            }
+        }
+        assert!(wrong.is_empty(), "{wrong:#?}");
     }
 
     #[test]

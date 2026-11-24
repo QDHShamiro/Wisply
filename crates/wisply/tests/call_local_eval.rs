@@ -203,6 +203,7 @@ fn multipart(audio: &[u8]) -> (Vec<u8>, String) {
 
 fn probe(home: &Home) -> Result<String, String> {
     let Some(audio) = speak(&home.0) else { return Ok("skipped (no espeak-ng)".to_string()) };
+    home.run(&["local-url", "llm", "stop"]);
     let (code, url, _) = home.run(&["local-url", "asr"]);
     if code != 0 {
         return Err(format!("whisper did not start: {url}"));
