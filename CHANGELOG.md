@@ -5,16 +5,50 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
-## [Unreleased]
+## [3.7.0] - 2026-11-24
 
 ### Added
+- Session coach: the next AI in a project hears what went wrong in the last session there. Once a session has been
+  quiet for 10 minutes Wisply counts, without a model, files read 3 times without an edit, the same error twice, code
+  edited and never built or tested afterwards, and tool outputs over 20k characters, and keeps up to 3 hints per
+  project. They show at session start (`Coach (last session): ...`) and in the MCP instructions, so Codex, Gemini and
+  the rest get them too. Claude Code and Codex sessions are read; Gemini and Qwen session files store no folder, so
+  their own sessions are not coached. `config coach off` turns it off.
+- A wisply command that already failed gets a warning before it runs again. A PreToolUse hook (Bash) checks whether the
+  same command failed in this session in the last 15 minutes and hands the AI the error and the fix that worked
+  before. It only hints, it never blocks.
+- `wisply todo tidy` finds to-dos that look forgotten and closes only the ones you name. Stale means a date in the text
+  has passed (`bis 22.11.`, `deadline 2026-01-05`, `am 3.12.25`), untouched for 14 days, or `doing` for 7 days without
+  a note; `waiting` ones are left alone. `todo tidy --done 3,7` / `--drop 4` close them, `todo undo` takes it back,
+  and the session start adds `N look stale: wisply todo tidy` when there are any.
+- `wisply doctor ai` adds a weekly report per AI (Claude, Codex, Gemini, Qwen): sessions, tool calls, failed share and
+  tokens per session, this week against last week, and the most repeated errors. Codex rollouts are read as
+  `.jsonl.zst` too.
+- `wisply doctor ai --fix` repairs what is safe to repair: it quotes frontmatter values with `: ` in skills and agents
+  that the AI would otherwise fail to load. A backup goes to `~/.wisply/doctor/backup`, `--undo` restores it byte for
+  byte.
 - `wisply memory slim [--dry|--undo] [--dir d]`: Claude loads its whole `MEMORY.md` at every session start, and most
   of it is one line per project that only matters when that project comes up. `slim` moves the project lines to
   `PROJECTS.md` next to it, leaves one pointer line and keeps a backup in `~/.wisply/archive`. When a prompt names a
   project, Wisply adds its line (up to 3, each once per session, word match only, no model). New project lines move
   over at session end, but only once `PROJECTS.md` exists. `--undo` puts everything back.
+- `wait` timeouts name the page they are on and the closest matching lines; the first line stays the same.
+- `press t29 Enter`, `type t29 ...` and `scroll t29` take the tab ref first and switch to that tab.
+- A stale tab ref (`no tab t54`) is rescued: Wisply remembers which page each tab showed and uses another tab with the
+  same page, or names the URL to open again.
+- `no window chosen` lists the open windows with their refs, terminals last and marked; `press e12 Enter` explains to
+  click the element first.
+
+### Changed
+- Lessons stay clean: one session counts once, a lesson expires after 30 days without a hit and two misses drop it.
+  Only fixes with the same verb or a helper (snap, text, windows, tabs, scroll) and without element refs are learned.
+  The existing lessons are tidied once by the same rules; the old table stays as `lessons_old`.
 
 ### Fixed
+- `wisply doctor ai` no longer blames slow hooks on Wisply: it shows Wisply's own time from `log.jsonl` next to the
+  whole hook time, so a slow shell, PC start or virus scan is named as such.
+- `wisply doctor ai` counted connector cost as the sum of every tool list change; it now takes what a session really
+  had loaded and reports the peak.
 - Claude notes in the newer format (`metadata:` with an indented `type:`) get their real kind in recall instead of
   the wrong one; `MEMORY.md` and `PROJECTS.md` are no longer indexed as notes.
 
