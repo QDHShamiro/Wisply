@@ -84,9 +84,9 @@ const SHIPPED: [Shipped; 6] = [
     Shipped {
         name: "list-chats",
         about: "read the Discord DM list and the WhatsApp chat list (read only) so contacts can be found",
-        guide: "app = all (default) | discord | whatsapp, max = most chats per app; one line per chat: app, name, dm link or chat|group",
+        guide: "app = all (default) | discord | whatsapp, max = most chats per app; one line per chat: app, name, dm link or chat|group; scan = show|add hands the rows to wisply contacts scan",
         tags: &["contacts", "kontakte", "scan", "dms", "chatliste", "chats"],
-        params: &["app", "max"],
+        params: &["app", "max", "scan"],
         code: include_str!("defaults/list-chats.js"),
         check: include_str!("defaults/list-chats.check.js"),
         before_ms: 90_000,

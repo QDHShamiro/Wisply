@@ -5,12 +5,16 @@ const cap = Number(args.max) > 0 ? Number(args.max) : 400;
 const SITE = {
   discord: {
     host: "discord.com",
+    tab: "discord.com/channels",
+    prefer: "discord.com/channels/@me",
     url: "https://discord.com/channels/@me",
     list: '[class*="privateChannels"] a[href^="/channels/@me/"], nav a[href^="/channels/@me/"]',
     steps: 40,
   },
   whatsapp: {
     host: "web.whatsapp.com",
+    tab: "web.whatsapp.com",
+    prefer: "(",
     url: "https://web.whatsapp.com/",
     ready: "#pane-side",
     list: "#pane-side span[title]",
@@ -116,33 +120,77 @@ function body(raw) {
     .join("\n");
 }
 
-async function tabOf(host) {
+async function tabsOf(site) {
   const tabs = await wisply(["tabs", "--all"]).nothrow();
-  const row = tabs.ok ? String(tabs.out).split("\n").find((l) => l.includes(` - ${host}`)) : undefined;
-  return row ? (row.match(/^\s*(t\d+)\s/) || [])[1] : undefined;
+  if (!tabs.ok) return [];
+  return String(tabs.out)
+    .split("\n")
+    .filter((l) => l.includes(` - ${site.tab}`))
+    .sort((a, b) => Number(b.includes(site.prefer)) - Number(a.includes(site.prefer)))
+    .map((l) => (l.match(/^\s*(t\d+)\s/) || [])[1])
+    .filter(Boolean);
 }
 
 const PAGE = [clean, until, scroller, sweep, dcRead, waRead, dcReady, dcOpen, dcList, waList].map(String).join("\n");
+const CHUNK = 8000;
+const SLICE = `const a = window.__wisplyChats || []; let n = AT, size = 0; const rows = [];
+while (n < a.length && (!rows.length || size + a[n].length < ${CHUNK})) { size += a[n].length + 4; rows.push(a[n]); n++; }
+if (n >= a.length) delete window.__wisplyChats;
+return { next: n, done: n >= a.length, rows };`;
+
+function answered(raw) {
+  return `the page answered: ${clean(raw).slice(0, 80)}`;
+}
+
+async function pull() {
+  const rows = [];
+  for (let at = 0; ; ) {
+    const raw = await wisply(["js", SLICE.replace("AT", String(at))]);
+    let part;
+    try {
+      part = JSON.parse(body(raw));
+    } catch {
+      return { rows, why: answered(raw) };
+    }
+    rows.push(...part.rows);
+    if (part.done || part.next <= at) return { rows };
+    at = part.next;
+  }
+}
+
+async function read(app, site) {
+  const fn = app === "discord" ? "dcList" : "waList";
+  const arg = JSON.stringify({ ...site, cap });
+  const raw = await wisply(["js", `${PAGE}\nreturn ${fn}(${arg}).then((r) => { window.__wisplyChats = r; return r.length; });`]);
+  const count = Number(body(raw).trim());
+  if (Number.isNaN(count)) return { rows: [], why: answered(raw) };
+  return count > 0 ? await pull() : { rows: [] };
+}
 
 async function chats(app) {
   const site = SITE[app];
   if (!site) return [`skip\t${app}\tunknown app`];
-  const tab = await tabOf(site.host);
-  if (tab) await wisply(["tab", tab]);
-  else await wisply(["open", site.url]);
-  const fn = app === "discord" ? "dcList" : "waList";
-  const raw = await wisply(["js", `${PAGE}\nreturn ${fn}(${JSON.stringify({ ...site, cap })});`]);
-  let rows;
-  try {
-    rows = JSON.parse(body(raw));
-  } catch {
-    return [`skip\t${app}\tthe page answered: ${clean(raw).slice(0, 80)}`];
+  const tabs = await tabsOf(site);
+  if (!tabs.length) {
+    await wisply(["open", site.url]);
+    tabs.push("");
   }
-  if (!rows.length) return [`skip\t${app}\tno chat list (logged out or still loading)`];
-  return rows;
+  let why = "";
+  for (let pass = 0; pass < 2; pass++) {
+    for (const tab of tabs) {
+      if (tab) await wisply(["tab", tab]);
+      const got = await read(app, site);
+      if (got.rows.length) return got.rows;
+      why = got.why || why;
+    }
+    await sleep(1500);
+  }
+  return [`skip\t${app}\t${why || "no chat list (logged out or still loading)"}`];
 }
 
 const out = [];
 for (const app of apps) out.push(...(await chats(app)));
 if (!out.some((l) => !l.startsWith("skip\t"))) throw new Error(`no chats read: ${out.map((l) => l.replace(/\t/g, " ")).join("; ")}`);
+const scan = String(args.scan || "").trim().toLowerCase();
+if (scan) return await wisply(["contacts", "scan", `--rows=${out.join("\n")}`, ...(scan === "add" ? ["--add"] : [])]);
 return out.join("\n");

@@ -4,9 +4,6 @@ use std::sync::LazyLock;
 use regex::Regex;
 use wisply_core::{Call, Fail};
 
-use super::super::Daemon;
-use super::super::ctx::Ctx;
-use super::act;
 use super::contacts::{self, Person};
 
 const ROUTINE: &str = "list-chats";
@@ -156,14 +153,18 @@ pub fn report(scan: &Scan, people: &[Person], add: Option<(usize, usize)>) -> St
     line
 }
 
-pub fn scan(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
+pub fn scan(home: &Path, c: &Call) -> Result<String, Fail> {
     if c.pos.len() > 1 {
         return Err(Fail::hint("contacts scan takes no names", USAGE));
     }
-    let raw = act::once(d, ctx, &["run".to_string(), ROUTINE.to_string(), "app=all".to_string()])?;
-    let found = parse(&raw);
-    let people = contacts::load(&d.home);
-    let add = c.on("add").then(|| apply(&d.home, &missing(&found.seen, &people)));
+    let Some(raw) = c.val("rows") else {
+        let mode = if c.on("add") { "add" } else { "show" };
+        let pairs = [("app".to_string(), "all".to_string()), ("scan".to_string(), mode.to_string())];
+        return Ok(wisply_proto::handoff_line(ROUTINE, &pairs, c.on("yes")));
+    };
+    let found = parse(raw);
+    let people = contacts::load(home);
+    let add = c.on("add").then(|| apply(home, &missing(&found.seen, &people)));
     Ok(report(&found, &people, add))
 }
 
@@ -286,6 +287,23 @@ skip\twhatsapp\tno chat list (logged out)\n";
         assert_eq!(maxi.dm, "https://discord.com/channels/@me/1001");
         assert_eq!(after.iter().find(|p| p.name == "Oma").map(|p| p.whatsapp.as_str()), Some("Oma"));
         assert!(missing(&scan.seen, &after).is_empty());
+        let _ = fs::remove_dir_all(&h);
+    }
+
+    #[test]
+    fn scan_hands_off_to_the_routine_and_reads_its_rows_back() {
+        let h = home("scan");
+        let ask = |argv: &[&str]| wisply_core::parse(&argv.iter().map(|a| (*a).to_string()).collect::<Vec<_>>());
+        let out = scan(&h, &ask(&["contacts", "scan", "--add"])).expect("handoff");
+        let (argv, _) = wisply_proto::handoff(&out).expect("a handoff");
+        assert_eq!(argv, ["codemode", "--routine", "list-chats", "--arg", "app=all", "--arg", "scan=add"]);
+        let shown = scan(&h, &ask(&["contacts", "scan", &format!("--rows={RAW}")])).expect("report");
+        assert!(shown.starts_with("found 7 · new 7: Maxi (discord)"), "{shown}");
+        assert!(contacts::load(&h).is_empty());
+        let saved = scan(&h, &ask(&["contacts", "scan", "--add", &format!("--rows={RAW}")])).expect("report");
+        assert!(saved.starts_with("found 7 · saved 7: "), "{saved}");
+        assert_eq!(contacts::load(&h).len(), 7);
+        assert!(scan(&h, &ask(&["contacts", "scan", "anna"])).is_err());
         let _ = fs::remove_dir_all(&h);
     }
 
