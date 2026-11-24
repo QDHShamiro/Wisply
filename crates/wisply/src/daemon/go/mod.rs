@@ -1,5 +1,11 @@
 mod act;
+#[cfg(windows)]
+mod assist;
 mod contacts;
+#[cfg(windows)]
+mod draw;
+mod hint;
+mod history;
 #[cfg(windows)]
 mod input;
 mod later;
@@ -7,7 +13,7 @@ mod parse;
 mod teach;
 mod words;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use wisply_core::{Call, Fail};
@@ -68,11 +74,36 @@ fn taught(d: &Daemon, ctx: &mut Ctx, said: &str, (dry, yes): (bool, bool), t0: I
     }))
 }
 
-fn plan(d: &Daemon, said: &str, t: f64) -> Result<Plan, Fail> {
-    let people = contacts::load(&d.home);
+fn parsed(home: &Path, said: &str, t: f64) -> Result<Option<Plan>, Fail> {
+    let people = contacts::load(home);
     let person = |w: &str| contacts::knows(&people, w);
-    let site = |w: &str| web::site(&d.home, w).is_some();
-    parse::parse(said, t, &Know { person: &person, site: &site })?.ok_or_else(|| teach::unknown(said))
+    let site = |w: &str| web::site(home, w).is_some();
+    parse::parse(said, t, &Know { person: &person, site: &site })
+}
+
+fn plan(home: &Path, said: &str, t: f64) -> Result<Plan, Fail> {
+    parsed(home, said, t)?.ok_or_else(|| teach::unknown(said))
+}
+
+fn dry(home: &Path, said: &str) -> Result<Option<String>, Fail> {
+    if let Some(hit) = teach::find(home, said) {
+        return Ok(Some(format!("would run routine {} {}", hit.name, hit.pairs.join(" ")).trim().to_string()));
+    }
+    let t = now();
+    let Some(plan) = parsed(home, said, t)? else { return Ok(None) };
+    let who = act::preview(home, &plan.act, false)?;
+    let shown = Plan { when: plan.when.filter(|at| *at > t), act: plan.act };
+    let tail = if who.is_empty() { String::new() } else { format!(" \u{b7} {who}") };
+    Ok(Some(format!("would do: {}{tail}", describe(&shown, t))))
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn preview(home: &Path, said: &str) -> String {
+    let said = said.trim();
+    if said.is_empty() {
+        return String::new();
+    }
+    hint::line(dry(home, said).map_err(|f| f.text()))
 }
 
 fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
@@ -82,7 +113,7 @@ fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
         return done;
     }
     let t = now();
-    let plan = plan(d, said, t)?;
+    let plan = plan(&d.home, said, t)?;
     let later_at = plan.when.filter(|at| !c.on("now") && *at > t);
     if dry {
         let who = act::preview(&d.home, &plan.act, yes)?;
