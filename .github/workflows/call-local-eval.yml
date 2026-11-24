@@ -24,10 +24,10 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --no-self-update
           rustup default stable
-      - name: Speech for the whisper probe
+      - name: System libraries and speech for the whisper probe
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends espeak-ng
+          sudo apt-get install -y -qq --no-install-recommends libxkbcommon-dev libwebkit2gtk-4.1-dev libgtk-3-dev espeak-ng
       - name: Models and programs
         id: models
         uses: actions/cache@v4
