@@ -81,11 +81,11 @@ pub fn cancel(home: &Path, id: u64) -> Result<String, Fail> {
     let _g = guard();
     let mut jobs = load(home);
     let Some(pos) = jobs.iter().position(|j| j.id == id) else {
-        return Err(Fail::hint(format!("nothing planned with #{id}"), "wisply go --list"));
+        return Err(Fail::hint(format!("no #{id} planned"), "wisply go --list"));
     };
     let gone = jobs.remove(pos);
     save(home, &jobs)?;
-    Ok(format!("cancelled #{id} ({})", gone.what))
+    Ok(format!("cancelled #{id}: {}", gone.what))
 }
 
 pub fn take_due(home: &Path, t: f64) -> Vec<Job> {
@@ -159,7 +159,7 @@ mod tests {
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&home).expect("home");
         let t = now();
-        let a = add(&home, t + 600.0, "schreib Franz hi", "message to Franz").expect("a");
+        let a = add(&home, t + 600.0, "schreib Anna hi", "message to Anna").expect("a");
         let b = add(&home, t - 1.0, "lauter", "media key volumeup").expect("b");
         assert_eq!((a, b), (1, 2));
         assert!(list(&home).starts_with("#2 "));
@@ -168,7 +168,7 @@ mod tests {
         assert_eq!(due[0].say, "lauter");
         assert_eq!(load(&home).len(), 1);
         assert!(cancel(&home, 9).is_err());
-        assert!(cancel(&home, 1).is_ok_and(|s| s.contains("message to Franz")));
+        assert!(cancel(&home, 1).is_ok_and(|s| s.contains("message to Anna")));
         assert_eq!(list(&home), "nothing planned");
         let _ = fs::remove_dir_all(&home);
     }

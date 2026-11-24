@@ -455,9 +455,9 @@ pub fn run(x: &mut Desk, c: &Call, aim: Option<&str>, may_wait: bool) -> Res<Out
 mod tests {
     #[test]
     fn exact_chat_names_match_one_title_part() {
-        let parts = super::segments("(3) Discord | @Lukas_90 | Friends");
-        assert_eq!(parts, ["discord", "lukas_90", "friends"]);
+        let parts = super::segments("(3) Discord | @Ben_90 | Friends");
+        assert_eq!(parts, ["discord", "ben_90", "friends"]);
         assert!(super::segments("#general - Server – Discord").contains(&"general".to_string()));
-        assert!(!super::segments("Lukas Fan Club - Discord").contains(&"lukas".to_string()));
+        assert!(!super::segments("Ben Fan Club - Discord").contains(&"ben".to_string()));
     }
 }

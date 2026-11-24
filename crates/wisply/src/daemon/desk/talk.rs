@@ -316,9 +316,9 @@ mod tests {
     #[test]
     fn unread_lists_dms_mentions_and_channels() {
         let names: Vec<String> = [
-            "Franz, 2 ungelesene Nachrichten",
-            "Lukas 5 unread messages, voice call active",
-            "Franz, 2 ungelesene Nachrichten",
+            "Anna, 2 ungelesene Nachrichten",
+            "Ben 5 unread messages, voice call active",
+            "Anna, 2 ungelesene Nachrichten",
             "3 Erwähnungen, Server X",
             "1 mention, Guild",
             "Ungelesene Nachrichten, allgemein",
@@ -328,13 +328,13 @@ mod tests {
         .map(|s| (*s).to_string())
         .collect();
         let (dms, at, others) = unread_of(&names);
-        assert_eq!(dms, vec![(5, "Lukas".into()), (2, "Franz".into())]);
+        assert_eq!(dms, vec![(5, "Ben".into()), (2, "Anna".into())]);
         assert_eq!(at, vec![(3, "Server X".into()), (1, "Guild".into())]);
         assert_eq!(others, vec!["allgemein".to_string()]);
         let text = unread_text("unread [w1] Discord", &names);
         assert_eq!(
             text,
-            "unread [w1] Discord\nDM Lukas: 5 new\nDM Franz: 2 new\n@ Server X: 3 mentions\n@ Guild: 1 mention\nunread: allgemein"
+            "unread [w1] Discord\nDM Ben: 5 new\nDM Anna: 2 new\n@ Server X: 3 mentions\n@ Guild: 1 mention\nunread: allgemein"
         );
         assert_eq!(unread_text("h", &[]), "h\nnothing unread");
     }

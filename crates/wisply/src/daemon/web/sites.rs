@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::{Map, Value, json};
 
+use super::super::go::cache::{self, Mark, Slot};
 use super::re;
 
 const SEED: &[(&str, &str)] = &[
@@ -31,6 +32,7 @@ const NAMES: &[(&str, &str)] = &[
     ("spigot", "spigotmc.org"),
 ];
 
+static KNOWN: Slot<Mark, Vec<String>> = Slot::new();
 static HOST: LazyLock<Regex> = LazyLock::new(|| re(r"(?i)^(?:[a-z][a-z0-9+.-]*://)?(?:www\.|m\.)?([^/:?#]+)"));
 static NOISE: LazyLock<Regex> = LazyLock::new(|| re(r"^(?:utm_|ref|fbclid|gclid|sp$|si$)"));
 
@@ -49,19 +51,25 @@ fn seed(host: &str) -> Option<&'static str> {
     SEED.iter().find(|(h, _)| *h == host).map(|(_, tpl)| *tpl)
 }
 
+fn hosts(home: &Path) -> Vec<String> {
+    let mut known: Vec<String> = SEED.iter().map(|(h, _)| (*h).to_string()).collect();
+    known.extend(load(home).keys().cloned());
+    known.sort();
+    known.dedup();
+    known
+}
+
 pub fn named(home: &Path, word: &str) -> Option<String> {
     let w = word.trim().to_lowercase();
     if let Some((_, host)) = NAMES.iter().find(|(name, _)| *name == w) {
         return Some((*host).to_string());
     }
-    let mut known: Vec<String> = SEED.iter().map(|(h, _)| (*h).to_string()).collect();
-    known.extend(load(home).keys().cloned());
-    known.sort();
-    known.dedup();
-    if known.contains(&w) {
+    let known = KNOWN.get(home, cache::mark(&home.join("sites.json")), || hosts(home));
+    if known.binary_search(&w).is_ok() {
         return Some(w);
     }
-    known.into_iter().find(|h| h.split('.').next() == Some(w.as_str()) || *h == format!("{w}.com"))
+    let com = format!("{w}.com");
+    known.iter().find(|h| h.split('.').next() == Some(w.as_str()) || **h == com).cloned()
 }
 
 pub fn template(home: &Path, host: &str) -> Option<String> {
