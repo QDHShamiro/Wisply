@@ -100,7 +100,7 @@ fn is_known(people: &[Person], s: &Seen) -> bool {
     let low = s.name.to_lowercase();
     people.iter().any(|p| {
         [&p.name, &p.discord, &p.whatsapp].iter().any(|w| !w.is_empty() && w.to_lowercase() == low)
-            || p.alias.iter().any(|a| *a == low)
+            || p.alias.contains(&low)
     })
 }
 
