@@ -62,6 +62,7 @@ const LOCAL: &[&str] = &[
     "review",
     "analyze",
     "pupil",
+    "call",
     "codemode",
 ];
 
