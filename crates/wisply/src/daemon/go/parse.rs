@@ -1,41 +1,14 @@
-use std::sync::LazyLock;
-
-use regex::Regex;
 use wisply_core::{Fail, local_parts};
 
 use super::words::{self as w, is};
 
-static CLOCK: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(\d{1,2})(?:[:.](\d{2}))?(am|pm|uhr|h)?$").expect("clock"));
-static SPAN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\d{1,4})([a-zäöü]+)$").expect("span"));
-static NUM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{1,4}$").expect("num"));
-const NUM_WORDS: &[(&str, u64)] = &[
-    ("ein", 1),
-    ("eine", 1),
-    ("einer", 1),
-    ("einem", 1),
-    ("an", 1),
-    ("a", 1),
-    ("one", 1),
-    ("zwei", 2),
-    ("two", 2),
-    ("drei", 3),
-    ("three", 3),
-    ("fünf", 5),
-    ("fuenf", 5),
-    ("five", 5),
-    ("zehn", 10),
-    ("ten", 10),
-    ("fünfzehn", 15),
-    ("fifteen", 15),
-    ("zwanzig", 20),
-    ("twenty", 20),
-    ("dreißig", 30),
-    ("dreissig", 30),
-    ("thirty", 30),
-];
-const DAY: f64 = 86_400.0;
+mod when;
+
+use when::{inner_time, tail_time, time_at};
+
 const VOLUME_STEPS: u32 = 5;
+const FUZZY_MIN: usize = 5;
+const LOOK_AFTER: &str = "up";
 const PUNCT: &[char] = &[',', '.', '!', '?', ';', ':'];
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,102 +64,6 @@ fn skip(t: &[Tok], mut i: usize, list: &[&str]) -> usize {
     i
 }
 
-fn num_of(low: &str) -> Option<u64> {
-    if NUM.is_match(low) {
-        return low.parse().ok();
-    }
-    NUM_WORDS.iter().find(|(word, _)| *word == low).map(|(_, n)| *n)
-}
-
-fn unit_of(low: &str) -> Option<u64> {
-    w::UNITS.iter().find(|(names, _)| names.contains(&low)).map(|(_, s)| *s)
-}
-
-fn day_start(now: f64) -> f64 {
-    let [_, _, _, h, mi, s] = local_parts(now);
-    now.floor() - f64::from(h * 3600 + mi * 60 + s)
-}
-
-fn at_clock(now: f64, h: u32, mi: u32, tomorrow: bool) -> f64 {
-    let base = day_start(now) + if tomorrow { DAY } else { 0.0 };
-    let mut t = base + f64::from(h * 3600 + mi * 60);
-    let got = local_parts(t)[3];
-    if got != h {
-        t += f64::from((h as i32 - got as i32) * 3600);
-    }
-    if !tomorrow && t <= now {
-        return at_clock(now, h, mi, true);
-    }
-    t
-}
-
-fn suffix_at(t: &[Tok], i: usize) -> bool {
-    t.get(i).is_some_and(|x| is(w::HOUR_WORD, &x.low) || is(w::PM, &x.low) || is(w::AM, &x.low))
-}
-
-fn clock(t: &[Tok], i: usize) -> Option<(usize, u32, u32, bool)> {
-    let m = CLOCK.captures(&t.get(i)?.low)?;
-    let mut h: u32 = m[1].parse().ok()?;
-    let mi: u32 = m.get(2).map_or(Some(0), |x| x.as_str().parse().ok())?;
-    let mut used = 1;
-    let mut suffix = m.get(3).map(|x| x.as_str().to_string());
-    while used < 3 && suffix_at(t, i + used) {
-        let next = t[i + used].low.clone();
-        if suffix.is_none() || is(w::PM, &next) || is(w::AM, &next) {
-            suffix = Some(next);
-        }
-        used += 1;
-    }
-    match suffix.as_deref() {
-        Some(s) if is(w::PM, s) && h < 12 => h += 12,
-        Some(s) if is(w::AM, s) && h == 12 => h = 0,
-        _ => {}
-    }
-    let worded = suffix.is_some() || m.get(2).is_some();
-    (h < 24 && mi < 60).then_some((used, h, mi, worded))
-}
-
-fn span(t: &[Tok], i: usize, now: f64) -> Option<(usize, f64)> {
-    let next = &t.get(i + 1)?.low;
-    if let Some(m) = SPAN.captures(next)
-        && let (Ok(n), Some(u)) = (m[1].parse::<u64>(), unit_of(&m[2]))
-    {
-        return Some((2, now + (n * u) as f64));
-    }
-    let n = num_of(next)?;
-    let u = unit_of(&t.get(i + 2)?.low)?;
-    Some((3, now + (n * u) as f64))
-}
-
-fn time_at(t: &[Tok], i: usize, now: f64, strict: bool) -> Option<(usize, f64)> {
-    let first = &t.get(i)?.low;
-    if is(w::IN, first) {
-        return span(t, i, now);
-    }
-    let tomorrow = is(w::TOMORROW, first);
-    let mut j = i + usize::from(tomorrow);
-    let lead = t.get(j).is_some_and(|x| is(w::AT, &x.low));
-    j += usize::from(lead);
-    let (used, h, mi, worded) = clock(t, j)?;
-    let loose = if strict { !worded } else { !worded && !lead };
-    if loose {
-        return None;
-    }
-    Some((j + used - i, at_clock(now, h, mi, tomorrow)))
-}
-
-fn tail_time(t: &mut Vec<Tok>, from: usize, now: f64) -> Option<f64> {
-    for start in from..t.len() {
-        if let Some((n, at)) = time_at(t, start, now, false)
-            && start + n == t.len()
-        {
-            t.truncate(start);
-            return Some(at);
-        }
-    }
-    None
-}
-
 fn bare(raw: &str) -> String {
     raw.trim_end_matches(PUNCT).trim_start_matches('@').to_string()
 }
@@ -223,13 +100,24 @@ fn chat_app(t: &[Tok], i: usize) -> Option<(&'static str, usize)> {
     (lead || t.get(at).is_some_and(|x| x.cut)).then_some((app, at + 1 - i))
 }
 
-fn msg(t: &[Tok], now: f64, k: &Know) -> Result<Plan, Fail> {
-    let mut i = skip(t, 1, w::FILLER);
+fn skip_all(t: &[Tok], mut i: usize, lists: &[&[&str]]) -> usize {
+    while i < t.len() && (t[i].low.is_empty() || lists.iter().any(|l| is(l, &t[i].low))) {
+        i += 1;
+    }
+    i
+}
+
+fn msg(t: &[Tok], now: f64, k: &Know) -> Result<Option<Plan>, Fail> {
+    let reply = is(w::REPLY, &t[0].low);
+    let mut i = skip(t, 1, w::LEAN);
     let mut app = chat_app(t, i).map(|(a, n)| {
         i += n;
         a.to_string()
     });
     i = skip(t, i, w::ARTICLES);
+    if t.get(i).is_some_and(|x| is(w::ME, &x.low)) {
+        return Ok(None);
+    }
     let (who, at) = names(t, i, k);
     if who.is_empty() {
         return Err(Fail::hint("who should get it?", "wisply go \"schreib Franz ich komm später\""));
@@ -240,32 +128,38 @@ fn msg(t: &[Tok], now: f64, k: &Know) -> Result<Plan, Fail> {
         i += n;
     }
     let mut when = None;
-    if let Some((n, at)) = time_at(t, i, now, false)
+    if let Some((n, at)) = time_at(t, i, now, true)
         && (t[i + n - 1].cut || t.get(i + n).is_some_and(|x| is(w::TEXT_LEAD, &x.low)))
     {
         when = Some(at);
         i += n;
     }
-    while i + 1 < t.len() && is(w::MSG_NOISE, &t[i].low) {
+    while i + 1 < t.len() && (is(w::MSG_NOISE, &t[i].low) || (reply && is(w::WITH, &t[i].low))) {
         i += 1;
+    }
+    if app.is_none()
+        && let Some((a, n)) = chat_app(t, i)
+        && i + n < t.len()
+    {
+        app = Some(a.to_string());
+        i += n;
     }
     i = skip(t, i, w::TEXT_LEAD);
     let text = join(&t[i..]);
     if text.trim().is_empty() {
         return Err(Fail::hint(format!("what should {} get?", who.join(" + ")), "add the text after the name"));
     }
-    Ok(Plan { act: Act::Msg { who, app, text }, when })
+    Ok(Some(Plan { act: Act::Msg { who, app, text }, when }))
 }
 
 fn remind(t: &mut Vec<Tok>, now: f64, lead: Option<f64>) -> Result<Plan, Fail> {
-    let mut i = skip(t, 1, w::FILLER);
-    i = skip(t, i, w::ME);
+    let mut i = skip_all(t, 1, &[w::LEAN, w::ME]);
     let mut when = None;
-    if let Some((n, at)) = time_at(t, i, now, false) {
+    if let Some((n, at)) = time_at(t, i, now, true) {
         when = Some(at);
         i += n;
     }
-    let when = lead.or(when).or_else(|| tail_time(t, i, now));
+    let when = lead.or(when).or_else(|| tail_time(t, i, now, true));
     let Some(when) = when else {
         return Err(Fail::hint("when should I remind you?", "wisply go \"erinner mich in 10 min an Pizza\""));
     };
@@ -276,15 +170,25 @@ fn remind(t: &mut Vec<Tok>, now: f64, lead: Option<f64>) -> Result<Plan, Fail> {
 }
 
 fn media(t: &[Tok]) -> Option<Act> {
+    let noun = t.iter().any(|x| is(w::MUSIC_NOUNS, &x.low));
     let rest: Vec<&str> = t
         .iter()
         .map(|x| x.low.as_str())
-        .filter(|l| !l.is_empty() && !is(w::FILLER, l) && !is(w::MUSIC_WORDS, l) && !is(w::PLAY_NOISE, l))
+        .filter(|l| {
+            !l.is_empty()
+                && !is(w::FILLER, l)
+                && !is(w::MUSIC_WORDS, l)
+                && !is(w::PLAY_NOISE, l)
+                && !is(w::MEDIA_NOISE, l)
+        })
         .collect();
     if rest.is_empty() || rest.len() > 2 {
         return None;
     }
-    let key = w::media_of(&rest.join(" "))?;
+    let phrase = rest.join(" ");
+    let key = w::media_of(&phrase)
+        .or_else(|| if rest.len() == 2 && is(w::MEDIA_NOUN, rest[0]) { w::media_of(rest[1]) } else { None })
+        .or_else(|| if noun { w::noun_media_of(&phrase) } else { None })?;
     let times = if key.starts_with("volume") { VOLUME_STEPS } else { 1 };
     Some(Act::Media { key, times })
 }
@@ -301,7 +205,7 @@ fn play(t: &[Tok]) -> Act {
             end -= 1;
         }
     }
-    let i = skip(t, 1, w::FILLER).min(end);
+    let i = skip_all(t, 1, &[w::LEAN, w::ME, w::SOME]).min(end);
     let rest = &t[i..end];
     if rest.iter().all(|x| x.low.is_empty() || is(w::MUSIC_WORDS, &x.low)) {
         return Act::Media { key: "playpause", times: 1 };
@@ -317,7 +221,7 @@ fn site_after(t: &[Tok], i: usize, k: &Know) -> Option<(String, usize)> {
 }
 
 fn search(t: &[Tok], head: &str, k: &Know) -> Option<Act> {
-    let mut i = skip(t, 1, w::FILLER);
+    let mut i = skip(t, 1, w::LEAN);
     let mut site = (!is(w::SEARCH, head) && (k.site)(head)).then(|| head.to_string());
     if site.is_none()
         && let Some((s, next)) = site_after(t, i, k)
@@ -336,11 +240,11 @@ fn search(t: &[Tok], head: &str, k: &Know) -> Option<Act> {
 }
 
 fn shot(t: &[Tok]) -> Option<Act> {
-    let i = skip(t, 0, w::SHOT_LEAD);
+    let i = skip_all(t, 0, &[w::SHOT_LEAD, w::LEAN]);
     if !t.get(i).is_some_and(|x| is(w::SHOT, &x.low)) {
         return None;
     }
-    let j = skip(t, i + 1, w::OF);
+    let j = skip_all(t, i + 1, &[w::OF, w::LEAN]);
     let of = t.get(j..).map(join).filter(|s| !s.trim().is_empty());
     Some(Act::Shot { of })
 }
@@ -353,10 +257,31 @@ fn recall(t: &[Tok]) -> Option<Act> {
     })
 }
 
-fn open(t: &[Tok]) -> Option<Act> {
-    let i = skip(t, 1, w::OPEN_NOISE);
-    let what = join(&t[i..]).trim_end_matches(PUNCT).to_string();
+fn open_what(t: &[Tok]) -> Option<Act> {
+    let what = join(t).trim_end_matches(PUNCT).to_string();
     (!what.is_empty()).then_some(Act::Open { what })
+}
+
+fn open(t: &[Tok]) -> Option<Act> {
+    open_what(&t[skip(t, 1, w::OPEN_NOISE)..])
+}
+
+fn go_to(t: &[Tok]) -> Option<Act> {
+    let i = skip(t, 1, w::GO_LEAD);
+    if i == 1 { None } else { open_what(&t[skip(t, i, w::OPEN_NOISE)..]) }
+}
+
+fn open_up(t: &[Tok]) -> Option<Act> {
+    let last = t.last()?;
+    if t.len() < 3 || !is(w::OPEN_TAIL, &last.low) {
+        return None;
+    }
+    open_what(&t[skip(t, 1, w::OPEN_NOISE)..t.len() - 1])
+}
+
+fn domain(word: &str) -> bool {
+    word.rsplit_once('.')
+        .is_some_and(|(name, tld)| !name.is_empty() && tld.len() >= 2 && tld.chars().all(char::is_alphabetic))
 }
 
 fn remember(t: &[Tok]) -> Result<Act, Fail> {
@@ -366,6 +291,10 @@ fn remember(t: &[Tok]) -> Result<Act, Fail> {
         return Err(Fail::hint("what should I remember?", "wisply go \"merk dir Franz mag Pizza\""));
     }
     Ok(Act::Remember { text })
+}
+
+fn looks_up(t: &[Tok], head: &str) -> bool {
+    is(w::SEARCH_UP, head) && t.get(1).is_some_and(|x| x.low == LOOK_AFTER)
 }
 
 fn simple(t: &[Tok], head: &str, k: &Know) -> Result<Option<Act>, Fail> {
@@ -381,10 +310,18 @@ fn simple(t: &[Tok], head: &str, k: &Know) -> Result<Option<Act>, Fail> {
     if is(w::OPEN, head) {
         return Ok(open(t));
     }
-    if t.len() == 1 && (k.site)(head) {
+    if is(w::GO, head) {
+        return Ok(go_to(t));
+    }
+    if is(w::MACH, head)
+        && let Some(act) = open_up(t)
+    {
+        return Ok(Some(act));
+    }
+    if t.len() == 1 && ((k.site)(head) || domain(head)) {
         return Ok(Some(Act::Open { what: head.to_string() }));
     }
-    if is(w::SEARCH, head) || (k.site)(head) {
+    if is(w::SEARCH, head) || looks_up(t, head) || (k.site)(head) {
         return Ok(search(t, head, k));
     }
     if is(w::REMEMBER, head) {
@@ -393,23 +330,82 @@ fn simple(t: &[Tok], head: &str, k: &Know) -> Result<Option<Act>, Fail> {
     Ok(None)
 }
 
+fn strip(t: &mut Vec<Tok>) -> bool {
+    let mut polite = false;
+    loop {
+        let i = skip(t, 0, w::FILLER);
+        let n = w::POLITE
+            .iter()
+            .find(|p| p.iter().enumerate().all(|(j, word)| t.get(i + j).is_some_and(|x| w::same(word, &x.low))))
+            .map_or(0, |p| p.len());
+        if i + n == 0 {
+            return polite;
+        }
+        t.drain(..i + n);
+        polite |= n > 0;
+    }
+}
+
+fn reshape(t: &mut [Tok], polite: bool) {
+    let Some(head) = t.first().map(|x| x.low.clone()) else { return };
+    if polite && !is(w::MSG, &head) {
+        let verb = (1..t.len().min(4)).find(|&p| is(w::MSG_INF, &t[p].low));
+        if let Some(p) = verb {
+            t[..=p].rotate_right(1);
+            t[0] = Tok { raw: t[0].raw.clone(), low: t[0].low.clone(), cut: false };
+        }
+    }
+}
+
+fn let_know(t: &mut Vec<Tok>) {
+    let Some(head) = t.first() else { return };
+    if !is(w::LET, &head.low) {
+        return;
+    }
+    if let Some(p) = (2..t.len().min(5)).find(|&p| is(w::LET_TRAIL, &t[p].low)) {
+        t.remove(p);
+        t[0] = Tok { raw: w::SAY.to_string(), low: w::SAY.to_string(), cut: false };
+    }
+}
+
+fn bare_lead(t: &[Tok], now: f64) -> Option<(usize, f64)> {
+    let (n, at) = time_at(t, 0, now, true)?;
+    let next = &t.get(n)?.low;
+    (is(w::REMIND, next) || is(w::MSG, next)).then_some((n, at))
+}
+
 fn prepare(sentence: &str, now: f64) -> (Vec<Tok>, Option<f64>) {
     let mut t = toks(sentence);
-    let start = skip(&t, 0, w::FILLER);
-    t.drain(..start);
+    let mut polite = strip(&mut t);
     let mut lead = None;
-    if let Some((n, at)) = time_at(&t, 0, now, false) {
+    if let Some((n, at)) = time_at(&t, 0, now, false).or_else(|| bare_lead(&t, now)) {
         lead = Some(at);
         t.drain(..n);
-        let again = skip(&t, 0, w::FILLER);
-        t.drain(..again);
+        polite |= strip(&mut t);
     }
+    reshape(&mut t, polite);
+    let_know(&mut t);
     (t, lead)
+}
+
+fn known(head: &str, k: &Know) -> bool {
+    let lists = [w::MSG, w::PLAY, w::OPEN, w::SEARCH, w::REMIND, w::SHOT, w::REMEMBER, w::GO, w::MACH, w::LET];
+    lists.iter().any(|l| is(l, head)) || (k.site)(head)
+}
+
+fn fix_head(t: &mut [Tok], k: &Know) {
+    let Some(first) = t.first_mut() else { return };
+    if first.low.chars().count() < FUZZY_MIN || known(&first.low, k) {
+        return;
+    }
+    if let Some(canon) = w::FUZZY_HEADS.iter().find(|c| w::near(&first.low, c)) {
+        first.low = (*canon).to_string();
+    }
 }
 
 fn own_time(t: &mut Vec<Tok>, head: &str, now: f64, lead: Option<f64>, k: &Know) -> Result<Option<Plan>, Fail> {
     if is(w::MSG, head) {
-        return msg(t, now, k).map(Some);
+        return msg(t, now, k);
     }
     if is(w::REMIND, head) {
         return remind(t, now, lead).map(Some);
@@ -419,6 +415,7 @@ fn own_time(t: &mut Vec<Tok>, head: &str, now: f64, lead: Option<f64>, k: &Know)
 
 pub fn parse(sentence: &str, now: f64, k: &Know) -> Result<Option<Plan>, Fail> {
     let (mut t, lead) = prepare(sentence, now);
+    fix_head(&mut t, k);
     let Some(head) = t.first().map(|x| x.low.clone()) else { return Ok(None) };
     if let Some(act) = recall(&t) {
         return Ok(Some(Plan { act, when: lead }));
@@ -427,8 +424,17 @@ pub fn parse(sentence: &str, now: f64, k: &Know) -> Result<Option<Plan>, Fail> {
         plan.when = lead.or(plan.when);
         return Ok(Some(plan));
     }
+    if is(w::MSG, &head) || is(w::REMIND, &head) {
+        return Ok(None);
+    }
     let keeps_time = is(w::REMEMBER, &head);
-    let when = lead.or_else(|| if keeps_time { None } else { tail_time(&mut t, 1, now) });
+    let mut when = lead;
+    if when.is_none() && !keeps_time {
+        when = tail_time(&mut t, 1, now, false);
+    }
+    if when.is_none() && !keeps_time && !is(w::SEARCH, &head) && !(k.site)(&head) {
+        when = inner_time(&mut t, now);
+    }
     Ok(simple(&t, &head, k)?.map(|act| Plan { act, when }))
 }
 
@@ -469,3 +475,7 @@ pub fn describe(plan: &Plan, now: f64) -> String {
 #[cfg(test)]
 #[path = "parse_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "corpus_tests.rs"]
+mod corpus;

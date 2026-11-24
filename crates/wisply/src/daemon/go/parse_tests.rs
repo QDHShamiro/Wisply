@@ -1,7 +1,7 @@
 use super::*;
 
 const NOW: f64 = 1_795_000_000.0;
-const PEOPLE: &[&str] = &["franz", "lukas", "mama", "papa", "luis", "froxotron", "max mustermann"];
+const PEOPLE: &[&str] = &["franz", "lukas", "mama", "papa", "luis", "pixelfox", "max mustermann"];
 const SITES: &[&str] = &["youtube", "google", "amazon", "github", "reddit", "wikipedia", "twitch"];
 
 fn person(w: &str) -> bool {
@@ -56,11 +56,11 @@ fn messages_now() {
         ("bitte schreib mal Papa gute Nacht", m(&["Papa"], None, "gute Nacht")),
         ("frag Luis ob er heute kann", m(&["Luis"], None, "ob er heute kann")),
         ("schreib Franz auf geht's", m(&["Franz"], None, "auf geht's")),
-        ("schreib @Froxotron gg", m(&["Froxotron"], None, "gg")),
+        ("schreib @Pixelfox gg", m(&["Pixelfox"], None, "gg")),
         ("tell Lukas I'm on my way", m(&["Lukas"], None, "I'm on my way")),
         ("text mom and dad: dinner's ready", m(&["mom", "dad"], None, "dinner's ready")),
         ("message Franz on discord hey", m(&["Franz"], Some("discord"), "hey")),
-        ("dm froxotron gg", m(&["froxotron"], None, "gg")),
+        ("dm pixelfox gg", m(&["pixelfox"], None, "gg")),
         ("send Luis via dc the link", m(&["Luis"], Some("discord"), "the link")),
     ];
     for (s, want) in cases {

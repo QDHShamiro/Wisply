@@ -5,9 +5,12 @@ use std::sync::Mutex;
 use serde_json::{Value, json};
 use wisply_core::{Call, Fail};
 
+use super::words::{fold, near};
+
 pub const APPS: &[&str] = &["discord", "whatsapp"];
 const FILE: &str = "contacts.json";
 const PREFIX_MIN: usize = 3;
+const FUZZY_MIN: usize = 4;
 const USAGE: &str =
     "wisply contact add Franz discord=Froxotron alias=franzi | wisply contact rm Franz | wisply contacts";
 
@@ -100,24 +103,43 @@ fn save(home: &Path, people: &[Person]) -> Result<(), Fail> {
     wisply_core::save(file(home), text).map_err(|e| Fail::new(format!("could not save contacts ({e})")))
 }
 
+fn folded(p: &Person) -> Vec<String> {
+    p.words().iter().map(|w| fold(w)).collect()
+}
+
+fn hits(people: &[Person], hit: impl Fn(&str) -> bool) -> Vec<Person> {
+    people.iter().filter(|p| folded(p).iter().any(|w| hit(w))).cloned().collect()
+}
+
+fn fuzzy(people: &[Person], word: &str) -> Vec<Person> {
+    if word.chars().count() < FUZZY_MIN { Vec::new() } else { hits(people, |w| near(w, word)) }
+}
+
 pub fn knows(people: &[Person], word: &str) -> bool {
-    let word = word.to_lowercase();
-    people.iter().any(|p| p.words().contains(&word))
+    let word = fold(word);
+    !hits(people, |w| w == word).is_empty() || fuzzy(people, &word).len() == 1
 }
 
 pub fn find(people: &[Person], word: &str) -> Found {
-    let word = word.to_lowercase();
-    let exact: Vec<Person> = people.iter().filter(|p| p.words().contains(&word)).cloned().collect();
+    let word = fold(word);
+    let exact = hits(people, |w| w == word);
     match exact.len() {
         1 => return Found::One(exact[0].clone()),
         0 => {}
         _ => return Found::Maybe(exact),
     }
-    if word.chars().count() < PREFIX_MIN {
-        return Found::Nobody;
+    if word.chars().count() >= PREFIX_MIN {
+        let prefix = hits(people, |w| w.starts_with(&word));
+        if !prefix.is_empty() {
+            return Found::Maybe(prefix);
+        }
     }
-    let near: Vec<Person> = people.iter().filter(|p| p.words().iter().any(|w| w.starts_with(&word))).cloned().collect();
-    if near.is_empty() { Found::Nobody } else { Found::Maybe(near) }
+    let mut close = fuzzy(people, &word);
+    match close.len() {
+        0 => Found::Nobody,
+        1 => Found::One(close.remove(0)),
+        _ => Found::Maybe(close),
+    }
 }
 
 fn title(word: &str) -> String {
@@ -315,5 +337,23 @@ mod tests {
         command(&h, &call("contact", &["add", "Luis", "alias=lu"])).expect("b");
         assert!(matches!(find(&load(&h), "lu"), Found::Maybe(v) if v.len() == 2));
         let _ = fs::remove_dir_all(&h);
+    }
+
+    #[test]
+    fn typos_case_and_umlauts_find_exactly_one() {
+        let named = |n: &str| Person { name: n.to_string(), ..Person::default() };
+        let people: Vec<Person> =
+            ["Franz", "Jürgen", "Lukas", "Mario", "Marie", "Ben"].into_iter().map(named).collect();
+        for typo in ["frans", "FRANZ", "franzz", "fanz", "frnaz"] {
+            assert!(matches!(find(&people, typo), Found::One(p) if p.name == "Franz"), "{typo}");
+        }
+        for typo in ["juergen", "JUERGEN", "jürgen", "juergn", "jurgen"] {
+            assert!(matches!(find(&people, typo), Found::One(p) if p.name == "Jürgen"), "{typo}");
+        }
+        assert!(matches!(find(&people, "lukaz"), Found::One(p) if p.name == "Lukas"));
+        assert!(matches!(find(&people, "marik"), Found::Maybe(v) if v.len() == 2));
+        assert!(matches!(find(&people, "bem"), Found::Nobody));
+        assert!(matches!(find(&people, "xyzzy"), Found::Nobody));
+        assert!(knows(&people, "frnaz") && knows(&people, "Juergen") && !knows(&people, "marik"));
     }
 }
