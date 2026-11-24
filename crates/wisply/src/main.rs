@@ -10,6 +10,7 @@ mod kit;
 #[cfg(windows)]
 mod launch;
 mod lint;
+mod local;
 mod mcp;
 mod more;
 mod peek;

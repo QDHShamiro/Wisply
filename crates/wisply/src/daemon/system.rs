@@ -6,7 +6,12 @@ use wisply_core::{Call, Fail, Flag, OUT_CHARS, ago, built_later, listing, parse,
 use super::ctx::Ctx;
 use super::{Daemon, Out, VERSION, config, media, route, web};
 
-const HELP: &str = "wisply 3.6 <command> [args]   browser, desktop apps, video and memory for AI agents
+const HELP: &str = concat!(
+    "wisply ",
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    " <command> [args]   browser, desktop apps, video and memory for AI agents
 refs: e12 web element | t77 tab | w3 window | d5 app element
 
 web     open <url> [-n] [-f \"a|b\"] [--text]   snap [-f \"a|b\"] [-s css|ref] [--all] [--full] [--diff] [--links]   text [-f txt] [--links]
@@ -42,6 +47,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
         progress [<percent> | <done>/<total>] [\"what you are doing\"] | progress show [--color] [--ascii] | progress clear (how far the task is, shown in the status line; plan tools are noted by themselves)
         call ask \"<question>\" [--choices ja,nein] [--wait 300] (rings the user free via ntfy, blocks until the answer, prints it) | call notice \"<text>\" | call away on|off | call briefing | call setup | call hook-config (a free way for any AI to call the user, help: call help)
+        local [status] | local get [--only llm|asr] | local stop | local rm [--yes] (small models on this PC: call understands free answers, voice listens without the cloud; about 750 MB, runs only while needed)
         kit | kit add <name> \"what it does\" [--file script | --rust file.rs|cargo-folder] [--replace] -- <program> [args with {1} {all} {file} {exe}] | kit run <name> [args] | kit show|rm <name> (tools of your own, kept for this user: every session and every AI runs them)
         skill | skill find <words> [--web] | skill new <name> \"what it does, use when ...\" --file text.md | skill add <folder> | skill get <owner/repo/path> | skill check <folder or name> | skill rm <name> (finds, builds, checks and installs skills for every AI on this PC)
         secure [folder|domain|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json] (keys, vulnerable dependencies, risky code, headers of your own sites; not while a game runs)
@@ -62,7 +68,8 @@ code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many sh
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
 Output is plain text, one line per action. Big results go to a file (path printed).
 Tabs Wisply opened close on done (Claude Code runs it after every reply); keep hands one to the user.
-Safety: risky clicks and long URL data to new sites need --yes, wisply abort stops everything.";
+Safety: risky clicks and long URL data to new sites need --yes, wisply abort stops everything."
+);
 const STATS_LINES: usize = 40;
 const KEYS_LINES: usize = 60;
 

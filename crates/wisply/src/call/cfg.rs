@@ -44,7 +44,9 @@ fn talk() -> Value {
         "voice_target": "",
         "voice_join_url": "",
         "voice_wait_s": 240,
-        "voice_linger_s": 25
+        "voice_linger_s": 25,
+        "understand": "auto",
+        "understand_timeout_s": 8
     })
 }
 
@@ -65,8 +67,10 @@ fn hook() -> Value {
         "hook_stop_chars": 200,
         "hook_yes": "ja",
         "hook_no": "nein",
-        "yes_words": "ja,jo,jep,jap,klar,okay,ok,mach,genau,passt,gerne,yes,yep,sure,erlaubt,freigegeben,weiter,los,gut",
-        "no_words": "nein,nee,nö,noe,nope,no,stopp,stop,abbrechen,ablehnen,verboten,lieber nicht"
+        "yes_words": "ja,jo,jep,jap,jop,jup,jawohl,klar,okay,ok,mach,genau,passt,gerne,yes,yep,yup,yeah,sure,go ahead,go for it,do it,erlaubt,freigegeben,weiter,los,gut",
+        "no_words": "nein,nee,nene,nö,noe,nope,no,nah,never,niemals,don't,do not,stopp,stop,abbrechen,ablehnen,verboten,lieber nicht",
+        "sure_no_words": "auf keinen fall,auf gar keinen fall,keinesfalls,bloß nicht,bloss nicht,no way,absolutely not,on no account",
+        "unsure_words": "vielleicht,maybe,perhaps,nicht sicher,not sure,unsure,weiß nicht,weiss nicht,keine ahnung,no idea,don't know,dont know,idk,mal sehen,mal schauen,kommt drauf an,depends,egal,whatever,wer weiß,who knows"
     })
 }
 
@@ -109,6 +113,7 @@ fn spoken() -> Value {
         "say_choices": "Sag {choices}.",
         "say_unclear": "Das habe ich nicht verstanden. {choices}",
         "say_got": "Okay, notiert: {answer}.",
+        "say_got_note": "Okay, notiert: {answer}, {note}.",
         "say_idle": "Gerade ist nichts offen.",
         "say_bye": "Das war es von mir. Bis später."
     })
@@ -208,6 +213,9 @@ pub fn set(home: &Path, pairs: &[String]) -> Result<String, Fail> {
         let value = coerce(d, v).ok_or_else(|| Fail::new(format!("'{v}' does not fit {k}")))?;
         if (k == "quiet_from" || k == "quiet_to" || k == "briefing_at") && clock(v).is_none() {
             return Err(Fail::hint(format!("'{v}' is not a time"), format!("wisply call set {k}=07:30")));
+        }
+        if k == "understand" && !["auto", "off"].contains(&v) {
+            return Err(Fail::hint(format!("'{v}' is not auto or off"), "wisply call set understand=auto"));
         }
         cfg.insert(k.to_string(), value);
     }

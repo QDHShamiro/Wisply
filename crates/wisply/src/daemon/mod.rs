@@ -15,6 +15,7 @@ mod grep;
 mod hosts;
 mod hotkey;
 mod lane;
+pub mod local;
 mod media;
 pub(crate) mod memory;
 mod pc;
@@ -256,6 +257,7 @@ pub fn serve() -> ExitCode {
     });
     memory::index::start(d.home.clone());
     pc::start(d.home.clone());
+    local::start(d.home.clone());
     go::start(d.home.clone());
     agents::start(d.home.clone());
     servers::start(d.home.clone());
@@ -321,6 +323,9 @@ fn handle(d: &Daemon, link: Link, lanes: &[Sender<Work>]) {
     let res = if name == "abort" {
         d.abort_all(lanes);
         Res::new(0, ABORTED)
+    } else if name == "local-url" {
+        let (code, out) = local::url_line(&d.home, &msg.argv[1..]);
+        Res::new(code, out)
     } else {
         let (reply, answer) = mpsc::sync_channel(1);
         let now = Instant::now();

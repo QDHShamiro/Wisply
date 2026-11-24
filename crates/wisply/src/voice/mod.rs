@@ -233,10 +233,10 @@ fn spawn(p: &Paths, args: &[&str]) -> Result<u32, Fail> {
     Ok(0)
 }
 
-fn ready(home: &Path, p: &Paths) -> Result<(), Fail> {
+fn ready(home: &Path, p: &Paths, calling: bool) -> Result<(), Fail> {
     let have = keys();
     let missing: Vec<&str> = KEYS.iter().copied().filter(|k| !have.contains_key(*k)).collect();
-    if !missing.is_empty() {
+    if !missing.is_empty() && !(calling && run::local_asr_ready(home)) {
         return Err(Fail::hint(format!("missing {}", missing.join(", ")), "add it to ~/.config/watch/.env"));
     }
     let cfg = p.config();
@@ -259,7 +259,7 @@ pub fn start_call(home: &Path, target: &str) -> Result<u32, Fail> {
     if matches!(status, "running" | "starting") && (alive(pid_of("pid")) || alive(pid_of("session_pid"))) {
         return Ok(0);
     }
-    ready(home, &p)?;
+    ready(home, &p, true)?;
     p.state(json!({"status": "starting", "target": target, "mode": "call"}));
     spawn(&p, &["voice-session", target])
 }
@@ -287,7 +287,7 @@ pub fn command(home: &Path, pos: &[String]) -> Result<String, Fail> {
             if running {
                 return Err(Fail::hint(format!("already in a call ({})", target_of()), "wisply voice leave"));
             }
-            ready(home, &p)?;
+            ready(home, &p, false)?;
             let target = if sub == "join" { pos[1..].join(" ") } else { String::new() };
             if sub == "join" && target.is_empty() {
                 return Err(Fail::hint("join needs a chat name", "wisply voice join \"Friends\""));

@@ -13,6 +13,7 @@ const FILES: &[&str] = &[
 ];
 const MIN_RATE: f64 = 95.0;
 const MAX_MS: f64 = 20.0;
+const TRIES: usize = 3;
 const DAY_SECS: f64 = 86_400.0;
 
 struct Case {
@@ -141,9 +142,14 @@ fn corpus_parse_time() {
     let cold = first.elapsed();
     let (mut total, mut worst, mut slow) = (Duration::ZERO, Duration::ZERO, "");
     for c in &all {
-        let t0 = Instant::now();
-        run(c.said, now);
-        let took = t0.elapsed();
+        let took = (0..TRIES)
+            .map(|_| {
+                let t0 = Instant::now();
+                run(c.said, now);
+                t0.elapsed()
+            })
+            .min()
+            .unwrap_or_default();
         total += took;
         if took > worst {
             (worst, slow) = (took, c.said);

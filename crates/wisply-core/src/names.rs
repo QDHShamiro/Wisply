@@ -43,6 +43,7 @@ const SYSTEM: &[&str] = &[
     "agents",
     "mobile",
     "notify",
+    "local-url",
 ];
 const MEMORY: &[&str] = &["remember", "recall", "forget", "todo", "bug", "list", "memory", "hook", "wiki", "code"];
 const MEMORY_LANE: &[&str] = &["suggest", "tokens", "grep", "squeeze", "board", "pc", "agents", "mobile", "notify"];
@@ -80,8 +81,8 @@ pub const WEB_ONLY: &[&str] = &[
     "frames",
 ];
 const MORE: &[&str] = &["read", "research", "listen", "watch", "voice", "phone", "claude", "desktop"];
-pub const CLIENT: &[&str] = &["more", "peek", "kit", "skill", "progress", "codemode", "call"];
-const HIDDEN: &[&str] = &["hook", "suggest", "board", "access-prompt", "autoload", "ping"];
+pub const CLIENT: &[&str] = &["more", "peek", "kit", "skill", "progress", "codemode", "call", "local"];
+const HIDDEN: &[&str] = &["hook", "suggest", "board", "access-prompt", "autoload", "ping", "local-url"];
 const GUESS: &[(&str, &str)] = &[
     ("find", "snap -f \"word\" (page), code <name> (code) or recall \"words\" (memory)"),
     ("url", "tabs (every tab with its URL)"),
@@ -204,7 +205,7 @@ mod tests {
     fn the_known_names_are_the_2x_list_secure_and_the_window() {
         let want = "agents back bench brain bug call channels check claude click clip close code codemode config console contact contacts demo desktop dialog \
                     dismiss do done downloads drag expect ext-reload fetch fill focus forget forward frames go grep headless help \
-                    hover improve inbox js keep keys kit launch learn list listen log memory mobile more net notify open pc peek phone press progress read recall record \
+                    hover improve inbox js keep keys kit launch learn list listen local log memory mobile more net notify open pc peek phone press progress read recall record \
                     reload remember reply research routine routines run scroll search secure select selftest shot skill snap squeeze \
                     status stop tab table tabs text think todo tokens tools type ui unread update upload version viewport voice wait watch \
                     wiki windows";

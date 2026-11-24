@@ -98,7 +98,11 @@ impl Desk {
                 self.current = None;
                 self.quiet_since = now();
                 let answer = done.answer.unwrap_or_default();
-                vec![Act::Say(self.line("say_got", &[("answer", &answer)]))]
+                let line = match done.note.as_deref() {
+                    Some(note) => self.line("say_got_note", &[("answer", &answer), ("note", note)]),
+                    None => self.line("say_got", &[("answer", &answer)]),
+                };
+                vec![Act::Say(line)]
             }
             Err(_) => vec![Act::Say(self.line("say_unclear", &[("choices", &self.choices(&ask))]))],
         }

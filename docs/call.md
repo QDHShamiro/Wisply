@@ -30,7 +30,7 @@ Wartet bis zur Antwort und gibt sie **nur** auf stdout aus (`ja`). Fehler: `err:
 - per **Sprache** im Discord-Call (siehe unten),
 - von Hand: `wisply call answer <id|last> "ja"`.
 
-Ohne `--choices` ist jeder Text eine gültige Antwort. Mit Auswahl zählt "klar", "mach" usw. als ja, "lieber nicht" als nein (Wörter in `yes_words` / `no_words`).
+Ohne `--choices` ist jeder Text eine gültige Antwort. Mit Auswahl zählt "klar", "mach" usw. als ja, "lieber nicht" als nein (Wörter in `yes_words` / `no_words`). "auf keinen Fall" oder "bloß nicht" ist ein sicheres Nein, solange danach kein Ja kommt (`sure_no_words`). Zweifel wie "vielleicht", "weiß nicht" oder "egal" bleiben immer unklar (`unsure_words`), genauso zwei genannte Optionen oder eine Nummer, die es nicht gibt. Was das lokale Modell wählt, muss es auch mit umgedrehter Reihenfolge der Optionen wählen.
 
 Weitere Verben: `call notice "Build fertig"` (klingelt, wartet nicht), `call list`, `call result <id>`, `call status`, `call config`.
 

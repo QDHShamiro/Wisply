@@ -1,0 +1,170 @@
+Soll ich deployen?	ja|nein	ja	ja	
+Soll ich deployen?	ja|nein	ja klar	ja	
+Soll ich deployen?	ja|nein	jo mach	ja	
+Soll ich deployen?	ja|nein	jep	ja	
+Soll ich deployen?	ja|nein	japp passt	ja	
+Soll ich deployen?	ja|nein	gerne	ja	
+Soll ich deployen?	ja|nein	los gehts	ja	
+Soll ich deployen?	ja|nein	mach das	ja	
+Soll ich deployen?	ja|nein	genau das	ja	
+Soll ich deployen?	ja|nein	ja bitte	ja	
+Soll ich deployen?	ja|nein	auf jeden fall ja	ja	
+Soll ich deployen?	ja|nein	klar doch	ja	
+Soll ich deployen?	ja|nein	sehr gerne	ja	
+Soll ich deployen?	ja|nein	ja, deploy	ja	
+Soll ich deployen?	ja|nein	ok mach	ja	
+Soll ich deployen?	ja|nein	passt so	ja	
+Soll ich deployen?	ja|nein	ja ja mach schon	ja	
+Soll ich deployen?	ja|nein	nein	nein	
+Soll ich deployen?	ja|nein	nee	nein	
+Soll ich deployen?	ja|nein	nö	nein	
+Soll ich deployen?	ja|nein	nein danke	nein	
+Soll ich deployen?	ja|nein	lieber nicht	nein	
+Soll ich deployen?	ja|nein	stopp	nein	
+Soll ich deployen?	ja|nein	auf keinen fall	nein	
+Soll ich deployen?	ja|nein	nee lass mal	nein	
+Soll ich deployen?	ja|nein	abbrechen	nein	
+Soll ich deployen?	ja|nein	nein nein nein	nein	
+Soll ich deployen?	ja|nein	bloß nicht	nein	
+Soll ich deployen?	ja|nein	mach das bloß nicht	nein	
+Soll ich deployen?	ja|nein	nö heute nicht	nein	
+Soll ich deployen?	ja|nein	bitte nicht	nein	
+Should I merge the PR?	yes|no	yes	yes	
+Should I merge the PR?	yes|no	yeah	yes	
+Should I merge the PR?	yes|no	yep	yes	
+Should I merge the PR?	yes|no	sure	yes	
+Should I merge the PR?	yes|no	go ahead	yes	
+Should I merge the PR?	yes|no	do it	yes	
+Should I merge the PR?	yes|no	yes please	yes	
+Should I merge the PR?	yes|no	absolutely	yes	
+Should I merge the PR?	yes|no	sounds good	yes	
+Should I merge the PR?	yes|no	ok merge it	yes	
+Should I merge the PR?	yes|no	no	no	
+Should I merge the PR?	yes|no	nope	no	
+Should I merge the PR?	yes|no	no thanks	no	
+Should I merge the PR?	yes|no	do not merge	no	
+Should I merge the PR?	yes|no	don't	no	
+Should I merge the PR?	yes|no	hold on, no	no	
+Should I merge the PR?	yes|no	absolutely not	no	
+Should I merge the PR?	yes|no	never	no	
+Should I merge the PR?	yes|no	not now	no	
+Should I merge the PR?	yes|no	stop	no	
+Soll ich den Build neu starten?	ja|nein	jaa	ja	
+Soll ich den Build neu starten?	ja|nein	jaaa mach ma	ja	
+Soll ich den Build neu starten?	ja|nein	jop	ja	
+Soll ich den Build neu starten?	ja|nein	joa klar	ja	
+Soll ich den Build neu starten?	ja|nein	ne	nein	
+Soll ich den Build neu starten?	ja|nein	nene	nein	
+Soll ich den Build neu starten?	ja|nein	nope danke	nein	
+Soll ich den Build neu starten?	ja|nein	nein bloß nicht neustarten	nein	
+Soll ich den Build neu starten?	ja|nein	yes	ja	
+Soll ich den Build neu starten?	ja|nein	ja bitte, aber erst nach dem Mittagessen	ja	Mittag
+Soll ich den Build neu starten?	ja|nein	mach mal, aber erst morgen	ja	morgen
+Soll ich den Build neu starten?	ja|nein	ja aber nur wenn die Tests grün sind	ja	Tests
+Soll ich den Build neu starten?	ja|nein	klar, aber sag mir danach Bescheid	ja	Bescheid
+Soll ich den Build neu starten?	ja|nein	ja, gegen fünf	ja	fünf
+Soll ich den Build neu starten?	ja|nein	jo mach, aber ohne die Migration	ja	Migration
+Soll ich den Build neu starten?	ja|nein	ja aber vorsichtig bitte	ja	vorsichtig
+Soll ich den Build neu starten?	ja|nein	ok, aber erst wenn ich zurück bin	ja	zurück
+Soll ich den Build neu starten?	ja|nein	gerne, aber bitte nur den Test-Server	ja	Test
+Soll ich den Build neu starten?	ja|nein	ja, am Wochenende	ja	Wochenende
+Soll ich den Build neu starten?	ja|nein	nein, erst wenn der Kunde fertig ist	nein	Kunde
+Soll ich den Build neu starten?	ja|nein	lieber nicht, es ist schon spät	nein	spät
+Soll ich den Build neu starten?	ja|nein	nee, heute nicht mehr	nein	
+Soll ich den Build neu starten?	ja|nein	nein danke, das mache ich selbst	nein	selbst
+Soll ich den Build neu starten?	ja|nein	mach das bloß nicht jetzt	nein	
+Soll ich den Build neu starten?	ja|nein	auf gar keinen Fall, die Datenbank läuft noch	nein	Datenbank
+Should I merge the PR?	yes|no	sure, but only if CI is green	yes	CI
+Should I merge the PR?	yes|no	yes but wait until tomorrow	yes	tomorrow
+Should I merge the PR?	yes|no	go ahead, just not before lunch	yes	lunch
+Should I merge the PR?	yes|no	yeah merge it but squash the commits	yes	squash
+Should I merge the PR?	yes|no	ok, after the review is done	yes	review
+Should I merge the PR?	yes|no	yes, and tell the team	yes	team
+Should I merge the PR?	yes|no	no, not until Anna has looked at it	no	Anna
+Should I merge the PR?	yes|no	no way, the tests are red	no	tests
+Should I merge the PR?	yes|no	please don't, I want to change something first	no	change
+Should I merge the PR?	yes|no	nope, wait for Monday	no	Monday
+Welche Farbe soll der Button haben?	rot|blau|grün	rot	rot	
+Welche Farbe soll der Button haben?	rot|blau|grün	blau	blau	
+Welche Farbe soll der Button haben?	rot|blau|grün	grün	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	grün bitte	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	nimm blau	blau	
+Welche Farbe soll der Button haben?	rot|blau|grün	ich will rot	rot	
+Welche Farbe soll der Button haben?	rot|blau|grün	den ersten	rot	
+Welche Farbe soll der Button haben?	rot|blau|grün	den zweiten	blau	
+Welche Farbe soll der Button haben?	rot|blau|grün	den dritten	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	nummer 2	blau	
+Welche Farbe soll der Button haben?	rot|blau|grün	nummer drei	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	die erste	rot	
+Welche Farbe soll der Button haben?	rot|blau|grün	zweite	blau	
+Welche Farbe soll der Button haben?	rot|blau|grün	dritte	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	den letzten	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	2	blau	
+Welche Farbe soll der Button haben?	rot|blau|grün	3	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	1	rot	
+Welche Farbe soll der Button haben?	rot|blau|grün	nimm den zweiten	blau	
+Welche Farbe soll der Button haben?	rot|blau|grün	option 3	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	mach ihn blau	blau	
+Welche Farbe soll der Button haben?	rot|blau|grün	lieber rot	rot	
+Welche Farbe soll der Button haben?	rot|blau|grün	die letzte Option	grün	
+Welche Farbe soll der Button haben?	rot|blau|grün	Nummer 1	rot	
+Which server should I restart?	alpha|beta|gamma|delta	alpha	alpha	
+Which server should I restart?	alpha|beta|gamma|delta	beta	beta	
+Which server should I restart?	alpha|beta|gamma|delta	gamma	gamma	
+Which server should I restart?	alpha|beta|gamma|delta	delta	delta	
+Which server should I restart?	alpha|beta|gamma|delta	the first	alpha	
+Which server should I restart?	alpha|beta|gamma|delta	the second one	beta	
+Which server should I restart?	alpha|beta|gamma|delta	third	gamma	
+Which server should I restart?	alpha|beta|gamma|delta	the fourth	delta	
+Which server should I restart?	alpha|beta|gamma|delta	the last one	delta	
+Which server should I restart?	alpha|beta|gamma|delta	number 2	beta	
+Which server should I restart?	alpha|beta|gamma|delta	option 4	delta	
+Which server should I restart?	alpha|beta|gamma|delta	1	alpha	
+Which server should I restart?	alpha|beta|gamma|delta	restart gamma	gamma	
+Which server should I restart?	alpha|beta|gamma|delta	the last	delta	
+Which server should I restart?	alpha|beta|gamma|delta	den dritten	gamma	
+Which server should I restart?	alpha|beta|gamma|delta	den vierten	delta	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	heute	heute	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	morgen	morgen	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	nächste Woche	nächste Woche	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	gleich heute	heute	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	lieber morgen	morgen	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	erst nächste Woche	nächste Woche	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	den zweiten	morgen	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	die erste Option	heute	
+Wann soll ich den Bericht schicken?	heute|morgen|nächste Woche	nimm die letzte	nächste Woche	
+Soll ich deployen?	ja|nein	vielleicht	unclear	
+Soll ich deployen?	ja|nein	weiß nicht	unclear	
+Soll ich deployen?	ja|nein	hm ich weiß nicht	unclear	
+Soll ich deployen?	ja|nein	frag mich später nochmal	unclear	
+Soll ich deployen?	ja|nein	keine Ahnung	unclear	
+Soll ich deployen?	ja|nein	mal sehen	unclear	
+Soll ich deployen?	ja|nein	kann ich noch nicht sagen	unclear	
+Soll ich deployen?	ja|nein	ich überlege noch	unclear	
+Soll ich deployen?	ja|nein	was kostet das eigentlich	unclear	
+Soll ich deployen?	ja|nein	wer hat das angefangen	unclear	
+Soll ich deployen?	ja|nein	wie spät ist es	unclear	
+Soll ich deployen?	ja|nein	ich bin gerade im Bus	unclear	
+Soll ich deployen?	ja|nein	was meinst du	unclear	
+Soll ich deployen?	ja|nein	erkläre mir das erst	unclear	
+Soll ich deployen?	ja|nein	rot	unclear	
+Soll ich deployen?	ja|nein	bananen	unclear	
+Soll ich deployen?	ja|nein	ähm	unclear	
+Soll ich deployen?	ja|nein	frag Anna	unclear	
+Soll ich deployen?	ja|nein	vielleicht morgen vielleicht nie	unclear	
+Soll ich deployen?	ja|nein	das hängt davon ab	unclear	
+Should I merge the PR?	yes|no	maybe	unclear	
+Should I merge the PR?	yes|no	i don't know	unclear	
+Should I merge the PR?	yes|no	ask me later	unclear	
+Should I merge the PR?	yes|no	not sure yet	unclear	
+Should I merge the PR?	yes|no	what does it cost	unclear	
+Should I merge the PR?	yes|no	let me think about it	unclear	
+Should I merge the PR?	yes|no	who wrote this	unclear	
+Should I merge the PR?	yes|no	banana	unclear	
+Should I merge the PR?	yes|no	uh	unclear	
+Should I merge the PR?	yes|no	depends	unclear	
+Welche Farbe soll der Button haben?	rot|blau|grün	die fünfte	unclear	
+Welche Farbe soll der Button haben?	rot|blau|grün	nummer 7	unclear	
+Welche Farbe soll der Button haben?	rot|blau|grün	den ersten oder den zweiten	unclear	
+Welche Farbe soll der Button haben?	rot|blau|grün	keine davon	unclear	
+Welche Farbe soll der Button haben?	rot|blau|grün	gelb	unclear	

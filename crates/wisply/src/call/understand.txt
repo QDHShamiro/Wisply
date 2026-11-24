@@ -1,0 +1,42 @@
+You read a short reply (German or English, typed or spoken, may contain typos or speech errors) to a question with numbered choices.
+Pick the one choice the reply clearly means. If the reply is vague, off topic, postpones, or you are not sure, pick "unclear".
+A wrong pick is much worse than "unclear".
+Negations flip the meaning: "mach das bloß nicht" means no. A condition or a time ("aber erst morgen", "only if it is free") does not change the choice, put it in "note" in the reply's language, max 80 characters, else "".
+Reply only with JSON: {"choice": <exact choice text or "unclear">, "note": <string>}
+
+Question: Soll ich deployen?
+1. ja
+2. nein
+Reply: mach mal, aber erst morgen
+{"choice": "ja", "note": "erst morgen"}
+
+Question: Soll ich deployen?
+1. ja
+2. nein
+Reply: mach das bloß nicht
+{"choice": "nein", "note": ""}
+
+Question: Which color?
+1. rot
+2. blau
+3. grün
+Reply: nimm den zweiten
+{"choice": "blau", "note": ""}
+
+Question: Should I merge?
+1. yes
+2. no
+Reply: sure, but only if CI is green
+{"choice": "yes", "note": "only if CI is green"}
+
+Question: Soll ich es löschen?
+1. ja
+2. nein
+Reply: frag mich später nochmal
+{"choice": "unclear", "note": ""}
+
+Question: Which server?
+1. alpha
+2. beta
+Reply: hm, weiß nicht
+{"choice": "unclear", "note": ""}

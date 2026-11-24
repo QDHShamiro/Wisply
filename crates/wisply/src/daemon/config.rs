@@ -13,6 +13,8 @@ const SNAP_TOP: i64 = 15;
 const FOCUS_MODES: [&str; 3] = ["never", "away", "idle"];
 const UPDATE_MODES: [&str; 3] = ["auto", "notify", "off"];
 const PUSH_MODES: [&str; 2] = ["off", "ntfy"];
+const GAME_MODES: [&str; 2] = ["pause", "allow"];
+const ASR_MODES: [&str; 2] = ["local", "groq"];
 const RISK_WORDS: &[&str] = &[
     "buy",
     "purchase",
@@ -90,6 +92,13 @@ fn defaults() -> Map<String, Value> {
         ("codemode", json!(true)),
         ("codemode_save", json!(true)),
         ("coach", json!(true)),
+        ("local_ram_mb", json!(1024)),
+        ("local_idle_s", json!(120)),
+        ("local_threads", json!(0)),
+        ("local_game", json!("pause")),
+        ("local_llm_start_mb", json!(650)),
+        ("local_asr_start_mb", json!(450)),
+        ("voice_asr", json!("local")),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
@@ -179,6 +188,18 @@ pub fn command(home: &Path, pos: &[String]) -> Result<(String, bool), Fail> {
     }
     if key == "push" && !PUSH_MODES.contains(&raw.to_lowercase().as_str()) {
         return Err(Fail::hint(format!("push is one of {}", PUSH_MODES.join(", ")), "wisply config push ntfy"));
+    }
+    if key == "local_game" && !GAME_MODES.contains(&raw.as_str()) {
+        return Err(Fail::hint(
+            format!("local_game is one of {}", GAME_MODES.join(", ")),
+            "wisply config local_game pause",
+        ));
+    }
+    if key == "voice_asr" && !ASR_MODES.contains(&raw.as_str()) {
+        return Err(Fail::hint(
+            format!("voice_asr is one of {}", ASR_MODES.join(", ")),
+            "wisply config voice_asr local",
+        ));
     }
     let line = format!("{key} = {}", dumps(&val));
     cfg.insert(key.clone(), val);

@@ -49,6 +49,7 @@ pub fn is_script(r: &Value) -> bool {
 }
 
 pub fn code_of(home: &Path, name: &str) -> Option<String> {
+    super::defaults::ensure(home);
     store::load(home, name).ok().filter(is_script).map(|r| text(&r["script"]["code"]))
 }
 

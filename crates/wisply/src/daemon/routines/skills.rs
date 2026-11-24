@@ -80,6 +80,7 @@ fn pair(p: &str) -> Option<(String, String)> {
 }
 
 pub fn check_of(home: &Path, name: &str) -> Option<String> {
+    defaults::ensure(home);
     store::load(home, name).ok().filter(is_skill).map(|r| text(&r["learn"]["check"])).filter(|c| !c.trim().is_empty())
 }
 

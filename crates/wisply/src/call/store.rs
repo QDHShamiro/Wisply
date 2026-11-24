@@ -6,6 +6,7 @@ use wisply_core::Fail;
 
 use super::cfg;
 use super::text::{now, random_hex};
+use super::understand::{self, Model, decide};
 
 const KEEP_S: f64 = 86_400.0;
 const ID_LEN: usize = 6;
@@ -20,14 +21,16 @@ pub struct Ask {
     pub state: String,
     pub answer: Option<String>,
     pub via: String,
+    pub note: Option<String>,
+    pub how: String,
 }
 
 impl Ask {
     fn to_json(&self) -> Value {
         json!({
             "id": self.id, "question": self.question, "choices": self.choices, "created": self.created,
-            "deadline": self.deadline, "state": self.state, "answer": self.answer, "via": self.via
-        })
+            "deadline": self.deadline, "state": self.state, "answer": self.answer, "via": self.via,
+            "note": self.note, "how": self.how        })
     }
 
     fn from_json(v: &Value) -> Option<Ask> {
@@ -42,12 +45,24 @@ impl Ask {
             state: s("state"),
             answer: v.get("answer").and_then(Value::as_str).map(str::to_string),
             via: s("via"),
+            note: v.get("note").and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string),
+            how: s("how"),
         })
         .filter(|a| !a.id.is_empty())
     }
 
     pub fn open(&self) -> bool {
         self.state == "open" && self.deadline > now()
+    }
+
+    pub fn shown(&self) -> String {
+        let answer = self.answer.clone().unwrap_or_default();
+        if self.note.is_none() && matches!(self.how.as_str(), "" | "words") {
+            return answer;
+        }
+        let note = self.note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
+        let via = if self.via.is_empty() { String::new() } else { format!(" via {}", self.via) };
+        format!("answered: {answer}{note}{via}")
     }
 }
 
@@ -101,6 +116,8 @@ pub fn create(home: &Path, question: &str, choices: &[String], wait_s: u64) -> R
         state: "open".into(),
         answer: None,
         via: String::new(),
+        note: None,
+        how: String::new(),
     };
     write(home, &ask)?;
     Ok(ask)
@@ -124,6 +141,51 @@ fn hits(spoken: &[String], list: &[String]) -> bool {
     })
 }
 
+fn spots(spoken: &[String], list: &[String]) -> Vec<usize> {
+    let mut at: Vec<usize> = list
+        .iter()
+        .map(|entry| words(entry))
+        .filter(|parts| !parts.is_empty())
+        .flat_map(|parts| {
+            spoken.windows(parts.len()).enumerate().filter(move |(_, w)| *w == parts.as_slice()).map(|(i, _)| i)
+        })
+        .collect();
+    at.sort_unstable();
+    at
+}
+
+pub fn said(cfg: &Map<String, Value>, key: &str, text: &str) -> bool {
+    hits(&words(text), &cfg::list(cfg, key))
+}
+
+pub fn sure_no(cfg: &Map<String, Value>, text: &str) -> bool {
+    let spoken = words(text);
+    let Some(&last_no) = spots(&spoken, &cfg::list(cfg, "sure_no_words")).last() else { return false };
+    spots(&spoken, &cfg::list(cfg, "yes_words")).iter().all(|&yes| yes < last_no)
+}
+
+pub fn refused(choices: &[String], text: &str) -> bool {
+    let spoken = words(text);
+    choices.iter().map(|c| words(c)).filter(|parts| !parts.is_empty()).any(|parts| {
+        spoken
+            .windows(parts.len() + 1)
+            .any(|w| w[1..] == parts[..] && super::understand::NEGATIONS.contains(&w[0].as_str()))
+    })
+}
+
+pub fn named(choices: &[String], text: &str) -> usize {
+    let spoken = words(text);
+    choices.iter().filter(|c| hits(&spoken, &[c.to_lowercase()])).count()
+}
+
+pub fn mapped(cfg: &Map<String, Value>, choices: &[String], want: bool) -> Option<String> {
+    let found: Vec<&String> = choices.iter().filter(|c| verdict(cfg, c) == Some(want)).collect();
+    match found.as_slice() {
+        [one] => Some((*one).clone()),
+        _ => None,
+    }
+}
+
 pub fn verdict(cfg: &Map<String, Value>, text: &str) -> Option<bool> {
     let spoken = words(text);
     let no = hits(&spoken, &cfg::list(cfg, "no_words"));
@@ -144,6 +206,9 @@ pub fn resolve(cfg: &Map<String, Value>, choices: &[String], text: &str) -> Opti
         return Some(trimmed.to_string());
     }
     let spoken = words(trimmed);
+    if refused(choices, trimmed) {
+        return None;
+    }
     let named: Vec<&String> = choices.iter().filter(|c| hits(&spoken, &[c.to_lowercase()])).collect();
     if let [one] = named.as_slice() {
         return Some((*one).clone());
@@ -152,14 +217,17 @@ pub fn resolve(cfg: &Map<String, Value>, choices: &[String], text: &str) -> Opti
         return None;
     }
     let want = verdict(cfg, trimmed)?;
-    let mapped: Vec<&String> = choices.iter().filter(|c| verdict(cfg, c) == Some(want)).collect();
-    match mapped.as_slice() {
-        [one] => Some((*one).clone()),
-        _ => None,
-    }
+    mapped(cfg, choices, want)
 }
 
 pub fn submit(home: &Path, which: &str, text: &str, via: &str) -> Result<Ask, Fail> {
+    let settings = cfg::load(home);
+    let local = understand::Local::new(home, &settings);
+    let model = understand::enabled(&settings).then_some(&local as &dyn Model);
+    submit_with(home, which, text, via, model)
+}
+
+pub fn submit_with(home: &Path, which: &str, text: &str, via: &str, model: Option<&dyn Model>) -> Result<Ask, Fail> {
     let settings = cfg::load(home);
     let target = if which.is_empty() || which == "last" {
         open_list(home).pop().ok_or_else(|| Fail::new("no question is waiting for an answer"))?
@@ -169,7 +237,7 @@ pub fn submit(home: &Path, which: &str, text: &str, via: &str) -> Result<Ask, Fa
     if !target.open() {
         return Err(Fail::new(format!("question {} is already {}", target.id, target.state)));
     }
-    let answer = resolve(&settings, &target.choices, text).ok_or_else(|| {
+    let verdict = decide(&settings, &target.question, &target.choices, text, model).ok_or_else(|| {
         let hint = if target.choices.is_empty() { "say something".to_string() } else { target.choices.join(" / ") };
         Fail::hint(
             format!("'{}' is not an answer to question {}", text.trim(), target.id),
@@ -181,7 +249,9 @@ pub fn submit(home: &Path, which: &str, text: &str, via: &str) -> Result<Ask, Fa
         return Err(Fail::new(format!("question {} is already {}", done.id, done.state)));
     }
     done.state = "answered".into();
-    done.answer = Some(answer);
+    done.answer = Some(verdict.choice);
+    done.note = Some(verdict.note).filter(|n| !n.is_empty());
+    done.how = verdict.how.to_string();
     done.via = via.to_string();
     write(home, &done)?;
     Ok(done)
@@ -212,6 +282,10 @@ mod tests {
         assert_eq!(resolve(&c, &ch, "lieber nicht"), Some("nein".into()));
         assert_eq!(resolve(&c, &ch, "ja nein"), None);
         assert_eq!(resolve(&c, &ch, "vielleicht morgen"), None);
+        let colors = vec!["rot".to_string(), "blau".to_string()];
+        assert_eq!(resolve(&c, &colors, "nicht rot"), None);
+        assert_eq!(resolve(&c, &colors, "not blau"), None);
+        assert_eq!(resolve(&c, &colors, "rot bitte"), Some("rot".into()));
         assert_eq!(resolve(&c, &ch, "   "), None);
         assert_eq!(resolve(&c, &[], "  frei geschrieben "), Some("frei geschrieben".into()));
         let colors = vec!["rot".to_string(), "blau".to_string()];
