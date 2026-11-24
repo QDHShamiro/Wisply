@@ -5,6 +5,7 @@ mod assist;
 mod bench;
 pub mod cache;
 mod contacts;
+mod discover;
 #[cfg(windows)]
 mod draw;
 mod hint;
@@ -141,6 +142,9 @@ fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
 
 pub fn command(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
     if c.name != "go" {
+        if discover::wants(c) {
+            return discover::scan(&d.home, c).map(Out::Text);
+        }
         return contacts::command(&d.home, c).map(Out::Text);
     }
     if c.on("list") || c.flags.contains_key("list") {
