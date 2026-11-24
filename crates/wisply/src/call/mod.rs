@@ -29,7 +29,8 @@ wisply call notice \"<text>\" [--title t] [--channels x] [--force] (rings, does 
 wisply call answer <id|last> \"<text>\" | result <id> | list (answers and open questions)
 wisply call away on|off|status (the hook only rings while he is away; automatic after away_after_min without input)
 wisply call briefing [--channels x] [--dry] | schedule on [HH:MM] | schedule off | schedule status
-wisply call setup [copy] | test [channel] | set key=value ... | config | hook-config | status";
+wisply call setup [copy] | test [channel] | set key=value ... | config | hook-config | status
+wisply call set understand=auto|off (unclear answers go to the local model from wisply local get, default auto)";
 
 pub fn run(home: &Path, args: &[String]) -> ExitCode {
     if args.first().map(String::as_str) == Some("hook") {

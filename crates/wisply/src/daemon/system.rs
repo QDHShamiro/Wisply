@@ -6,7 +6,12 @@ use wisply_core::{Call, Fail, Flag, OUT_CHARS, ago, built_later, listing, parse,
 use super::ctx::Ctx;
 use super::{Daemon, Out, VERSION, config, media, route, web};
 
-const HELP: &str = "wisply 3.6 <command> [args]   browser, desktop apps, video and memory for AI agents
+const HELP: &str = concat!(
+    "wisply ",
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    " <command> [args]   browser, desktop apps, video and memory for AI agents
 refs: e12 web element | t77 tab | w3 window | d5 app element
 
 web     open <url> [-n] [-f \"a|b\"] [--text]   snap [-f \"a|b\"] [-s css|ref] [--all] [--full] [--diff] [--links]   text [-f txt] [--links]
@@ -63,7 +68,8 @@ code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many sh
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
 Output is plain text, one line per action. Big results go to a file (path printed).
 Tabs Wisply opened close on done (Claude Code runs it after every reply); keep hands one to the user.
-Safety: risky clicks and long URL data to new sites need --yes, wisply abort stops everything.";
+Safety: risky clicks and long URL data to new sites need --yes, wisply abort stops everything."
+);
 const STATS_LINES: usize = 40;
 const KEYS_LINES: usize = 60;
 

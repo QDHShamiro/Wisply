@@ -11,7 +11,8 @@ use crate::daemon::local::{self, Kind, Why, get};
 
 const HELP: &str = "wisply local [status] (what is installed and running)
 wisply local get [--only llm|asr] (loads the small models, about 750 MB, checked by sha256)
-wisply local stop (ends both programs) | rm [--yes] (deletes everything loaded)";
+wisply local stop (ends both programs) | rm [--yes] (deletes everything loaded)
+used by wisply call for answers the word rules cannot place (call set understand=auto|off, default auto)";
 const MODEL_NAME: &str = "local";
 const ANSWER_TOKENS: i64 = 120;
 const SCHEMA_NAME: &str = "answer";
