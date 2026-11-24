@@ -9,7 +9,7 @@ use wisply_core::local_now;
 use super::script::hash;
 use super::store::{file, save, text};
 
-const VERSION: u64 = 3;
+const VERSION: u64 = 4;
 
 struct Shipped {
     name: &'static str,
@@ -23,7 +23,7 @@ struct Shipped {
     before_tokens: u64,
 }
 
-const SHIPPED: [Shipped; 5] = [
+const SHIPPED: [Shipped; 6] = [
     Shipped {
         name: "send-message",
         about: "send a chat message (WhatsApp Web, Telegram Web, Discord Web, or a chat app on the desktop)",
@@ -91,6 +91,17 @@ const SHIPPED: [Shipped; 5] = [
         check: include_str!("defaults/list-chats.check.js"),
         before_ms: 90_000,
         before_tokens: 5000,
+    },
+    Shipped {
+        name: "call-briefing",
+        about: "ring or message the morning briefing: open to-dos, sessions and new Albion messages",
+        guide: "channels = ntfy,callmebot (default: the briefing channels from wisply call set), runs by itself with wisply call schedule on",
+        tags: &["call", "briefing", "morning", "morgen", "anruf", "anrufen", "klingeln", "ring", "bericht"],
+        params: &["channels"],
+        code: include_str!("defaults/call-briefing.js"),
+        check: include_str!("defaults/call-briefing.check.js"),
+        before_ms: 30_000,
+        before_tokens: 1500,
     },
 ];
 
