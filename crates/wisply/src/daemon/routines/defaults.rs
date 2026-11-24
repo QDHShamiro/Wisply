@@ -9,7 +9,7 @@ use wisply_core::local_now;
 use super::script::hash;
 use super::store::{file, save, text};
 
-const VERSION: u64 = 1;
+const VERSION: u64 = 3;
 
 struct Shipped {
     name: &'static str,
@@ -26,8 +26,8 @@ struct Shipped {
 const SHIPPED: [Shipped; 4] = [
     Shipped {
         name: "send-message",
-        about: "send a chat message (WhatsApp Web, Telegram Web, or a chat app on the desktop)",
-        guide: "to = the exact chat name, text = the message, app = whatsapp (default) | telegram | any chat app",
+        about: "send a chat message (WhatsApp Web, Telegram Web, Discord Web, or a chat app on the desktop)",
+        guide: "to = the exact chat name (Discord: user name), text = the message, app = whatsapp (default) | telegram | discord | any chat app, dm = a known Discord DM link, list = JSON [{name,to,app,dm}] to send the same text to several chats",
         tags: &[
             "send",
             "message",
@@ -42,7 +42,7 @@ const SHIPPED: [Shipped; 4] = [
             "schreiben",
             "schreib",
         ],
-        params: &["to", "text", "app"],
+        params: &["to", "text", "app", "dm", "list"],
         code: include_str!("defaults/send-message.js"),
         check: include_str!("defaults/send-message.check.js"),
         before_ms: 120_000,
@@ -97,8 +97,12 @@ fn dropped_list(m: &Value) -> Vec<String> {
     m["dropped"].as_array().into_iter().flatten().map(text).collect()
 }
 
-fn write_marker(home: &Path, version: u64, dropped: &[String]) {
-    let _ = wisply_core::save(marker(home), json!({"version": version, "dropped": dropped}).to_string());
+fn write_marker(home: &Path, version: u64, code: &str, dropped: &[String]) {
+    let _ = wisply_core::save(marker(home), json!({"version": version, "code": code, "dropped": dropped}).to_string());
+}
+
+fn shipped_code() -> String {
+    hash(&SHIPPED.iter().map(|s| s.code).collect::<Vec<_>>().join("\n"))
 }
 
 fn stamp() -> String {
@@ -115,13 +119,13 @@ pub fn forget(home: &Path, name: &str) {
     if !dropped.iter().any(|d| d == name) {
         dropped.push(name.to_string());
     }
-    write_marker(home, m["version"].as_u64().unwrap_or(0), &dropped);
+    write_marker(home, m["version"].as_u64().unwrap_or(0), &text(&m["code"]), &dropped);
 }
 
 pub fn bring_back(home: &Path, name: &str) {
     let m = read_marker(home);
     let dropped: Vec<String> = dropped_list(&m).into_iter().filter(|d| d != name).collect();
-    write_marker(home, m["version"].as_u64().unwrap_or(0), &dropped);
+    write_marker(home, m["version"].as_u64().unwrap_or(0), &text(&m["code"]), &dropped);
 }
 
 fn learn_of(s: &Shipped) -> Value {
@@ -170,7 +174,8 @@ pub fn ensure(home: &Path) {
     }
     done.insert(home.to_path_buf());
     let m = read_marker(home);
-    if m["version"].as_u64() == Some(VERSION) {
+    let code = shipped_code();
+    if m["version"].as_u64() == Some(VERSION) && text(&m["code"]) == code {
         return;
     }
     let dropped = dropped_list(&m);
@@ -183,7 +188,7 @@ pub fn ensure(home: &Path) {
         };
         let _ = save(home, &r);
     }
-    write_marker(home, VERSION, &dropped);
+    write_marker(home, VERSION, &code, &dropped);
 }
 
 #[cfg(test)]
@@ -203,7 +208,7 @@ mod tests {
         let mut mine = serde_json::from_str::<Value>(&fs::read_to_string(file(&home, "pr-ci")).unwrap()).unwrap();
         mine["script"]["hash"] = json!("changed-here");
         save(&home, &mine).unwrap();
-        write_marker(&home, 0, &["find-file".to_string()]);
+        write_marker(&home, 0, "", &["find-file".to_string()]);
         DONE.lock().unwrap().clear();
         ensure(&home);
         assert!(!file(&home, "find-file").exists());

@@ -338,23 +338,29 @@ pub fn from_steps(
     Ok(r)
 }
 
-pub fn save_current(
+pub fn current_steps(d: &Daemon, ctx: &Ctx) -> Result<(Vec<Value>, usize, Value), Fail> {
+    if !ctx.ep.steps.is_empty() {
+        return Ok((ctx.ep.steps.clone(), ctx.ep.cost, ctx.ep.start.clone()));
+    }
+    let past: Vec<Value> = episodes(&d.home, RECENT_PAST).into_iter().filter(|e| e["via"].is_null()).collect();
+    let Some(e) = past.last() else {
+        return Err(Fail::hint("no finished task to save", "do the task with wisply first"));
+    };
+    Ok((
+        e["steps"].as_array().cloned().unwrap_or_default(),
+        e["cost"].as_u64().unwrap_or(0) as usize,
+        e["start"].clone(),
+    ))
+}
+
+pub fn save_episode(
     d: &Daemon,
     ctx: &mut Ctx,
     name: &str,
     pairs: &[String],
     last: Option<&str>,
-) -> Result<String, Fail> {
-    let (mut steps, mut cost, mut start) = (ctx.ep.steps.clone(), ctx.ep.cost, ctx.ep.start.clone());
-    if steps.is_empty() {
-        let past: Vec<Value> = episodes(&d.home, RECENT_PAST).into_iter().filter(|e| e["via"].is_null()).collect();
-        let Some(e) = past.last() else {
-            return Err(Fail::hint("no finished task to save", "do the task with wisply first"));
-        };
-        steps = e["steps"].as_array().cloned().unwrap_or_default();
-        cost = e["cost"].as_u64().unwrap_or(0) as usize;
-        start = e["start"].clone();
-    }
+) -> Result<Value, Fail> {
+    let (mut steps, cost, start) = current_steps(d, ctx)?;
     if let Some(n) = last {
         let n: usize =
             n.parse().map_err(|_| Fail::hint("--last needs a number", "wisply routine save NAME --last 3"))?;
@@ -365,6 +371,17 @@ pub fn save_current(
     let task = Task { steps: &steps, cost, start: &start };
     let r = from_steps(&d.home, name, pairs, "saved", &task, &d.prompts_of(&ctx.sid))?;
     ctx.ep = Episode::default();
+    Ok(r)
+}
+
+pub fn save_current(
+    d: &Daemon,
+    ctx: &mut Ctx,
+    name: &str,
+    pairs: &[String],
+    last: Option<&str>,
+) -> Result<String, Fail> {
+    let r = save_episode(d, ctx, name, pairs, last)?;
     Ok(format!(
         "saved routine {} ({} steps) -> {}",
         text(&r["name"]),

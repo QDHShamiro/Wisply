@@ -55,6 +55,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
 code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many shell, file and wisply steps in one call, only the result comes back; wisply codemode help)
         mcp (MCP server on stdin/stdout for any AI: one tool \"wisply\" that takes a command or code mode code)
         run <name|words> [k=v ...] [--yes]   routines [-f word]   routine save|show|rm|rename|forget <name> (tasks done before, replayed in one call)
+        go \"<sentence>\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<sentence>\" | contacts | contact add <name> discord=<user> whatsapp=\"<chat>\" alias=a,b (plain orders in German or English, no AI: message people, play music, media keys, open, search, remind, screenshot, remember; \"in 10 min\" or \"um 18 Uhr\" plans it; Ctrl+Alt+Space opens a box to type one, hold it to say one)
         learn [\"<task>\"] | learn save <name> \"<what it does>\" --file run.js --check check.js [k=v] | learn ok|practice|show|drop <name> (skills: taught once, practiced with a check, then one call; send-message, read-form, find-file, pr-ci come with Wisply)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
@@ -110,7 +111,7 @@ pub fn run_one(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<(Out, Strin
         "done" => web::done(d, ctx, &call)?,
         "keep" => web::keep(d, ctx, &call)?,
         "codemode" if call.pos.first().is_some_and(|w| w == "mark") => {
-            ctx.singles.clear();
+            ctx.code_mode_at(super::ctx::now());
             "ok".into()
         }
         "codemode" => return Err(old_client()),
@@ -174,8 +175,12 @@ fn posix(path: &Path) -> String {
 
 fn status(d: &Daemon, ctx: &Ctx) -> String {
     let up = ago(d.started.elapsed().as_secs());
-    let mut lines =
-        vec![format!("wisply {VERSION} | daemon pid {} up {up} | hotkey {}", d.pid, super::hotkey::label())];
+    let mut lines = vec![format!(
+        "wisply {VERSION} | daemon pid {} up {up} | hotkey {} | go {}",
+        d.pid,
+        super::hotkey::label(),
+        super::go::hotkey()
+    )];
     web::any_browser(d);
     let mut hosts = d.hosts.alive();
     hosts.sort_by(|a, b| b.focused().max(b.connected).total_cmp(&a.focused().max(a.connected)));

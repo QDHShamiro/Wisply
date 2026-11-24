@@ -22,11 +22,13 @@ pub use episode::Episode;
 use store::{file, load, save, score, slug, stem, text, usage};
 
 pub use align::{align, build, truthy};
+pub use defaults::ensure as ensure_shipped;
 pub use episode::{close, observe};
-pub use run::run;
+pub use learn::{current_steps, save_episode};
+pub use run::{run, transient};
 pub use script::{code_of as script_code, project_of as script_project, values_in};
 pub use skills::{PRACTICE_ROUNDS, check_of as script_check, is_skill, weak};
-pub use store::{load_all, step_line, words};
+pub use store::{load_all, save as save_one, step_line, words};
 
 const LIST_LINES: usize = 60;
 const NAME_WORDS: usize = 6;

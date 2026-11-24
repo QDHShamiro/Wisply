@@ -6,7 +6,7 @@ use wisply_core::{APP_ONLY, CHAT, CLIENT, Call, Fail, Flag, SHARED, WEB_ONLY, bu
 
 use super::ctx::Ctx;
 use super::{
-    Daemon, Out, agents, brain, channels, claude, desk, flow, media, phone, record, routines, secure, think, web,
+    Daemon, Out, agents, brain, channels, claude, desk, flow, go, media, phone, record, routines, secure, think, web,
 };
 
 const POST_VIEW: &[&str] = &[
@@ -172,6 +172,7 @@ pub fn route(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         "demo" => super::check::demo(d, ctx, c).map(Out::Text),
         "access-prompt" => Ok(Out::Text(desk::access())),
         "do" => flow::run(d, ctx, c),
+        "go" | "contact" | "contacts" => go::command(d, ctx, c),
         "run" | "routine" | "routines" | "learn" => routines::command(d, ctx, c),
         "channels" => channels::run(d, ctx, c),
         "brain" => brain::command(d, ctx, c),

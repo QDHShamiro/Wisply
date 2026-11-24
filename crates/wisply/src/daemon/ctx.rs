@@ -19,6 +19,7 @@ const SAVE_STEP_S: i64 = 600;
 const DESK: [&str; 4] = ["windows", "hwnd", "info", "launched"];
 const TIP_AFTER: usize = 3;
 const TIP_WINDOW_S: f64 = 120.0;
+const CODED_QUIET_S: f64 = 900.0;
 
 pub fn now() -> f64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
@@ -95,6 +96,7 @@ pub struct Ctx {
     pub brain_miss: Option<Miss>,
     pub retried: Option<Vec<String>>,
     pub singles: Vec<f64>,
+    pub coded: Option<f64>,
     pub broken_script: Option<(String, f64)>,
     pub last_script: Option<(String, f64, String)>,
     pub tab_urls: Vec<(String, String)>,
@@ -133,6 +135,7 @@ impl Ctx {
             brain_miss: None,
             retried: None,
             singles: Vec::new(),
+            coded: None,
             broken_script: None,
             last_script: None,
             tab_urls: Vec::new(),
@@ -159,8 +162,13 @@ impl Ctx {
         }
     }
 
+    pub fn code_mode_at(&mut self, at: f64) {
+        self.coded = Some(at);
+        self.singles.clear();
+    }
+
     pub fn tip_due(&mut self, at: f64) -> bool {
-        if self.side {
+        if self.side || self.coded.is_some_and(|c| at - c <= CODED_QUIET_S) {
             return false;
         }
         self.singles.retain(|t| at - t <= TIP_WINDOW_S);
@@ -349,6 +357,10 @@ mod tests {
         assert_eq!(quick, vec![false, false, true, false, false, true]);
         let mut side = Contexts::side();
         assert!(!(0..10).any(|i| side.get("s").tip_due(f64::from(i))));
+        ctx.code_mode_at(3000.0);
+        assert!(!(0..10).any(|i| ctx.tip_due(3001.0 + f64::from(i))));
+        let late: Vec<bool> = (0..3).map(|i| ctx.tip_due(4000.0 + f64::from(i))).collect();
+        assert_eq!(late, vec![false, false, true]);
     }
 
     #[test]
