@@ -183,6 +183,7 @@ enum Msg {
     Hello(Map<String, Value>),
 }
 
+pub(crate) use agents::scrub;
 pub(crate) use claude::{claude_exe, clean as clean_claude_env};
 pub use config::{load as load_config, on as config_on};
 pub(crate) use doctor::install as net;

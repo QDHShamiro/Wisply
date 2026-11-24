@@ -249,6 +249,26 @@ fn take_lines(p: &Paths) -> Vec<String> {
         .collect()
 }
 
+fn finish(acts: Vec<crate::call::Act>, mouth: &Mouth, p: &Paths, stop: &AtomicBool) -> bool {
+    let mut left = false;
+    for act in acts {
+        match act {
+            crate::call::Act::Say(line) => mouth.say(&line),
+            crate::call::Act::Leave => left = true,
+        }
+    }
+    if !left {
+        return false;
+    }
+    let until = now() + BYE_WAIT_S;
+    while mouth.busy() && now() < until {
+        thread::sleep(Duration::from_millis(100));
+    }
+    stop.store(true, Ordering::SeqCst);
+    p.state(json!({"status": "stopped", "reason": "call done"}));
+    true
+}
+
 pub fn call(p: &Paths, target: &str) -> Result<(), String> {
     let cfg: Map<String, Value> = p.config();
     let k = keys();
@@ -258,6 +278,9 @@ pub fn call(p: &Paths, target: &str) -> Result<(), String> {
     }
     let _ = fs::create_dir_all(p.say_dir());
     p.state(json!({"pid": std::process::id(), "target": target, "started": now(), "status": "running", "last_heard": "", "last_said": ""}));
+    let mut desk =
+        (p.current().get("mode").and_then(Value::as_str) == Some("call")).then(|| crate::call::Desk::new(&p.home));
+    p.state(json!({"mode": ""}));
     let brain = Brain::new(&cfg, &k, p.clone(), target);
     let mouth = Mouth::new(&cfg, p)?;
     let owner = Some(text(&cfg, "owner_name")).filter(|o| !o.is_empty()).unwrap_or_else(|| "Owner".into());
@@ -309,7 +332,9 @@ pub fn call(p: &Paths, target: &str) -> Result<(), String> {
         .into_iter()
         .filter(|s| !s.is_empty())
         .collect();
-    mouth.say(&opening.join(" "));
+    if desk.is_none() {
+        mouth.say(&opening.join(" "));
+    }
     let mut c = Call { p: p.clone(), brain, mouth: Arc::clone(&mouth), talk: Arc::clone(&talk) };
     let (mut last_voice, mut last_me, mut nudged) = (now(), 0.0f64, 0u32);
     loop {
@@ -333,9 +358,21 @@ pub fn call(p: &Paths, target: &str) -> Result<(), String> {
             last_voice = now();
             last_me = last_voice;
         }
+        if let Some(d) = desk.as_mut() {
+            let acts = d.tick(last_voice.max(last_me));
+            if !acts.is_empty() {
+                last_me = now();
+            }
+            if finish(acts, &mouth, p, &stop) {
+                return Ok(());
+            }
+        }
         let (t_end, mut asr_s, first) = match heard_rx.recv_timeout(POLL) {
             Ok(h) => h,
             Err(RecvTimeoutError::Timeout) => {
+                if desk.is_some() {
+                    continue;
+                }
                 let quiet_for = now() - last_voice.max(last_me);
                 let limit = num(&cfg, "silence_s") * f64::from(2u32.pow(nudged));
                 if !talk.load(Ordering::SeqCst) && !mouth.busy() && quiet_for > limit && nudged < NUDGES {
@@ -385,6 +422,14 @@ pub fn call(p: &Paths, target: &str) -> Result<(), String> {
             stop.store(true, Ordering::SeqCst);
             p.state(json!({"status": "stopped", "reason": "stop word"}));
             return Ok(());
+        }
+        if let Some(d) = desk.as_mut() {
+            let acts = d.hear(&plain);
+            last_me = now();
+            if finish(acts, &mouth, p, &stop) {
+                return Ok(());
+            }
+            continue;
         }
         let asked = QUESTION.is_match(&said);
         let addressed = wake.is_match(&plain) || (asked && YOU.is_match(&plain));

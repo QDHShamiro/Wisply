@@ -229,6 +229,7 @@ fn need<'a>(rest: &'a [String], what: &str) -> Result<&'a str, Fail> {
 }
 
 pub fn command(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
+    defaults::ensure(&d.home);
     if c.name == "routines" {
         return Ok(Out::Text(listing(d, ctx, c)));
     }

@@ -77,7 +77,7 @@ pub const WEB_ONLY: &[&str] = &[
     "frames",
 ];
 const MORE: &[&str] = &["read", "research", "listen", "watch", "voice", "phone", "claude", "desktop"];
-pub const CLIENT: &[&str] = &["more", "peek", "kit", "skill", "progress", "codemode"];
+pub const CLIENT: &[&str] = &["more", "peek", "kit", "skill", "progress", "codemode", "call"];
 const HIDDEN: &[&str] = &["hook", "suggest", "board", "access-prompt", "autoload", "ping"];
 const GUESS: &[(&str, &str)] = &[
     ("find", "snap -f \"word\" (page), code <name> (code) or recall \"words\" (memory)"),
