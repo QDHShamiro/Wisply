@@ -109,7 +109,7 @@ pub fn args(kind: Kind, model: &Path, port: u16, threads: usize) -> Vec<String> 
             "--cache-reuse",
             "256",
         ],
-        Kind::Asr => &["--inference-path", ASR_PATH, "-nt", "-bo", "1"],
+        Kind::Asr => &["--inference-path", ASR_PATH, "-nt", "-bo", "1", "-l", "auto"],
     };
     list.extend(extra.iter().map(|a| (*a).to_string()));
     list
@@ -358,6 +358,12 @@ mod tests {
         assert!(list.windows(2).any(|w| w[0] == "--inference-path" && w[1] == "/v1/audio/transcriptions"));
         assert!(!list.contains(&"-c".to_string()));
         assert!(list.contains(&"-nt".to_string()));
+    }
+
+    #[test]
+    fn whisper_detects_the_language_unless_the_request_names_one() {
+        let list = args(Kind::Asr, Path::new("w.bin"), 5001, 3);
+        assert!(list.windows(2).any(|w| w[0] == "-l" && w[1] == "auto"));
     }
 
     #[test]
