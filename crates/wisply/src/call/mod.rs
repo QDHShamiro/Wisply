@@ -20,6 +20,7 @@ use answer::Opts;
 use cfg::fill;
 use ring::{Kind, Spec};
 
+#[cfg(windows)]
 pub use talk::{Act, Desk};
 
 const HELP: &str = "wisply call ask \"<question>\" [--choices ja,nein] [--wait 300] [--channels ntfy,callmebot] [--force] (rings him, waits, prints the answer)

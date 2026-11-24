@@ -1,3 +1,5 @@
+#![cfg_attr(not(windows), allow(dead_code))]
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
