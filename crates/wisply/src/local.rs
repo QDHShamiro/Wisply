@@ -68,6 +68,7 @@ pub fn ensure(home: &Path, kind: Kind) -> Result<String, Why> {
     }
 }
 
+#[cfg(windows)]
 pub fn release(home: &Path, kind: Kind) {
     let _ = crate::client::ask(home, &["local-url", kind.label(), "stop"]);
 }
