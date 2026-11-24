@@ -23,6 +23,8 @@ use wisply_core::{Call, Fail};
 use super::ctx::Ctx;
 use super::{Daemon, Out};
 
+pub use secret::scrub;
+
 pub fn start(home: PathBuf) {
     server::start(&home);
     watch::start(home);

@@ -1,20 +1,21 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use wisply_core::{Call, Fail};
 
+use super::cache::{self, Mark, Slot};
 use super::words::{fold, near};
 
 pub const APPS: &[&str] = &["discord", "whatsapp"];
 const FILE: &str = "contacts.json";
 const PREFIX_MIN: usize = 3;
 const FUZZY_MIN: usize = 4;
-const USAGE: &str =
-    "wisply contact add Franz discord=Froxotron alias=franzi | wisply contact rm Franz | wisply contacts";
+const USAGE: &str = "wisply contact add Anna discord=anna_99 alias=annie | contact rm Anna | contacts";
 
 static LOCK: Mutex<()> = Mutex::new(());
+static PEOPLE: Slot<Mark, Vec<Person>> = Slot::new();
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Person {
@@ -92,15 +93,26 @@ impl Person {
     }
 }
 
-pub fn load(home: &Path) -> Vec<Person> {
+pub(super) fn read(home: &Path) -> Vec<Person> {
     let raw = fs::read_to_string(file(home)).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
     raw.and_then(|v| v["people"].as_array().cloned()).unwrap_or_default().iter().map(Person::of).collect()
+}
+
+pub fn loaded(home: &Path) -> Arc<Vec<Person>> {
+    PEOPLE.get(home, cache::mark(&file(home)), || read(home))
+}
+
+pub fn load(home: &Path) -> Vec<Person> {
+    loaded(home).as_ref().clone()
 }
 
 fn save(home: &Path, people: &[Person]) -> Result<(), Fail> {
     let body = json!({"people": people.iter().map(Person::json).collect::<Vec<_>>()});
     let text = serde_json::to_string_pretty(&body).map_err(|e| Fail::new(e.to_string()))?;
-    wisply_core::save(file(home), text).map_err(|e| Fail::new(format!("could not save contacts ({e})")))
+    PEOPLE.clear();
+    let saved = wisply_core::save(file(home), text).map_err(|e| Fail::new(format!("could not save contacts ({e})")));
+    PEOPLE.clear();
+    saved
 }
 
 fn folded(p: &Person) -> Vec<String> {
@@ -232,30 +244,34 @@ fn rm(home: &Path, c: &Call) -> Result<String, Fail> {
 pub fn row(p: &Person) -> String {
     let mut parts = vec![p.name.clone()];
     if !p.discord.is_empty() {
-        parts.push(format!("discord @{}", p.discord));
+        parts.push(format!("discord={}", quoted(&p.discord)));
     }
     if !p.whatsapp.is_empty() {
-        parts.push(format!("whatsapp \"{}\"", p.whatsapp));
+        parts.push(format!("whatsapp={}", quoted(&p.whatsapp)));
     }
     if !p.alias.is_empty() {
-        parts.push(format!("also {}", p.alias.join(", ")));
+        parts.push(format!("alias={}", p.alias.join(",")));
     }
     if !p.app.is_empty() {
-        parts.push(format!("usually {}", p.app));
+        parts.push(format!("app={}", p.app));
     }
     if !p.dm.is_empty() {
-        parts.push("dm link known".into());
+        parts.push("dm".into());
     }
     if p.sent > 0 {
-        parts.push(format!("{} sent", p.sent));
+        parts.push(format!("sent={}", p.sent));
     }
-    parts.join(" · ")
+    parts.join(" ")
+}
+
+fn quoted(v: &str) -> String {
+    if v.contains(char::is_whitespace) { format!("\"{v}\"") } else { v.to_string() }
 }
 
 fn list(home: &Path) -> String {
     let people = load(home);
     if people.is_empty() {
-        return format!("no contacts yet; they fill up as you send, or add one: {USAGE}");
+        return format!("no contacts, add: {USAGE}");
     }
     people.iter().map(row).collect::<Vec<_>>().join("\n")
 }
@@ -270,7 +286,7 @@ fn sent(home: &Path, c: &Call) -> Result<String, Fail> {
         return Err(Fail::hint(format!("contact sent needs app={}", APPS.join("|")), USAGE));
     }
     learn(home, name, &app, get("handle").unwrap_or(name), get("dm"));
-    Ok(format!("noted a message to {name}"))
+    Ok(format!("noted {name}"))
 }
 
 pub fn command(home: &Path, c: &Call) -> Result<String, Fail> {
@@ -304,27 +320,27 @@ mod tests {
     #[test]
     fn add_find_learn_and_remove() {
         let h = home("cycle");
-        command(&h, &call("contact", &["add", "franz", "discord=Froxotron", "alias=franzi,foxo"])).expect("add");
+        command(&h, &call("contact", &["add", "anna", "discord=anna_99", "alias=annie,nana"])).expect("add");
         let people = load(&h);
-        assert!(knows(&people, "Franz") && knows(&people, "froxotron") && knows(&people, "foxo"));
-        assert!(matches!(find(&people, "franzi"), Found::One(p) if p.name == "Franz"));
-        assert!(matches!(find(&people, "fra"), Found::Maybe(v) if v.len() == 1));
-        assert!(matches!(find(&people, "lukas"), Found::Nobody));
-        assert!(matches!(find(&people, "fr"), Found::Nobody));
-        learn(&h, "Franz", "discord", "Froxotron", Some("https://discord.com/channels/@me/42"));
+        assert!(knows(&people, "Anna") && knows(&people, "anna_99") && knows(&people, "nana"));
+        assert!(matches!(find(&people, "annie"), Found::One(p) if p.name == "Anna"));
+        assert!(matches!(find(&people, "ann"), Found::Maybe(v) if v.len() == 1));
+        assert!(matches!(find(&people, "ben"), Found::Nobody));
+        assert!(matches!(find(&people, "an"), Found::Nobody));
+        learn(&h, "Anna", "discord", "anna_99", Some("https://discord.com/channels/@me/42"));
         let p = load(&h).remove(0);
         assert_eq!((p.app.as_str(), p.dm.as_str(), p.sent), ("discord", "https://discord.com/channels/@me/42", 1));
         assert_eq!(p.app_for(None).as_deref(), Some("discord"));
-        assert_eq!(p.handle("whatsapp"), "Franz");
+        assert_eq!(p.handle("whatsapp"), "Anna");
         learn(&h, "mama", "whatsapp", "Mama", None);
         let people = load(&h);
         assert!(matches!(find(&people, "mama"), Found::One(p) if p.whatsapp == "Mama" && p.name == "Mama"));
         let dm = "dm=https://discord.com/channels/@me/7";
-        command(&h, &call("contact", &["sent", "Albion", "app=discord", "handle=xALBIONx", dm])).expect("sent");
-        let a = load(&h).into_iter().find(|p| p.name == "Albion").expect("albion");
-        assert_eq!((a.discord.as_str(), a.dm.as_str(), a.sent), ("xALBIONx", "https://discord.com/channels/@me/7", 1));
-        assert!(command(&h, &call("contact", &["sent", "Albion", "app=icq"])).is_err());
-        command(&h, &call("contact", &["rm", "franz"])).expect("rm");
+        command(&h, &call("contact", &["sent", "Tom", "app=discord", "handle=xTOMx", dm])).expect("sent");
+        let a = load(&h).into_iter().find(|p| p.name == "Tom").expect("tom");
+        assert_eq!((a.discord.as_str(), a.dm.as_str(), a.sent), ("xTOMx", "https://discord.com/channels/@me/7", 1));
+        assert!(command(&h, &call("contact", &["sent", "Tom", "app=icq"])).is_err());
+        command(&h, &call("contact", &["rm", "anna"])).expect("rm");
         assert_eq!(load(&h).len(), 2);
         assert!(command(&h, &call("contact", &["add", "x", "bogus=1"])).is_err());
         let _ = fs::remove_dir_all(&h);
@@ -333,8 +349,8 @@ mod tests {
     #[test]
     fn two_people_with_one_alias_are_ambiguous() {
         let h = home("twins");
-        command(&h, &call("contact", &["add", "Lukas", "alias=lu"])).expect("a");
-        command(&h, &call("contact", &["add", "Luis", "alias=lu"])).expect("b");
+        command(&h, &call("contact", &["add", "Ben", "alias=lu"])).expect("a");
+        command(&h, &call("contact", &["add", "Lea", "alias=lu"])).expect("b");
         assert!(matches!(find(&load(&h), "lu"), Found::Maybe(v) if v.len() == 2));
         let _ = fs::remove_dir_all(&h);
     }
@@ -343,17 +359,17 @@ mod tests {
     fn typos_case_and_umlauts_find_exactly_one() {
         let named = |n: &str| Person { name: n.to_string(), ..Person::default() };
         let people: Vec<Person> =
-            ["Franz", "Jürgen", "Lukas", "Mario", "Marie", "Ben"].into_iter().map(named).collect();
-        for typo in ["frans", "FRANZ", "franzz", "fanz", "frnaz"] {
-            assert!(matches!(find(&people, typo), Found::One(p) if p.name == "Franz"), "{typo}");
+            ["Jonas", "Jürgen", "Tobias", "Mario", "Marie", "Ben"].into_iter().map(named).collect();
+        for typo in ["jonaz", "JONAS", "jonass", "joas", "jnoas"] {
+            assert!(matches!(find(&people, typo), Found::One(p) if p.name == "Jonas"), "{typo}");
         }
         for typo in ["juergen", "JUERGEN", "jürgen", "juergn", "jurgen"] {
             assert!(matches!(find(&people, typo), Found::One(p) if p.name == "Jürgen"), "{typo}");
         }
-        assert!(matches!(find(&people, "lukaz"), Found::One(p) if p.name == "Lukas"));
+        assert!(matches!(find(&people, "tobiaz"), Found::One(p) if p.name == "Tobias"));
         assert!(matches!(find(&people, "marik"), Found::Maybe(v) if v.len() == 2));
         assert!(matches!(find(&people, "bem"), Found::Nobody));
         assert!(matches!(find(&people, "xyzzy"), Found::Nobody));
-        assert!(knows(&people, "frnaz") && knows(&people, "Juergen") && !knows(&people, "marik"));
+        assert!(knows(&people, "jnoas") && knows(&people, "Juergen") && !knows(&people, "marik"));
     }
 }

@@ -380,7 +380,7 @@ mod tests {
                 "Bewerbung Ausbildung apprenticeship",
                 "The apprenticeship application has a deadline at the district office.",
             ),
-            note(8, "Discord friends mapping", "Franz maps to Froxotron and Lukas to the lukfighter handle."),
+            note(8, "Discord friends mapping", "Anna maps to anna_99 and Ben to the benny handle."),
             note(9, "External disk spindown", "The external disk spins down after twenty minutes before spinup."),
             note(10, "ThumbnailEngine renderer", "Thumbnails use a procedural renderer with no image model at all."),
         ];

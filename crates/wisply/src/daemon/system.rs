@@ -41,6 +41,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
         peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
         progress [<percent> | <done>/<total>] [\"what you are doing\"] | progress show [--color] [--ascii] | progress clear (how far the task is, shown in the status line; plan tools are noted by themselves)
+        call ask \"<question>\" [--choices ja,nein] [--wait 300] (rings the user free via ntfy, blocks until the answer, prints it) | call notice \"<text>\" | call away on|off | call briefing | call setup | call hook-config (a free way for any AI to call the user, help: call help)
         kit | kit add <name> \"what it does\" [--file script | --rust file.rs|cargo-folder] [--replace] -- <program> [args with {1} {all} {file} {exe}] | kit run <name> [args] | kit show|rm <name> (tools of your own, kept for this user: every session and every AI runs them)
         skill | skill find <words> [--web] | skill new <name> \"what it does, use when ...\" --file text.md | skill add <folder> | skill get <owner/repo/path> | skill check <folder or name> | skill rm <name> (finds, builds, checks and installs skills for every AI on this PC)
         secure [folder|domain|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json] (keys, vulnerable dependencies, risky code, headers of your own sites; not while a game runs)
@@ -55,7 +56,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
 code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many shell, file and wisply steps in one call, only the result comes back; wisply codemode help)
         mcp (MCP server on stdin/stdout for any AI: one tool \"wisply\" that takes a command or code mode code)
         run <name|words> [k=v ...] [--yes]   routines [-f word]   routine save|show|rm|rename|forget <name> (tasks done before, replayed in one call)
-        go \"<sentence>\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<sentence>\" | contacts | contact add <name> discord=<user> whatsapp=\"<chat>\" alias=a,b (plain orders in German or English, no AI: message people, play music, media keys, open, search, remind, screenshot, remember; \"in 10 min\" or \"um 18 Uhr\" plans it; Ctrl+Alt+Space opens a box to type one, hold it to say one)
+        go \"<order>\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<order>\" | contacts | contact add <name> discord=<user> whatsapp=<chat> alias=a,b (no AI, German or English: go \"schreib Anna bin gleich da\", go \"spiel Daft Punk\", go \"such auf youtube lofi\", go \"erinner mich in 10 min an Pizza\"; --dry previews; Ctrl+Alt+Space types one)
         learn [\"<task>\"] | learn save <name> \"<what it does>\" --file run.js --check check.js [k=v] | learn ok|practice|show|drop <name> (skills: taught once, practiced with a check, then one call; send-message, read-form, find-file, pr-ci come with Wisply)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.
