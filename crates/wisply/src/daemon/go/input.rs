@@ -6,12 +6,8 @@ use std::sync::{Mutex, OnceLock, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
-use windows::Win32::Graphics::Gdi::{
-    BeginPaint, CreateFontW, CreateSolidBrush, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, DeleteObject,
-    DrawTextW, EndPaint, FW_SEMIBOLD, FillRect, InvalidateRect, PAINTSTRUCT, SelectObject, SetBkMode, SetTextColor,
-    TRANSPARENT,
-};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Graphics::Gdi::InvalidateRect;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -21,15 +17,17 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetForegroundWindow, GetMessageW,
     GetSystemMetrics, GetWindowThreadProcessId, HHOOK, KBDLLHOOKSTRUCT, KillTimer, LWA_ALPHA, MSG, PostThreadMessageW,
-    RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWNOACTIVATE, SetLayeredWindowAttributes, SetTimer,
-    SetWindowsHookExW, ShowWindow, UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_APP, WM_HOTKEY, WM_KEYDOWN, WM_PAINT,
-    WM_SYSKEYDOWN, WM_TIMER, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_EX_TRANSPARENT, WS_POPUP,
+    RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER,
+    SetLayeredWindowAttributes, SetTimer, SetWindowPos, SetWindowsHookExW, ShowWindow, UnhookWindowsHookEx,
+    WH_KEYBOARD_LL, WM_APP, WM_HOTKEY, WM_KEYDOWN, WM_PAINT, WM_SYSKEYDOWN, WM_TIMER, WNDCLASSW, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
 use super::super::desk::clip_get;
 use super::super::media::transcribe;
+use super::assist::{self, VK_DOWN, VK_TAB, VK_UP};
+use super::draw::{self, BOX_H, BOX_W, TIP_H};
 use super::later::spawn_go;
 use crate::voice::{ASR_RATE, AUDIO_RATE, AudioKind, clean, record, wav};
 
@@ -51,15 +49,10 @@ const M_CANCEL: u32 = WM_APP + 2;
 const M_DONE: u32 = WM_APP + 3;
 const M_PASTE: u32 = WM_APP + 4;
 const KEY_INJECTED: u32 = 0x10;
-const BOX_W: i32 = 680;
-const BOX_H: i32 = 46;
 const BOX_TOP_DIV: i32 = 5;
-const PAD: i32 = 16;
 const ALPHA: u8 = 240;
-const FONT_PX: i32 = 19;
 const SHOWN_CHARS: usize = 72;
 const LINE_CHARS: usize = 160;
-const BG: u32 = 0x0020_1C1C;
 const FG: u32 = 0x00F2_F2F2;
 const DIM: u32 = 0x0090_9090;
 const RED: u32 = 0x0050_50F0;
@@ -132,6 +125,22 @@ fn typed(vk: u32, scan: u32) -> String {
     if n > 0 { String::from_utf16_lossy(&buf[..n as usize]) } else { String::new() }
 }
 
+fn box_h() -> i32 {
+    if MODE.load(Ordering::SeqCst) == TYPING { BOX_H + TIP_H } else { BOX_H }
+}
+
+fn ask() {
+    if let Some(home) = HOME.get() {
+        assist::ask(home, &text(), redraw);
+    }
+}
+
+fn shrink() {
+    if let Some(h) = win() {
+        let _ = unsafe { SetWindowPos(h, None, 0, 0, BOX_W, box_h(), SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER) };
+    }
+}
+
 fn idle_again() {
     if let Some(h) = win() {
         unsafe { SetTimer(Some(h), T_IDLE, IDLE_MS, None) };
@@ -153,14 +162,18 @@ fn key(vk: u32, scan: u32) {
             } else {
                 t.pop();
             }
+            assist::typed();
         }
+        VK_UP | VK_DOWN | VK_TAB => assist::nav(vk, &mut text()),
         _ => {
             let add: String = typed(vk, scan).chars().filter(|c| !c.is_control()).collect();
             text().push_str(&add);
+            assist::typed();
         }
     }
     idle_again();
     redraw();
+    ask();
 }
 
 unsafe extern "system" fn on_key(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
@@ -203,40 +216,9 @@ unsafe extern "system" fn paint(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
     if msg != WM_PAINT {
         return unsafe { DefWindowProcW(hwnd, msg, wp, lp) };
     }
-    let (line, color) = shown();
-    unsafe {
-        let mut ps = PAINTSTRUCT::default();
-        let dc = BeginPaint(hwnd, &raw mut ps);
-        let brush = CreateSolidBrush(COLORREF(BG));
-        let full = RECT { left: 0, top: 0, right: BOX_W, bottom: BOX_H };
-        FillRect(dc, &raw const full, brush);
-        let font = CreateFontW(
-            FONT_PX,
-            0,
-            0,
-            0,
-            FW_SEMIBOLD.0 as i32,
-            0,
-            0,
-            0,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            0,
-            w!("Segoe UI"),
-        );
-        let old = SelectObject(dc, font.into());
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, COLORREF(color));
-        let mut r = RECT { left: PAD, top: 0, right: BOX_W - PAD, bottom: BOX_H };
-        let mut wide: Vec<u16> = line.encode_utf16().collect();
-        DrawTextW(dc, &mut wide, &raw mut r, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-        SelectObject(dc, old);
-        let _ = DeleteObject(font.into());
-        let _ = DeleteObject(brush.into());
-        let _ = EndPaint(hwnd, &raw const ps);
-    }
+    let (main, color) = shown();
+    let tip = if MODE.load(Ordering::SeqCst) == TYPING { assist::line_for(&text()) } else { String::new() };
+    draw::paint(hwnd, &draw::Lines { main: &main, color, tip: &tip, height: box_h() });
     LRESULT(0)
 }
 
@@ -267,7 +249,7 @@ fn open_box() -> bool {
             x,
             y,
             BOX_W,
-            BOX_H,
+            box_h(),
             None,
             None,
             Some(inst.into()),
@@ -297,6 +279,7 @@ fn close() {
     unhook();
     MODE.store(CLOSED, Ordering::SeqCst);
     text().clear();
+    assist::clear();
     let h = WIN.swap(0, Ordering::SeqCst);
     if h != 0 {
         let h = HWND(h as *mut _);
@@ -348,6 +331,9 @@ fn submit(home: &Path) {
         return close();
     }
     MODE.store(BUSY, Ordering::SeqCst);
+    assist::remember(home, &said);
+    assist::clear();
+    shrink();
     set_text(&said);
     let home = home.to_path_buf();
     let _ = thread::Builder::new().name("go-box".into()).spawn(move || run_go(&home, &said));
@@ -412,6 +398,9 @@ fn on_hotkey(home: &Path) {
         thread::sleep(HOLD_POLL);
     };
     text().clear();
+    if !held {
+        assist::open(home);
+    }
     MODE.store(if held { LISTEN } else { TYPING }, Ordering::SeqCst);
     if !open_box() {
         MODE.store(CLOSED, Ordering::SeqCst);
@@ -431,8 +420,10 @@ fn paste() {
     if let Some(clip) = clip_get() {
         let one: String = clip.split_whitespace().collect::<Vec<_>>().join(" ");
         text().push_str(&one);
+        assist::typed();
         idle_again();
         redraw();
+        ask();
     }
 }
 

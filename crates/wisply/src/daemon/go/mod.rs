@@ -1,8 +1,14 @@
 mod act;
+#[cfg(windows)]
+mod assist;
 #[cfg(test)]
 mod bench;
 pub mod cache;
 mod contacts;
+#[cfg(windows)]
+mod draw;
+mod hint;
+mod history;
 #[cfg(windows)]
 mod input;
 mod later;
@@ -10,16 +16,16 @@ mod parse;
 mod teach;
 mod words;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use wisply_core::{Call, Fail};
 
 use super::ctx::{Ctx, now};
 use super::{Daemon, Out, web};
-use parse::{Know, Plan, describe, label};
+use parse::{Act, Know, Plan, describe, label};
 
-pub const USAGE: &str = "wisply go \"schreib Franz bin gleich da\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<order>\"";
+pub const USAGE: &str = "wisply go \"schreib Anna bin gleich da\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<order>\"";
 
 pub fn start(home: PathBuf) {
     #[cfg(windows)]
@@ -68,11 +74,47 @@ fn taught(d: &Daemon, ctx: &mut Ctx, said: &str, (dry, yes): (bool, bool), t0: I
     }))
 }
 
-fn plan(home: &std::path::Path, said: &str, t: f64) -> Result<Plan, Fail> {
+fn parsed(home: &Path, said: &str, t: f64) -> Result<Option<Plan>, Fail> {
     let people = contacts::load(home);
     let person = |w: &str| contacts::knows(&people, w);
     let site = |w: &str| web::site(home, w).is_some();
-    parse::parse(said, t, &Know { person: &person, site: &site })?.ok_or_else(|| teach::unknown(said))
+    parse::parse(said, t, &Know { person: &person, site: &site })
+}
+
+fn plan(home: &Path, said: &str, t: f64) -> Result<Plan, Fail> {
+    parsed(home, said, t)?.ok_or_else(|| teach::unknown(said))
+}
+
+fn shown(home: &Path, plan: Plan, yes: bool, t: f64) -> Result<String, Fail> {
+    let who = act::preview(home, &plan.act, yes)?;
+    let Act::Msg { text, .. } = &plan.act else { return Ok(describe(&plan, t)) };
+    if who.is_empty() {
+        return Ok(describe(&plan, t));
+    }
+    let line = format!("message to {who}: \"{text}\"");
+    Ok(match plan.when {
+        Some(at) => format!("{line} at {}", label(t, at)),
+        None => line,
+    })
+}
+
+fn dry(home: &Path, said: &str) -> Result<Option<String>, Fail> {
+    if let Some(hit) = teach::find(home, said) {
+        return Ok(Some(format!("would run routine {} {}", hit.name, hit.pairs.join(" ")).trim().to_string()));
+    }
+    let t = now();
+    let Some(plan) = parsed(home, said, t)? else { return Ok(None) };
+    let plan = Plan { when: plan.when.filter(|at| *at > t), act: plan.act };
+    Ok(Some(format!("would do: {}", shown(home, plan, false, t)?)))
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn preview(home: &Path, said: &str) -> String {
+    let said = said.trim();
+    if said.is_empty() {
+        return String::new();
+    }
+    hint::line(dry(home, said).map_err(|f| f.text()))
 }
 
 fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
@@ -85,10 +127,8 @@ fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
     let plan = plan(&d.home, said, t)?;
     let later_at = plan.when.filter(|at| !c.on("now") && *at > t);
     if dry {
-        let who = act::preview(&d.home, &plan.act, yes)?;
-        let shown = Plan { act: plan.act, when: later_at };
-        let tail = if who.is_empty() { String::new() } else { format!(" -> {who}") };
-        return Ok(Out::Text(format!("dry: {}{tail}", describe(&shown, t))));
+        let line = shown(&d.home, Plan { act: plan.act, when: later_at }, yes, t)?;
+        return Ok(Out::Text(format!("dry: {line}")));
     }
     if let Some(at) = later_at {
         act::preview(&d.home, &plan.act, yes)?;

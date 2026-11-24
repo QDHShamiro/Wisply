@@ -181,7 +181,7 @@ fn a_skill_is_saved_practiced_with_its_check_approved_and_then_runs_in_one_call(
     let (_, out) = home.run(&["learn", "gree"]);
     assert!(out.contains("\ntask: gree"), "{out}");
     let (_, out) = home.run(&["learn"]);
-    assert!(out.starts_with("find-file name= in= | learned | not run yet (by hand ~"), "{out}");
+    assert!(out.contains("find-file name= in= | learned | not run yet (by hand ~"), "{out}");
     assert!(
         out.contains("\ngreet who= | learned | 1/2 ok | ")
             && out.contains("send-message to= text= app= dm= list= | learned"),

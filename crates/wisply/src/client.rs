@@ -77,6 +77,7 @@ fn without_daemon(home: &Path, first: &str, args: &[String]) -> Option<ExitCode>
         "review" | "analyze" => crate::review::run(home, rest),
         "setup" | "install" | "uninstall" => crate::setup::run(home, args),
         "pupil" => crate::pupil::run(home, rest),
+        "call" => crate::call::run(home, rest),
         _ => return None,
     })
 }

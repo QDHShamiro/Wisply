@@ -41,6 +41,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
         peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
         progress [<percent> | <done>/<total>] [\"what you are doing\"] | progress show [--color] [--ascii] | progress clear (how far the task is, shown in the status line; plan tools are noted by themselves)
+        call ask \"<question>\" [--choices ja,nein] [--wait 300] (rings the user free via ntfy, blocks until the answer, prints it) | call notice \"<text>\" | call away on|off | call briefing | call setup | call hook-config (a free way for any AI to call the user, help: call help)
         kit | kit add <name> \"what it does\" [--file script | --rust file.rs|cargo-folder] [--replace] -- <program> [args with {1} {all} {file} {exe}] | kit run <name> [args] | kit show|rm <name> (tools of your own, kept for this user: every session and every AI runs them)
         skill | skill find <words> [--web] | skill new <name> \"what it does, use when ...\" --file text.md | skill add <folder> | skill get <owner/repo/path> | skill check <folder or name> | skill rm <name> (finds, builds, checks and installs skills for every AI on this PC)
         secure [folder|domain|file.jar|file.apk|file.exe] [--history] [--no-deps] [--json] (keys, vulnerable dependencies, risky code, headers of your own sites; not while a game runs)

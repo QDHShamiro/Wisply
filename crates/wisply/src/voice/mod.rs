@@ -233,6 +233,37 @@ fn spawn(p: &Paths, args: &[&str]) -> Result<u32, Fail> {
     Ok(0)
 }
 
+fn ready(home: &Path, p: &Paths) -> Result<(), Fail> {
+    let have = keys();
+    let missing: Vec<&str> = KEYS.iter().copied().filter(|k| !have.contains_key(*k)).collect();
+    if !missing.is_empty() {
+        return Err(Fail::hint(format!("missing {}", missing.join(", ")), "add it to ~/.config/watch/.env"));
+    }
+    let cfg = p.config();
+    let unset: Vec<&str> = NEEDED.iter().copied().filter(|k| text(&cfg, k).is_empty()).collect();
+    if !unset.is_empty() {
+        return Err(Fail::hint(
+            format!("voice needs your audio devices first: {}", unset.join(", ")),
+            "wisply voice set listen_device=<what Discord plays to> discord_out=<the same device>",
+        ));
+    }
+    mouth::tts_exe(home)?;
+    Ok(())
+}
+
+pub fn start_call(home: &Path, target: &str) -> Result<u32, Fail> {
+    let p = Paths::new(home);
+    let cur = p.current();
+    let pid_of = |k: &str| cur.get(k).and_then(Value::as_u64).unwrap_or(0);
+    let status = cur.get("status").and_then(Value::as_str).unwrap_or("");
+    if matches!(status, "running" | "starting") && (alive(pid_of("pid")) || alive(pid_of("session_pid"))) {
+        return Ok(0);
+    }
+    ready(home, &p)?;
+    p.state(json!({"status": "starting", "target": target, "mode": "call"}));
+    spawn(&p, &["voice-session", target])
+}
+
 fn coerce(default: &Value, raw: &str) -> Option<Value> {
     match default {
         Value::Bool(_) => Some(json!(matches!(raw.to_lowercase().as_str(), "1" | "on" | "true" | "ja"))),
@@ -256,25 +287,12 @@ pub fn command(home: &Path, pos: &[String]) -> Result<String, Fail> {
             if running {
                 return Err(Fail::hint(format!("already in a call ({})", target_of()), "wisply voice leave"));
             }
-            let have = keys();
-            let missing: Vec<&str> = KEYS.iter().copied().filter(|k| !have.contains_key(*k)).collect();
-            if !missing.is_empty() {
-                return Err(Fail::hint(format!("missing {}", missing.join(", ")), "add it to ~/.config/watch/.env"));
-            }
-            let cfg = p.config();
-            let unset: Vec<&str> = NEEDED.iter().copied().filter(|k| text(&cfg, k).is_empty()).collect();
-            if !unset.is_empty() {
-                return Err(Fail::hint(
-                    format!("voice needs your audio devices first: {}", unset.join(", ")),
-                    "wisply voice set listen_device=<what Discord plays to> discord_out=<the same device>",
-                ));
-            }
-            mouth::tts_exe(home)?;
+            ready(home, &p)?;
             let target = if sub == "join" { pos[1..].join(" ") } else { String::new() };
             if sub == "join" && target.is_empty() {
                 return Err(Fail::hint("join needs a chat name", "wisply voice join \"Friends\""));
             }
-            p.state(json!({"status": "starting", "target": target}));
+            p.state(json!({"status": "starting", "target": target, "mode": ""}));
             let pid = spawn(&p, &["voice-session", &target])?;
             let shown = if target.is_empty() { "the open chat".to_string() } else { target };
             Ok(format!("voice: joining {shown} (pid {pid}), check with: wisply voice status"))
