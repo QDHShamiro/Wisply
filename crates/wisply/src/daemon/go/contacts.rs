@@ -8,8 +8,7 @@ use wisply_core::{Call, Fail};
 pub const APPS: &[&str] = &["discord", "whatsapp"];
 const FILE: &str = "contacts.json";
 const PREFIX_MIN: usize = 3;
-const USAGE: &str =
-    "wisply contact add Franz discord=Froxotron alias=franzi | wisply contact rm Franz | wisply contacts";
+const USAGE: &str = "wisply contact add Anna discord=anna_99 alias=annie | wisply contact rm Anna | wisply contacts | wisply contacts scan [--add]";
 
 static LOCK: Mutex<()> = Mutex::new(());
 
@@ -159,7 +158,7 @@ fn pairs(c: &Call) -> Vec<(String, String)> {
         .skip(2)
         .filter_map(|p| p.split_once('=').map(|(k, v)| (k.trim().to_lowercase(), v.trim().to_string())))
         .collect();
-    for k in ["discord", "whatsapp", "alias", "app"] {
+    for k in ["discord", "whatsapp", "alias", "app", "dm"] {
         if let Some(v) = c.val(k) {
             out.push((k.to_string(), v.to_string()));
         }
@@ -178,6 +177,7 @@ fn add(home: &Path, c: &Call) -> Result<String, Fail> {
         match k.as_str() {
             "discord" => p.discord = v,
             "whatsapp" | "wa" => p.whatsapp = v,
+            "dm" => p.dm = v,
             "app" if APPS.contains(&v.to_lowercase().as_str()) => p.app = v.to_lowercase(),
             "alias" => {
                 for a in v.split(',').map(|a| a.trim().to_lowercase()).filter(|a| !a.is_empty()) {

@@ -23,7 +23,7 @@ struct Shipped {
     before_tokens: u64,
 }
 
-const SHIPPED: [Shipped; 4] = [
+const SHIPPED: [Shipped; 5] = [
     Shipped {
         name: "send-message",
         about: "send a chat message (WhatsApp Web, Telegram Web, Discord Web, or a chat app on the desktop)",
@@ -80,6 +80,17 @@ const SHIPPED: [Shipped; 4] = [
         check: include_str!("defaults/pr-ci.check.js"),
         before_ms: 300_000,
         before_tokens: 3000,
+    },
+    Shipped {
+        name: "list-chats",
+        about: "read the Discord DM list and the WhatsApp chat list (read only) so contacts can be found",
+        guide: "app = all (default) | discord | whatsapp, max = most chats per app; one line per chat: app, name, dm link or chat|group",
+        tags: &["contacts", "kontakte", "scan", "dms", "chatliste", "chats"],
+        params: &["app", "max"],
+        code: include_str!("defaults/list-chats.js"),
+        check: include_str!("defaults/list-chats.check.js"),
+        before_ms: 90_000,
+        before_tokens: 5000,
     },
 ];
 
