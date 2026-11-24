@@ -64,21 +64,21 @@ mod tests {
 
     fn people() -> Vec<Vec<String>> {
         let p = |w: &[&str]| w.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-        vec![p(&["Franz", "franzi"]), p(&["Frank"]), p(&["Mira", "mimi"]), p(&["Mirko"])]
+        vec![p(&["Hanna", "hanni"]), p(&["Hannes"]), p(&["Mira", "mimi"]), p(&["Mirko"])]
     }
 
     #[test]
     fn tab_completes_a_unique_prefix_in_the_last_word() {
         assert_eq!(complete("schreib Mirk", &people()).as_deref(), Some("schreib Mirko "));
         assert_eq!(complete("schreib mim", &people()).as_deref(), Some("schreib mimi "));
-        assert_eq!(complete("schreib Franzi", &people()), None);
-        assert_eq!(complete("schreib frank", &people()), None);
+        assert_eq!(complete("schreib Hanni", &people()), None);
+        assert_eq!(complete("schreib hannes", &people()), None);
     }
 
     #[test]
     fn tab_stays_quiet_when_two_people_match() {
         assert_eq!(complete("schreib Mi", &people()), None);
-        assert_eq!(complete("schreib Fran", &people()), None);
+        assert_eq!(complete("schreib Hann", &people()), None);
     }
 
     #[test]
@@ -86,7 +86,7 @@ mod tests {
         assert_eq!(complete("", &people()), None);
         assert_eq!(complete("schreib ", &people()), None);
         assert_eq!(complete("schreib Zed", &people()), None);
-        assert_eq!(complete("schreib Fran", &[]), None);
+        assert_eq!(complete("schreib Hann", &[]), None);
     }
 
     #[test]
@@ -110,6 +110,15 @@ mod tests {
         let seen = crate::daemon::go::preview(&home, "  lauter ");
         assert!(seen.starts_with("\u{2192} would do: media key volumeup"), "{seen}");
         assert_eq!(crate::daemon::go::preview(&home, "   "), "");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn preview_names_a_known_person_once() {
+        let home = empty_home("known");
+        crate::daemon::go::contacts::learn(&home, "Anna", "discord", "anna_99", None);
+        let seen = crate::daemon::go::preview(&home, "schreib Anna hi");
+        assert_eq!(seen, "\u{2192} would do: message to Anna (discord): \"hi\"");
         let _ = std::fs::remove_dir_all(&home);
     }
 
@@ -138,7 +147,7 @@ mod tests {
 
     #[test]
     fn errors_show_only_the_message() {
-        let e = "err: send what? -> try: wisply go \"schreib Franz hi\"".to_string();
+        let e = "err: send what? -> try: wisply go \"schreib Hanna hi\"".to_string();
         assert_eq!(line(Err(e)), "\u{2192} send what?");
         assert_eq!(line(Err("plain\nsecond".into())), "\u{2192} plain");
     }
