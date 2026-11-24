@@ -5,6 +5,15 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [Unreleased]
+
+### Fixed
+- The local speech-to-text server now detects the spoken language (`-l auto`) instead of falling back to English, so
+  German and other non-English audio without a language hint is no longer translated into English. A `language`
+  in the request still wins.
+- While a game runs with `local_game allow`, only the local language model drops to idle priority. Speech-to-text
+  stays at below-normal, so a spoken command no longer waits behind every busy process on the PC.
+
 ## [3.8.0] - 2026-11-24
 
 ### Added
