@@ -1,4 +1,7 @@
 mod act;
+#[cfg(test)]
+mod bench;
+pub mod cache;
 mod contacts;
 #[cfg(windows)]
 mod input;
@@ -16,8 +19,7 @@ use super::ctx::{Ctx, now};
 use super::{Daemon, Out, web};
 use parse::{Know, Plan, describe, label};
 
-pub const USAGE: &str = "wisply go \"schreib Franz bin gleich da\" [--dry] [--yes] [--now] · wisply go --list · \
-wisply go --cancel N · wisply go --teach \"<sentence>\" · wisply contacts";
+pub const USAGE: &str = "wisply go \"schreib Franz bin gleich da\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<order>\"";
 
 pub fn start(home: PathBuf) {
     #[cfg(windows)]
@@ -53,9 +55,7 @@ fn cancel(d: &Daemon, c: &Call) -> Result<Out, Fail> {
 fn taught(d: &Daemon, ctx: &mut Ctx, said: &str, (dry, yes): (bool, bool), t0: Instant) -> Option<Result<Out, Fail>> {
     let hit = teach::find(&d.home, said)?;
     if dry {
-        return Some(Ok(Out::Text(
-            format!("would run routine {} {}", hit.name, hit.pairs.join(" ")).trim().to_string(),
-        )));
+        return Some(Ok(Out::Text(format!("dry: routine {} {}", hit.name, hit.pairs.join(" ")).trim().to_string())));
     }
     let mut argv = vec!["run".to_string(), hit.name];
     argv.extend(hit.pairs);
@@ -68,10 +68,10 @@ fn taught(d: &Daemon, ctx: &mut Ctx, said: &str, (dry, yes): (bool, bool), t0: I
     }))
 }
 
-fn plan(d: &Daemon, said: &str, t: f64) -> Result<Plan, Fail> {
-    let people = contacts::load(&d.home);
+fn plan(home: &std::path::Path, said: &str, t: f64) -> Result<Plan, Fail> {
+    let people = contacts::load(home);
     let person = |w: &str| contacts::knows(&people, w);
-    let site = |w: &str| web::site(&d.home, w).is_some();
+    let site = |w: &str| web::site(home, w).is_some();
     parse::parse(said, t, &Know { person: &person, site: &site })?.ok_or_else(|| teach::unknown(said))
 }
 
@@ -82,19 +82,19 @@ fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
         return done;
     }
     let t = now();
-    let plan = plan(d, said, t)?;
+    let plan = plan(&d.home, said, t)?;
     let later_at = plan.when.filter(|at| !c.on("now") && *at > t);
     if dry {
         let who = act::preview(&d.home, &plan.act, yes)?;
         let shown = Plan { act: plan.act, when: later_at };
-        let tail = if who.is_empty() { String::new() } else { format!(" · {who}") };
-        return Ok(Out::Text(format!("would do: {}{tail}", describe(&shown, t))));
+        let tail = if who.is_empty() { String::new() } else { format!(" -> {who}") };
+        return Ok(Out::Text(format!("dry: {}{tail}", describe(&shown, t))));
     }
     if let Some(at) = later_at {
         act::preview(&d.home, &plan.act, yes)?;
         let what = describe(&Plan { act: plan.act, when: None }, t);
         let id = later::add(&d.home, at, said, &what)?;
-        return Ok(Out::Text(format!("planned #{id} for {}: {what}", label(t, at))));
+        return Ok(Out::Text(format!("planned #{id} {}: {what}", label(t, at))));
     }
     act::run(d, ctx, &plan.act, yes).map(|out| Out::Text(timed(&out, t0)))
 }

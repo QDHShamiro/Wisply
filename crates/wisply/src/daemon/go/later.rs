@@ -81,11 +81,11 @@ pub fn cancel(home: &Path, id: u64) -> Result<String, Fail> {
     let _g = guard();
     let mut jobs = load(home);
     let Some(pos) = jobs.iter().position(|j| j.id == id) else {
-        return Err(Fail::hint(format!("nothing planned with #{id}"), "wisply go --list"));
+        return Err(Fail::hint(format!("no #{id} planned"), "wisply go --list"));
     };
     let gone = jobs.remove(pos);
     save(home, &jobs)?;
-    Ok(format!("cancelled #{id} ({})", gone.what))
+    Ok(format!("cancelled #{id}: {}", gone.what))
 }
 
 pub fn take_due(home: &Path, t: f64) -> Vec<Job> {

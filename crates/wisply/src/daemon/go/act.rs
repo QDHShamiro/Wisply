@@ -11,6 +11,7 @@ use wisply_core::Fail;
 
 use super::super::ctx::Ctx;
 use super::super::{Daemon, Out, agents, routines, system, web};
+use super::cache;
 use super::contacts::{self, Found, Person};
 use super::parse::Act;
 
@@ -78,22 +79,22 @@ fn pick(people: &[Person], who: &str, yes: bool) -> Result<Person, String> {
     match contacts::find(people, who) {
         Found::One(p) => Ok(p),
         Found::Maybe(list) if !yes => {
-            Err(format!("{who}? could be {}", list.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" / ")))
+            Err(format!("{who}? {}", list.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" / ")))
         }
-        Found::Nobody if !yes => Err(format!("{who} is not in your contacts yet")),
+        Found::Nobody if !yes => Err(format!("{who} unknown")),
         _ => Ok(Person { name: who.to_string(), ..Person::default() }),
     }
 }
 
 fn resolve(home: &Path, who: &[String], asked: Option<&str>, yes: bool) -> Result<Vec<To>, Fail> {
-    let people = contacts::load(home);
+    let people = contacts::loaded(home);
     let mut out = Vec::new();
     let mut unsure = Vec::new();
     for w in who {
         match pick(&people, w, yes) {
             Ok(person) => match person.app_for(asked) {
                 Some(app) => out.push(To { person, app }),
-                None => unsure.push(format!("which app for {}? say \"auf discord\" or \"auf whatsapp\"", person.name)),
+                None => unsure.push(format!("{}: which app? add \"auf discord\" or \"auf whatsapp\"", person.name)),
             },
             Err(why) => unsure.push(why),
         }
@@ -102,21 +103,21 @@ fn resolve(home: &Path, who: &[String], asked: Option<&str>, yes: bool) -> Resul
         return Ok(out);
     }
     Err(Fail::hint(
-        format!("nothing sent: {}", unsure.join("; ")),
-        "wisply contact add <name> discord=<user> whatsapp=\"<chat name>\", or add --yes to use the chat with exactly that name",
+        format!("not sent, {}", unsure.join("; ")),
+        "wisply contact add <name> discord=<user> whatsapp=<chat>, or --yes for the exact chat name",
     ))
 }
 
 fn guard(text: &str, yes: bool) -> Result<(), Fail> {
     if LINK.is_match(text) && !yes {
-        return Err(Fail::hint("nothing sent: the text has a link", "add --yes if the link is meant"));
+        return Err(Fail::hint("not sent, text has a link", "add --yes if meant"));
     }
     Ok(())
 }
 
 fn lists(home: &Path) -> bool {
     routines::ensure_shipped(home);
-    routines::load_all(home)
+    cache::routines(home)
         .iter()
         .find(|r| r["name"] == SEND)
         .is_none_or(|r| r["script"]["code"].as_str().is_some_and(|c| c.contains("args.list")))
@@ -126,7 +127,7 @@ fn message(home: &Path, who: &[String], app: Option<&str>, text: &str, yes: bool
     guard(text, yes)?;
     let to = resolve(home, who, app, yes)?;
     let (Some(first), Some(last)) = (to.first(), to.last()) else {
-        return Err(Fail::hint("nothing sent: nobody to send to", super::USAGE));
+        return Err(Fail::hint("not sent, nobody to send to", super::USAGE));
     };
     let rows: Vec<serde_json::Value> = to
         .iter()
@@ -145,7 +146,7 @@ fn message(home: &Path, who: &[String], app: Option<&str>, text: &str, yes: bool
         }
     } else {
         return Err(Fail::hint(
-            "nothing sent: your send-message routine was changed and sends to one chat only",
+            "not sent, send-message routine was changed and takes one chat",
             "send to one person at a time",
         ));
     }
@@ -250,7 +251,7 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, act: &Act, yes: bool) -> Result<String, Fa
         Act::Search { site, q } => search(d, ctx, site.as_deref(), q),
         Act::Remind { text } => {
             agents::remind(&d.home, text, "Wisply");
-            Ok(format!("reminded: {text}"))
+            Ok(format!("reminded {text}"))
         }
         Act::Shot { of } => shot(d, ctx, of.as_deref()),
         Act::Remember { text } => once(d, ctx, &argv(&["remember", text])),
@@ -266,14 +267,8 @@ pub fn preview(home: &Path, act: &Act, yes: bool) -> Result<String, Fail> {
     let Act::Msg { who, app, text } = act else { return Ok(String::new()) };
     guard(text, yes)?;
     let to = resolve(home, who, app.as_deref(), yes)?;
-    let rows: Vec<String> = to
-        .iter()
-        .map(|t| {
-            let dm = if t.app == "discord" && !t.person.dm.is_empty() { ", dm link known" } else { "" };
-            format!("{} via {} \"{}\"{dm}", t.person.name, t.app, t.person.handle(&t.app))
-        })
-        .collect();
-    Ok(format!("to {}", rows.join(", ")))
+    let rows: Vec<String> = to.iter().map(|t| format!("{} ({})", t.person.name, t.app)).collect();
+    Ok(rows.join(", "))
 }
 
 #[cfg(test)]
@@ -305,13 +300,13 @@ mod tests {
         let ok = resolve(&home, &who(&["franz"]), None, false).expect("franz");
         assert_eq!((ok[0].app.as_str(), ok[0].person.handle("discord").as_str()), ("discord", "Froxotron"));
         let err = resolve(&home, &who(&["franz", "olaf"]), None, false).err().expect("olaf blocks");
-        assert!(err.msg.starts_with("nothing sent") && err.msg.contains("olaf"));
+        assert!(err.msg.starts_with("not sent") && err.msg.contains("olaf"));
         assert!(resolve(&home, &who(&["olaf"]), None, true).is_err());
         let forced = resolve(&home, &who(&["olaf"]), Some("whatsapp"), true).expect("forced");
         assert_eq!(forced[0].person.handle("whatsapp"), "olaf");
         assert!(
             preview(&home, &Act::Msg { who: who(&["franz"]), app: None, text: "hi".into() }, false)
-                .is_ok_and(|p| p.contains("Franz via discord \"Froxotron\""))
+                .is_ok_and(|p| p == "Franz (discord)")
         );
         let _ = std::fs::remove_dir_all(&home);
     }
