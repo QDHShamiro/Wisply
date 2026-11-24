@@ -302,7 +302,10 @@ skip\twhatsapp\tno chat list (logged out)\n";
         assert!(contacts::load(&h).is_empty());
         let saved = scan(&h, &ask(&["contacts", "scan", "--add", &format!("--rows={RAW}")])).expect("report");
         assert!(saved.starts_with("found 7 · saved 7: "), "{saved}");
-        assert_eq!(contacts::load(&h).len(), 7);
+        let people = contacts::load(&h);
+        assert_eq!(people.len(), 6);
+        let maxi = people.iter().find(|p| p.name == "Maxi").expect("maxi");
+        assert_eq!((maxi.discord.as_str(), maxi.whatsapp.as_str()), ("Maxi", "Maxi"));
         assert!(scan(&h, &ask(&["contacts", "scan", "anna"])).is_err());
         let _ = fs::remove_dir_all(&h);
     }
