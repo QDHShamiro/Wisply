@@ -198,7 +198,7 @@ fn launch(home: &Path, kind: Kind, set: &Settings, playing: &str) -> Result<Slot
     let list = args(kind, &model, port, set.threads);
     let dir = exe.parent().map_or_else(|| state::dir(home), Path::to_path_buf);
     let _ = fs::create_dir_all(state::dir(home));
-    let prio = plan::priority(&set.game_mode, playing);
+    let prio = plan::priority(kind, &set.game_mode, playing);
     let pid = sys::spawn(&exe, &list, &dir, &log_file(home, kind), prio)
         .ok_or_else(|| Why::Failed(format!("could not start {}", get::server_name(kind))))?;
     let began = state::now();

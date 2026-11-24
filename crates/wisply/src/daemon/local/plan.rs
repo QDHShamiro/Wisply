@@ -54,8 +54,9 @@ pub enum Prio {
     Idle,
 }
 
-pub fn priority(mode: &str, playing: &str) -> Prio {
-    if mode == "allow" && !playing.is_empty() { Prio::Idle } else { Prio::Low }
+pub fn priority(kind: Kind, mode: &str, playing: &str) -> Prio {
+    let idle = kind == Kind::Llm && mode == "allow" && !playing.is_empty();
+    if idle { Prio::Idle } else { Prio::Low }
 }
 
 #[cfg(test)]
@@ -104,9 +105,15 @@ mod tests {
         assert!(gaming("pause", "javaw.exe"));
         assert!(!gaming("pause", ""));
         assert!(!gaming("allow", "javaw.exe"));
-        assert_eq!(priority("allow", "javaw.exe"), Prio::Idle);
-        assert_eq!(priority("allow", ""), Prio::Low);
-        assert_eq!(priority("pause", ""), Prio::Low);
+        assert_eq!(priority(Kind::Llm, "allow", "javaw.exe"), Prio::Idle);
+        assert_eq!(priority(Kind::Llm, "allow", ""), Prio::Low);
+        assert_eq!(priority(Kind::Llm, "pause", ""), Prio::Low);
+    }
+
+    #[test]
+    fn speech_stays_below_normal_while_a_game_runs() {
+        assert_eq!(priority(Kind::Asr, "allow", "javaw.exe"), Prio::Low);
+        assert_eq!(priority(Kind::Asr, "allow", ""), Prio::Low);
     }
 
     #[test]
