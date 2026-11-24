@@ -218,6 +218,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_shipped_script_runs_before_anything_listed_the_routines() {
+        let home = std::env::temp_dir().join(format!("wisply-skill-first-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&home);
+        assert!(super::super::script::code_of(&home, "list-chats").is_some_and(|c| !c.trim().is_empty()));
+        assert!(super::super::skills::check_of(&home, "list-chats").is_some());
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn default_skills_install_once_stay_dropped_and_keep_local_changes() {
         let home = std::env::temp_dir().join(format!("wisply-skill-defaults-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
