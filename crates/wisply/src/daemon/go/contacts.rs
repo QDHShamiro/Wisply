@@ -10,7 +10,7 @@ use super::cache::{self, Mark, Slot};
 pub const APPS: &[&str] = &["discord", "whatsapp"];
 const FILE: &str = "contacts.json";
 const PREFIX_MIN: usize = 3;
-const USAGE: &str = "wisply contact add Franz discord=Froxotron alias=franzi | contact rm Franz | contacts";
+const USAGE: &str = "wisply contact add Anna discord=anna_99 alias=annie | contact rm Anna | contacts";
 
 static LOCK: Mutex<()> = Mutex::new(());
 static PEOPLE: Slot<Mark, Vec<Person>> = Slot::new();
@@ -304,27 +304,27 @@ mod tests {
     #[test]
     fn add_find_learn_and_remove() {
         let h = home("cycle");
-        command(&h, &call("contact", &["add", "franz", "discord=Froxotron", "alias=franzi,foxo"])).expect("add");
+        command(&h, &call("contact", &["add", "anna", "discord=anna_99", "alias=annie,nana"])).expect("add");
         let people = load(&h);
-        assert!(knows(&people, "Franz") && knows(&people, "froxotron") && knows(&people, "foxo"));
-        assert!(matches!(find(&people, "franzi"), Found::One(p) if p.name == "Franz"));
-        assert!(matches!(find(&people, "fra"), Found::Maybe(v) if v.len() == 1));
-        assert!(matches!(find(&people, "lukas"), Found::Nobody));
-        assert!(matches!(find(&people, "fr"), Found::Nobody));
-        learn(&h, "Franz", "discord", "Froxotron", Some("https://discord.com/channels/@me/42"));
+        assert!(knows(&people, "Anna") && knows(&people, "anna_99") && knows(&people, "nana"));
+        assert!(matches!(find(&people, "annie"), Found::One(p) if p.name == "Anna"));
+        assert!(matches!(find(&people, "ann"), Found::Maybe(v) if v.len() == 1));
+        assert!(matches!(find(&people, "ben"), Found::Nobody));
+        assert!(matches!(find(&people, "an"), Found::Nobody));
+        learn(&h, "Anna", "discord", "anna_99", Some("https://discord.com/channels/@me/42"));
         let p = load(&h).remove(0);
         assert_eq!((p.app.as_str(), p.dm.as_str(), p.sent), ("discord", "https://discord.com/channels/@me/42", 1));
         assert_eq!(p.app_for(None).as_deref(), Some("discord"));
-        assert_eq!(p.handle("whatsapp"), "Franz");
+        assert_eq!(p.handle("whatsapp"), "Anna");
         learn(&h, "mama", "whatsapp", "Mama", None);
         let people = load(&h);
         assert!(matches!(find(&people, "mama"), Found::One(p) if p.whatsapp == "Mama" && p.name == "Mama"));
         let dm = "dm=https://discord.com/channels/@me/7";
-        command(&h, &call("contact", &["sent", "Albion", "app=discord", "handle=xALBIONx", dm])).expect("sent");
-        let a = load(&h).into_iter().find(|p| p.name == "Albion").expect("albion");
-        assert_eq!((a.discord.as_str(), a.dm.as_str(), a.sent), ("xALBIONx", "https://discord.com/channels/@me/7", 1));
-        assert!(command(&h, &call("contact", &["sent", "Albion", "app=icq"])).is_err());
-        command(&h, &call("contact", &["rm", "franz"])).expect("rm");
+        command(&h, &call("contact", &["sent", "Tom", "app=discord", "handle=xTOMx", dm])).expect("sent");
+        let a = load(&h).into_iter().find(|p| p.name == "Tom").expect("tom");
+        assert_eq!((a.discord.as_str(), a.dm.as_str(), a.sent), ("xTOMx", "https://discord.com/channels/@me/7", 1));
+        assert!(command(&h, &call("contact", &["sent", "Tom", "app=icq"])).is_err());
+        command(&h, &call("contact", &["rm", "anna"])).expect("rm");
         assert_eq!(load(&h).len(), 2);
         assert!(command(&h, &call("contact", &["add", "x", "bogus=1"])).is_err());
         let _ = fs::remove_dir_all(&h);
@@ -333,8 +333,8 @@ mod tests {
     #[test]
     fn two_people_with_one_alias_are_ambiguous() {
         let h = home("twins");
-        command(&h, &call("contact", &["add", "Lukas", "alias=lu"])).expect("a");
-        command(&h, &call("contact", &["add", "Luis", "alias=lu"])).expect("b");
+        command(&h, &call("contact", &["add", "Ben", "alias=lu"])).expect("a");
+        command(&h, &call("contact", &["add", "Lea", "alias=lu"])).expect("b");
         assert!(matches!(find(&load(&h), "lu"), Found::Maybe(v) if v.len() == 2));
         let _ = fs::remove_dir_all(&h);
     }

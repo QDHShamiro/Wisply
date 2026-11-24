@@ -11,7 +11,7 @@ description: Drives the user's logged-in browser and desktop apps (read, click, 
 More than one step = one `wisply codemode --file x.js` (MCP: `code`): look, decide, act and check inside the script, return only the result. Values that change go in as `--arg pr=100` (`args.pr`), never into the code: a working script is kept as a routine and replays as `wisply run <name> pr=101`. A single call only when the task is one command. `references/codemode.md`
 
 ## Cheapest first
-1. `Wisply skill|routine fits ...` in the prompt, or done before: `wisply run <name or words> k=v`. Orders (send, play, open, remind): `wisply go "schreib Franz hi"`, `--dry` previews.
+1. `Wisply skill|routine fits ...` in the prompt, or done before: `wisply run <name or words> k=v`. Orders (send, play, open, remind): `wisply go "schreib Anna hi"`, `--dry` previews.
 2. Public page: `read <url>` (no browser, PDFs too). Question: `research "q" "q en"`. Data: `fetch <url> --pick a.b`, `net`.
 3. `open <url> -f "a|b"` finds, `--text` reads, plain is the first look.
 4. `-f "word"` on an action shows its result: `click "Merge" -f merged`. Then `snap -f`, `text -f`, `shot` last. A repeated `snap` lists changes (`--full` all).

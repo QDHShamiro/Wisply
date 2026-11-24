@@ -56,7 +56,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
 code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many shell, file and wisply steps in one call, only the result comes back; wisply codemode help)
         mcp (MCP server on stdin/stdout for any AI: one tool \"wisply\" that takes a command or code mode code)
         run <name|words> [k=v ...] [--yes]   routines [-f word]   routine save|show|rm|rename|forget <name> (tasks done before, replayed in one call)
-        go \"<order>\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<order>\" | contacts | contact add <name> discord=<user> whatsapp=<chat> alias=a,b (no AI, German or English: go \"schreib Franz bin gleich da\", go \"spiel Daft Punk\", go \"such auf youtube lofi\", go \"erinner mich in 10 min an Pizza\"; --dry previews; Ctrl+Alt+Space types one)
+        go \"<order>\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<order>\" | contacts | contact add <name> discord=<user> whatsapp=<chat> alias=a,b (no AI, German or English: go \"schreib Anna bin gleich da\", go \"spiel Daft Punk\", go \"such auf youtube lofi\", go \"erinner mich in 10 min an Pizza\"; --dry previews; Ctrl+Alt+Space types one)
         learn [\"<task>\"] | learn save <name> \"<what it does>\" --file run.js --check check.js [k=v] | learn ok|practice|show|drop <name> (skills: taught once, practiced with a check, then one call; send-message, read-form, find-file, pr-ci come with Wisply)
 
 Any action takes -f \"a|b\" to show the matching lines of the result in the same call.

@@ -295,18 +295,18 @@ mod tests {
         let home = std::env::temp_dir().join(format!("wisply-go-act-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&home);
         let _ = std::fs::remove_file(home.join("contacts.json"));
-        contacts::learn(&home, "Franz", "discord", "Froxotron", None);
+        contacts::learn(&home, "Anna", "discord", "anna_99", None);
         let who = |w: &[&str]| w.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-        let ok = resolve(&home, &who(&["franz"]), None, false).expect("franz");
-        assert_eq!((ok[0].app.as_str(), ok[0].person.handle("discord").as_str()), ("discord", "Froxotron"));
-        let err = resolve(&home, &who(&["franz", "olaf"]), None, false).err().expect("olaf blocks");
+        let ok = resolve(&home, &who(&["anna"]), None, false).expect("anna");
+        assert_eq!((ok[0].app.as_str(), ok[0].person.handle("discord").as_str()), ("discord", "anna_99"));
+        let err = resolve(&home, &who(&["anna", "olaf"]), None, false).err().expect("olaf blocks");
         assert!(err.msg.starts_with("not sent") && err.msg.contains("olaf"));
         assert!(resolve(&home, &who(&["olaf"]), None, true).is_err());
         let forced = resolve(&home, &who(&["olaf"]), Some("whatsapp"), true).expect("forced");
         assert_eq!(forced[0].person.handle("whatsapp"), "olaf");
         assert!(
-            preview(&home, &Act::Msg { who: who(&["franz"]), app: None, text: "hi".into() }, false)
-                .is_ok_and(|p| p == "Franz (discord)")
+            preview(&home, &Act::Msg { who: who(&["anna"]), app: None, text: "hi".into() }, false)
+                .is_ok_and(|p| p == "Anna (discord)")
         );
         let _ = std::fs::remove_dir_all(&home);
     }
