@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use super::*;
 
 const NOW_RAW: f64 = 1_795_000_000.0;
-const PEOPLE: &[&str] = &["franz", "lukas", "anna", "mama", "papa", "luis", "ben", "oma", "pixelfox", "max mustermann"];
+const PEOPLE: &[&str] = &["jonas", "milo", "anna", "mama", "papa", "theo", "ben", "oma", "pixelfox", "max mustermann"];
 const SITES: &[&str] = &["youtube", "google", "amazon", "github", "reddit", "wikipedia", "twitch"];
 const FILES: &[&str] = &[
     include_str!("corpus/msg.txt"),
@@ -137,7 +137,7 @@ fn corpus_parse_time() {
     let now = noon();
     let all = cases();
     let first = Instant::now();
-    run("schreib franz hi", now);
+    run("schreib jonas hi", now);
     let cold = first.elapsed();
     let (mut total, mut worst, mut slow) = (Duration::ZERO, Duration::ZERO, "");
     for c in &all {

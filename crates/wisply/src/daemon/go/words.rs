@@ -57,10 +57,18 @@ pub const MACH: &[&str] = &["mach", "mache", "make"];
 pub const OPEN_TAIL: &[&str] = &["auf", "open"];
 pub const SEARCH: &[&str] = &["such", "suche", "suchen", "google", "search", "find", "finde"];
 pub const SEARCH_UP: &[&str] = &["look"];
-pub const REMIND: &[&str] = &["erinner", "erinnere", "remind"];
+pub const REMIND: &[&str] = &["erinner", "erinnere", "erinnern", "remind"];
 pub const SHOT: &[&str] = &["screenshot", "bildschirmfoto", "shot", "screen"];
 pub const REMEMBER: &[&str] = &["merk", "merke", "notier", "notiere", "remember", "note"];
 pub const RECALL_HEADS: &[&str] = &[
+    "was hab ich",
+    "was habe ich",
+    "was hatte ich",
+    "wann hab ich",
+    "wann habe ich",
+    "what did i",
+    "what have i",
+    "when did i",
     "was weißt du über",
     "was weisst du über",
     "was weißt du ueber",
@@ -76,16 +84,63 @@ pub const RECALL_HEADS: &[&str] = &[
     "recall",
 ];
 pub const FILLER: &[&str] = &[
-    "bitte", "mal", "ma", "please", "kurz", "schnell", "doch", "einfach", "jetzt", "now", "noch", "hey", "wisply", "yo",
+    "bitte", "mal", "ma", "please", "kurz", "schnell", "doch", "einfach", "jetzt", "now", "noch", "hey", "wisply",
+    "yo", "eben", "pls", "plz", "bidde",
 ];
-pub const LEAN: &[&str] =
-    &["bitte", "mal", "ma", "please", "kurz", "schnell", "doch", "einfach", "jetzt", "now", "noch"];
+pub const LEAN: &[&str] = &[
+    "bitte", "mal", "ma", "please", "kurz", "schnell", "doch", "einfach", "jetzt", "now", "noch", "eben", "pls", "plz",
+    "bidde",
+];
+pub const LEAD_FILLER: &[&str] = &[
+    "ey", "eyy", "eyo", "alter", "digga", "dikka", "bro", "bruder", "ah", "ach", "oh", "hm", "hmm", "hmmm", "ok",
+    "okay", "oke", "also", "na", "dann", "hallo", "hi", "moin", "servus",
+];
+pub const TRAIL_FILL: &[&str] = &[
+    "bitte", "please", "pls", "plz", "bidde", "mal", "ma", "kurz", "eben", "schnell", "doch", "einfach", "danke",
+    "thx", "thanks", "jetzt", "now",
+];
+pub const POLITE_TAIL: &[&str] = &["bitte", "please", "pls", "plz", "bidde", "danke", "thx", "thanks"];
+pub const SMILEYS: &[&str] = &[":)", ":-)", ":(", ":-(", ":d", ";)", ";-)", ":p", ":/", "xd", "<3", "^^", "^_^", "c:"];
 pub const ARTICLES: &[&str] = &["dem", "der", "den", "die", "an", "to", "zu", "mit", "with"];
+pub const NOT_NAME: &[&str] = &[
+    "ich", "i", "wir", "we", "dass", "that", "ob", "if", "du", "er", "es", "ihr", "you", "he", "she", "it", "they",
+    "the", "is", "ist", "sind", "war", "bin", "are", "am", "was", "wie", "wo", "wann", "warum", "wer", "what", "why",
+    "how", "who", "when", "where", "ein", "eine", "einen", "einem", "einer", "a", "an", "den", "die", "das", "dem",
+    "mein", "meine", "meinen", "my", "your", "dein", "deine", "kein", "keine", "this", "diese", "dieses", "nicht",
+    "not", "mal", "ma", "eben", "bitte", "please", "pls", "plz",
+];
+pub const SOFT_LEAD: &[&str] = &["mal", "ma", "eben", "pls", "plz"];
+pub const SOFT_POLITE: &[&str] = &["bitte", "please", "bidde"];
+pub const END_LEAD: &[&str] = &["an", "to", "für", "fuer", "for"];
+pub const THINK: &[&str] = &[
+    "denke", "denk", "denken", "denkt", "dachte", "gedacht", "think", "thinking", "thought", "glaube", "glauben",
+    "danke", "dank",
+];
+pub const TEXT_SOFT: &[&str] = &["das"];
+pub const TEXT_SOFT_NEXT: &[&str] = &["ich", "wir", "du", "er", "sie", "ihr", "i", "we"];
+pub const STARTERS: &[&str] = &[
+    "ich", "i", "wir", "we", "dass", "that", "ob", "if", "whether", "bin", "komm", "komme", "gleich", "sorry", "danke",
+    "thx", "hi", "hallo", "moin", "gute", "guten", "alles", "lass", "lasst", "ok", "okay", "ja", "nein", "kannst",
+    "kommst", "hast", "hab", "habe", "willst", "wollen", "bis", "wann", "wo", "wie", "was", "will", "wird", "haben",
+    "hey", "im", "i'm", "see", "can", "are", "do", "did", "wanna",
+];
+pub const ALARM: &[&str] = &["wecker", "alarm", "weckruf"];
+pub const WAKE: &[&str] = &["weck", "wecke", "wecken", "wake"];
+pub const WAKE_NOISE: &[&str] = &["up", "auf"];
+pub const ALARM_NOISE: &[&str] = &[
+    "stell", "stelle", "stellen", "set", "mir", "me", "einen", "ein", "nen", "ne", "an", "a", "mach", "mache", "make",
+    "bitte", "please", "setz", "setze", "create", "erstell", "erstelle", "den", "my", "mein", "meinen",
+];
+pub const ALARM_VERB: &[&str] = &["stellen", "setzen", "machen", "erstellen", "bitte", "please"];
+pub const ALARM_FOR: &[&str] = &["für", "fuer", "for", "auf", "zum", "zur", "to"];
+pub const INF_ACT: &[&str] = &["erinnern", "wecken"];
+pub const REMIND_TEXT: &str = "Erinnerung";
+pub const ALARM_TEXT: &str = "Wecker";
 pub const JOIN: &[&str] = &["und", "and", "&", "+", "sowie"];
 pub const APP_LEAD: &[&str] = &["auf", "on", "per", "via", "über", "ueber", "in", "bei", "im"];
-pub const TEXT_LEAD: &[&str] = &["dass", "das", "that", ":", "-"];
+pub const TEXT_LEAD: &[&str] = &["dass", "that", ":", "-"];
 pub const ME: &[&str] = &["mich", "me", "mir"];
-pub const ABOUT: &[&str] = &["an", "ans", "dass", "to", "about", "daran", "that", "zu"];
+pub const ABOUT: &[&str] = &["an", "ans", "dass", "to", "about", "daran", "that", "zu", "für", "fuer", "for"];
 pub const DIR: &[&str] = &["dir", "you", "dass", "that", ":", "to"];
 pub const OF: &[&str] = &["von", "vom", "of", "from", "der", "des"];
 pub const MSG_NOISE: &[&str] = &["ne", "eine", "nachricht", "message", "a", "msg", "bescheid", "kurz"];
@@ -93,9 +148,25 @@ pub const SEARCH_NOISE: &[&str] = &["nach", "for", "mal", "bitte", "up"];
 pub const PLAY_NOISE: &[&str] =
     &["spiel", "spiele", "play", "mach", "mache", "make", "turn", "dreh", "stell", "the", "die", "der"];
 pub const SOME: &[&str] = &["some", "etwas", "paar"];
-pub const OPEN_NOISE: &[&str] = &["die", "den", "das", "mir", "mal", "bitte", "the", "up"];
+pub const OPEN_NOISE: &[&str] =
+    &["die", "den", "das", "mir", "mal", "bitte", "the", "up", "pls", "plz", "please", "eben", "kurz", "ma"];
 pub const SHOT_LEAD: &[&str] =
-    &["mach", "mache", "nimm", "take", "make", "einen", "ein", "a", "an", "nen", "nem", "ne"];
+    &["mach", "mache", "nimm", "nehm", "nehme", "take", "make", "einen", "ein", "a", "an", "nen", "nem", "ne"];
+pub const SHOT_TAIL: &[&str] = &[
+    "machen",
+    "mach",
+    "mache",
+    "make",
+    "take",
+    "nehmen",
+    "nimm",
+    "aufnehmen",
+    "erstellen",
+    "bitte",
+    "please",
+    "pls",
+    "plz",
+];
 pub const SITE_LEAD: &[&str] = &["nach", "for", "auf", "on", "in", "bei", "im"];
 
 pub const MEDIA: &[(&[&str], &str)] = &[

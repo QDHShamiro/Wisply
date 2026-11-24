@@ -2,12 +2,14 @@ use wisply_core::{Fail, local_parts};
 
 use super::words::{self as w, is};
 
+mod alarm;
+mod prep;
 mod when;
 
+use prep::unquote;
 use when::{inner_time, tail_time, time_at};
 
 const VOLUME_STEPS: u32 = 5;
-const FUZZY_MIN: usize = 5;
 const LOOK_AFTER: &str = "up";
 const PUNCT: &[char] = &[',', '.', '!', '?', ';', ':'];
 
@@ -107,7 +109,39 @@ fn skip_all(t: &[Tok], mut i: usize, lists: &[&[&str]]) -> usize {
     i
 }
 
-fn msg(t: &[Tok], now: f64, k: &Know) -> Result<Option<Plan>, Fail> {
+fn real_names(who: &[String], k: &Know) -> bool {
+    who.iter().all(|n| {
+        let low = n.to_lowercase();
+        (k.person)(&low) || !is(w::NOT_NAME, &low)
+    })
+}
+
+fn text_start(t: &[Tok], i: usize) -> usize {
+    let i = skip(t, i, w::TEXT_LEAD);
+    let soft = t.get(i).is_some_and(|x| is(w::TEXT_SOFT, &x.low))
+        && t.get(i + 1).is_some_and(|x| is(w::TEXT_SOFT_NEXT, &x.low));
+    i + usize::from(soft)
+}
+
+fn msg_time(t: &[Tok], i: usize, now: f64) -> Option<(usize, f64)> {
+    let (n, at) = time_at(t, i, now, true)?;
+    (t[i + n - 1].cut || t.get(i + n).is_some_and(|x| is(w::TEXT_LEAD, &x.low))).then_some((n, at))
+}
+
+fn noise(t: &[Tok], i: usize, reply: bool) -> bool {
+    let low = &t[i].low;
+    let polite = is(w::SOFT_POLITE, low) && t.get(i + 1).is_some_and(|x| is(w::STARTERS, &x.low));
+    is(w::MSG_NOISE, low) || is(w::SOFT_LEAD, low) || polite || (reply && is(w::WITH, low))
+}
+
+fn skip_noise(t: &[Tok], mut i: usize, reply: bool) -> usize {
+    while i + 1 < t.len() && noise(t, i, reply) {
+        i += 1;
+    }
+    i
+}
+
+fn msg(t: &[Tok], now: f64, k: &Know, trail: &str) -> Result<Option<Plan>, Fail> {
     let reply = is(w::REPLY, &t[0].low);
     let mut i = skip(t, 1, w::LEAN);
     let mut app = chat_app(t, i).map(|(a, n)| {
@@ -119,24 +153,19 @@ fn msg(t: &[Tok], now: f64, k: &Know) -> Result<Option<Plan>, Fail> {
         return Ok(None);
     }
     let (who, at) = names(t, i, k);
-    if who.is_empty() {
-        return Err(Fail::hint("who should get it?", "wisply go \"schreib Franz ich komm später\""));
+    if who.is_empty() || !real_names(&who, k) {
+        return Err(Fail::hint("who should get it?", "wisply go \"schreib Jonas ich komm später\""));
     }
     i = at;
     if let Some((a, n)) = chat_app(t, i) {
         app = Some(a.to_string());
         i += n;
     }
-    let mut when = None;
-    if let Some((n, at)) = time_at(t, i, now, true)
-        && (t[i + n - 1].cut || t.get(i + n).is_some_and(|x| is(w::TEXT_LEAD, &x.low)))
-    {
-        when = Some(at);
+    let when = msg_time(t, i, now).map(|(n, at)| {
         i += n;
-    }
-    while i + 1 < t.len() && (is(w::MSG_NOISE, &t[i].low) || (reply && is(w::WITH, &t[i].low))) {
-        i += 1;
-    }
+        at
+    });
+    i = skip_noise(t, i, reply);
     if app.is_none()
         && let Some((a, n)) = chat_app(t, i)
         && i + n < t.len()
@@ -144,28 +173,33 @@ fn msg(t: &[Tok], now: f64, k: &Know) -> Result<Option<Plan>, Fail> {
         app = Some(a.to_string());
         i += n;
     }
-    i = skip(t, i, w::TEXT_LEAD);
-    let text = join(&t[i..]);
+    i = text_start(t, i).min(t.len());
+    let text = prep::attach(unquote(&join(&t[i..])), trail);
     if text.trim().is_empty() {
         return Err(Fail::hint(format!("what should {} get?", who.join(" + ")), "add the text after the name"));
     }
     Ok(Some(Plan { act: Act::Msg { who, app, text }, when }))
 }
 
-fn remind(t: &mut Vec<Tok>, now: f64, lead: Option<f64>) -> Result<Plan, Fail> {
+fn remind(t: &mut Vec<Tok>, now: f64, lead: Option<f64>, alarm: bool) -> Result<Plan, Fail> {
+    let bare = !alarm;
     let mut i = skip_all(t, 1, &[w::LEAN, w::ME]);
     let mut when = None;
-    if let Some((n, at)) = time_at(t, i, now, true) {
+    if let Some((n, at)) = time_at(t, i, now, bare) {
         when = Some(at);
         i += n;
     }
-    let when = lead.or(when).or_else(|| tail_time(t, i, now, true));
+    let when = lead.or(when).or_else(|| tail_time(t, i, now, bare));
     let Some(when) = when else {
         return Err(Fail::hint("when should I remind you?", "wisply go \"erinner mich in 10 min an Pizza\""));
     };
-    i = skip(t, i, w::ABOUT);
-    let text = join(&t[i.min(t.len())..]);
-    let text = if text.trim().is_empty() { "Erinnerung".to_string() } else { text };
+    i = skip_all(t, i, &[w::LEAN, w::ABOUT]);
+    let label = unquote(&join(&t[i.min(t.len())..]));
+    let text = match (alarm, label.trim().is_empty()) {
+        (true, _) => alarm::text(&label),
+        (false, true) => w::REMIND_TEXT.to_string(),
+        (false, false) => label,
+    };
     Ok(Plan { act: Act::Remind { text }, when: Some(when) })
 }
 
@@ -210,7 +244,7 @@ fn play(t: &[Tok]) -> Act {
     if rest.iter().all(|x| x.low.is_empty() || is(w::MUSIC_WORDS, &x.low)) {
         return Act::Media { key: "playpause", times: 1 };
     }
-    Act::Play { app, q: join(rest) }
+    Act::Play { app, q: unquote(&join(rest)) }
 }
 
 fn site_after(t: &[Tok], i: usize, k: &Know) -> Option<(String, usize)> {
@@ -235,7 +269,7 @@ fn search(t: &[Tok], head: &str, k: &Know) -> Option<Act> {
         site = Some(t[end - 1].low.clone());
         end -= 2;
     }
-    let q = join(&t[i.min(end)..end]);
+    let q = unquote(&join(&t[i.min(end)..end]));
     (!q.trim().is_empty()).then_some(Act::Search { site, q })
 }
 
@@ -244,8 +278,12 @@ fn shot(t: &[Tok]) -> Option<Act> {
     if !t.get(i).is_some_and(|x| is(w::SHOT, &x.low)) {
         return None;
     }
-    let j = skip_all(t, i + 1, &[w::OF, w::LEAN]);
-    let of = t.get(j..).map(join).filter(|s| !s.trim().is_empty());
+    let j = skip_all(t, i + 1, &[w::OF, w::LEAN, w::SHOT_TAIL]);
+    let mut end = t.len();
+    while end > j && is(w::SHOT_TAIL, &t[end - 1].low) {
+        end -= 1;
+    }
+    let of = t.get(j..end).map(join).filter(|s| !s.trim().is_empty());
     Some(Act::Shot { of })
 }
 
@@ -284,11 +322,11 @@ fn domain(word: &str) -> bool {
         .is_some_and(|(name, tld)| !name.is_empty() && tld.len() >= 2 && tld.chars().all(char::is_alphabetic))
 }
 
-fn remember(t: &[Tok]) -> Result<Act, Fail> {
+fn remember(t: &[Tok], trail: &str) -> Result<Act, Fail> {
     let i = skip(t, 1, w::DIR);
-    let text = join(&t[i..]);
+    let text = prep::attach(unquote(&join(&t[i..])), trail);
     if text.trim().is_empty() {
-        return Err(Fail::hint("what should I remember?", "wisply go \"merk dir Franz mag Pizza\""));
+        return Err(Fail::hint("what should I remember?", "wisply go \"merk dir Jonas mag Pizza\""));
     }
     Ok(Act::Remember { text })
 }
@@ -297,7 +335,7 @@ fn looks_up(t: &[Tok], head: &str) -> bool {
     is(w::SEARCH_UP, head) && t.get(1).is_some_and(|x| x.low == LOOK_AFTER)
 }
 
-fn simple(t: &[Tok], head: &str, k: &Know) -> Result<Option<Act>, Fail> {
+fn simple(t: &[Tok], head: &str, k: &Know, trail: &str) -> Result<Option<Act>, Fail> {
     if let Some(act) = media(t) {
         return Ok(Some(act));
     }
@@ -325,117 +363,56 @@ fn simple(t: &[Tok], head: &str, k: &Know) -> Result<Option<Act>, Fail> {
         return Ok(search(t, head, k));
     }
     if is(w::REMEMBER, head) {
-        return remember(t).map(Some);
+        return remember(t, trail).map(Some);
     }
     Ok(None)
 }
 
-fn strip(t: &mut Vec<Tok>) -> bool {
-    let mut polite = false;
-    loop {
-        let i = skip(t, 0, w::FILLER);
-        let n = w::POLITE
-            .iter()
-            .find(|p| p.iter().enumerate().all(|(j, word)| t.get(i + j).is_some_and(|x| w::same(word, &x.low))))
-            .map_or(0, |p| p.len());
-        if i + n == 0 {
-            return polite;
-        }
-        t.drain(..i + n);
-        polite |= n > 0;
-    }
+struct Ctx<'a> {
+    now: f64,
+    lead: Option<f64>,
+    trail: &'a str,
 }
 
-fn reshape(t: &mut [Tok], polite: bool) {
-    let Some(head) = t.first().map(|x| x.low.clone()) else { return };
-    if polite && !is(w::MSG, &head) {
-        let verb = (1..t.len().min(4)).find(|&p| is(w::MSG_INF, &t[p].low));
-        if let Some(p) = verb {
-            t[..=p].rotate_right(1);
-            t[0] = Tok { raw: t[0].raw.clone(), low: t[0].low.clone(), cut: false };
-        }
-    }
-}
-
-fn let_know(t: &mut Vec<Tok>) {
-    let Some(head) = t.first() else { return };
-    if !is(w::LET, &head.low) {
-        return;
-    }
-    if let Some(p) = (2..t.len().min(5)).find(|&p| is(w::LET_TRAIL, &t[p].low)) {
-        t.remove(p);
-        t[0] = Tok { raw: w::SAY.to_string(), low: w::SAY.to_string(), cut: false };
-    }
-}
-
-fn bare_lead(t: &[Tok], now: f64) -> Option<(usize, f64)> {
-    let (n, at) = time_at(t, 0, now, true)?;
-    let next = &t.get(n)?.low;
-    (is(w::REMIND, next) || is(w::MSG, next)).then_some((n, at))
-}
-
-fn prepare(sentence: &str, now: f64) -> (Vec<Tok>, Option<f64>) {
-    let mut t = toks(sentence);
-    let mut polite = strip(&mut t);
-    let mut lead = None;
-    if let Some((n, at)) = time_at(&t, 0, now, false).or_else(|| bare_lead(&t, now)) {
-        lead = Some(at);
-        t.drain(..n);
-        polite |= strip(&mut t);
-    }
-    reshape(&mut t, polite);
-    let_know(&mut t);
-    (t, lead)
-}
-
-fn known(head: &str, k: &Know) -> bool {
-    let lists = [w::MSG, w::PLAY, w::OPEN, w::SEARCH, w::REMIND, w::SHOT, w::REMEMBER, w::GO, w::MACH, w::LET];
-    lists.iter().any(|l| is(l, head)) || (k.site)(head)
-}
-
-fn fix_head(t: &mut [Tok], k: &Know) {
-    let Some(first) = t.first_mut() else { return };
-    if first.low.chars().count() < FUZZY_MIN || known(&first.low, k) {
-        return;
-    }
-    if let Some(canon) = w::FUZZY_HEADS.iter().find(|c| w::near(&first.low, c)) {
-        first.low = (*canon).to_string();
-    }
-}
-
-fn own_time(t: &mut Vec<Tok>, head: &str, now: f64, lead: Option<f64>, k: &Know) -> Result<Option<Plan>, Fail> {
+fn own_time(t: &mut Vec<Tok>, head: &str, c: &Ctx, k: &Know) -> Result<Option<Plan>, Fail> {
     if is(w::MSG, head) {
-        return msg(t, now, k);
+        return msg(t, c.now, k, c.trail);
     }
     if is(w::REMIND, head) {
-        return remind(t, now, lead).map(Some);
+        return remind(t, c.now, c.lead, false).map(Some);
     }
     Ok(None)
+}
+
+fn timed(t: &mut Vec<Tok>, head: &str, c: &Ctx, k: &Know) -> Option<f64> {
+    if is(w::REMEMBER, head) {
+        return c.lead;
+    }
+    let found = c.lead.or_else(|| tail_time(t, 1, c.now, false));
+    found.or_else(|| if is(w::SEARCH, head) || (k.site)(head) { None } else { inner_time(t, c.now) })
 }
 
 pub fn parse(sentence: &str, now: f64, k: &Know) -> Result<Option<Plan>, Fail> {
-    let (mut t, lead) = prepare(sentence, now);
-    fix_head(&mut t, k);
+    let (mut t, lead, trail) = prep::prepare(sentence, now, k);
+    if let Some(mut a) = alarm::rewrite(&t, now) {
+        return Ok(remind(&mut a, now, lead, true).ok());
+    }
+    prep::fix_head(&mut t, k);
     let Some(head) = t.first().map(|x| x.low.clone()) else { return Ok(None) };
     if let Some(act) = recall(&t) {
         return Ok(Some(Plan { act, when: lead }));
     }
-    if let Some(mut plan) = own_time(&mut t, &head, now, lead, k)? {
+    prep::trim_end(&mut t, &head, k);
+    let c = Ctx { now, lead, trail: &trail };
+    if let Some(mut plan) = own_time(&mut t, &head, &c, k)? {
         plan.when = lead.or(plan.when);
         return Ok(Some(plan));
     }
     if is(w::MSG, &head) || is(w::REMIND, &head) {
         return Ok(None);
     }
-    let keeps_time = is(w::REMEMBER, &head);
-    let mut when = lead;
-    if when.is_none() && !keeps_time {
-        when = tail_time(&mut t, 1, now, false);
-    }
-    if when.is_none() && !keeps_time && !is(w::SEARCH, &head) && !(k.site)(&head) {
-        when = inner_time(&mut t, now);
-    }
-    Ok(simple(&t, &head, k)?.map(|act| Plan { act, when }))
+    let when = timed(&mut t, &head, &c, k);
+    Ok(simple(&t, &head, k, &trail)?.map(|act| Plan { act, when }))
 }
 
 pub fn label(now: f64, at: f64) -> String {
