@@ -10,6 +10,7 @@ mod setup;
 mod store;
 mod talk;
 mod text;
+mod understand;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -105,7 +106,7 @@ fn ask(home: &Path, rest: &mut Vec<String>) -> Result<String, Fail> {
     let opts = Opts { question, choices: choices.unwrap_or_default(), wait_s, channels, force };
     let (done, line) = answer::ask(home, &opts)?;
     match done.answer {
-        Some(a) => Ok(a),
+        Some(_) => Ok(done.shown()),
         None => Ok(format!("call: asked {} ({line}); the answer: wisply call result {}", done.id, done.id)),
     }
 }
@@ -141,14 +142,15 @@ fn reply(home: &Path, rest: &[String]) -> Result<String, Fail> {
         return Err(Fail::hint("answer needs an id and the text", "wisply call answer <id|last> \"ja\""));
     };
     let done = store::submit(home, which, &words(&rest[1..]), "cli")?;
-    Ok(format!("call: {} answered {}", done.id, done.answer.unwrap_or_default()))
+    let note = done.note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
+    Ok(format!("call: {} answered {}{note}", done.id, done.answer.clone().unwrap_or_default()))
 }
 
 fn result(home: &Path, rest: &[String]) -> Result<String, Fail> {
     let id = rest.first().ok_or_else(|| Fail::hint("which question?", "wisply call result <id>"))?;
     let ask = store::load(home, id).ok_or_else(|| Fail::new(format!("no question '{id}'")))?;
     match (ask.state.as_str(), ask.answer.clone()) {
-        ("answered", Some(a)) => Ok(a),
+        ("answered", Some(_)) => Ok(ask.shown()),
         ("open", _) if ask.open() => Ok(format!("call: {} is still waiting", ask.id)),
         ("open", _) => Ok(format!("call: {} expired without an answer", ask.id)),
         (state, _) => Ok(format!("call: {} is {state}", ask.id)),

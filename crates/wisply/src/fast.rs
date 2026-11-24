@@ -63,6 +63,7 @@ const LOCAL: &[&str] = &[
     "analyze",
     "pupil",
     "call",
+    "local",
     "codemode",
 ];
 

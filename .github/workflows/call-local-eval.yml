@@ -1,0 +1,54 @@
+name: call-local-eval
+
+on:
+  pull_request:
+    paths: ["crates/wisply/src/call/**", "crates/wisply/src/daemon/local/**", "crates/wisply/src/local.rs", "crates/wisply/tests/call_local_eval.rs", "crates/wisply/tests/data/call-answers.tsv", ".github/workflows/call-local-eval.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_INCREMENTAL: "0"
+  LOCAL_PINS: llama-b12676_whisper-b5907_qwen35-08b-q4km-6ab4614_small-q5_1-5359861
+
+jobs:
+  eval:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+      - name: Speech for the whisper probe
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends espeak-ng
+      - name: Models and programs
+        id: models
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/wisply-local
+          key: call-local-${{ env.LOCAL_PINS }}
+      - name: Build
+        run: cargo build -p wisply --bin wisply-full
+      - name: Load models
+        if: steps.models.outputs.cache-hit != 'true'
+        env:
+          WISPLY_HOME: ${{ runner.temp }}/wisply-local
+        run: |
+          mkdir -p "$WISPLY_HOME"
+          ./target/debug/wisply-full local get
+      - name: Eval
+        env:
+          WISPLY_LOCAL_DIR: ${{ runner.temp }}/wisply-local
+        run: |
+          cargo test -p wisply --test call_local_eval -- --ignored --nocapture 2>&1 | tee "$RUNNER_TEMP/eval.log"
+          status=${PIPESTATUS[0]}
+          line=$(grep -m1 '^EVAL rules-only' "$RUNNER_TEMP/eval.log" || echo "EVAL no result")
+          echo "::notice title=call-local eval::$line"
+          exit "$status"

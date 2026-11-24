@@ -6,6 +6,7 @@ use wisply_core::Fail;
 
 use super::cfg;
 use super::text::{now, random_hex};
+use super::understand::{self, Model, decide};
 
 const KEEP_S: f64 = 86_400.0;
 const ID_LEN: usize = 6;
@@ -20,14 +21,16 @@ pub struct Ask {
     pub state: String,
     pub answer: Option<String>,
     pub via: String,
+    pub note: Option<String>,
+    pub how: String,
 }
 
 impl Ask {
     fn to_json(&self) -> Value {
         json!({
             "id": self.id, "question": self.question, "choices": self.choices, "created": self.created,
-            "deadline": self.deadline, "state": self.state, "answer": self.answer, "via": self.via
-        })
+            "deadline": self.deadline, "state": self.state, "answer": self.answer, "via": self.via,
+            "note": self.note, "how": self.how        })
     }
 
     fn from_json(v: &Value) -> Option<Ask> {
@@ -42,12 +45,24 @@ impl Ask {
             state: s("state"),
             answer: v.get("answer").and_then(Value::as_str).map(str::to_string),
             via: s("via"),
+            note: v.get("note").and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string),
+            how: s("how"),
         })
         .filter(|a| !a.id.is_empty())
     }
 
     pub fn open(&self) -> bool {
         self.state == "open" && self.deadline > now()
+    }
+
+    pub fn shown(&self) -> String {
+        let answer = self.answer.clone().unwrap_or_default();
+        if self.note.is_none() && matches!(self.how.as_str(), "" | "words") {
+            return answer;
+        }
+        let note = self.note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
+        let via = if self.via.is_empty() { String::new() } else { format!(" via {}", self.via) };
+        format!("answered: {answer}{note}{via}")
     }
 }
 
@@ -101,6 +116,8 @@ pub fn create(home: &Path, question: &str, choices: &[String], wait_s: u64) -> R
         state: "open".into(),
         answer: None,
         via: String::new(),
+        note: None,
+        how: String::new(),
     };
     write(home, &ask)?;
     Ok(ask)
@@ -161,6 +178,13 @@ pub fn resolve(cfg: &Map<String, Value>, choices: &[String], text: &str) -> Opti
 
 pub fn submit(home: &Path, which: &str, text: &str, via: &str) -> Result<Ask, Fail> {
     let settings = cfg::load(home);
+    let local = understand::Local::new(home, &settings);
+    let model = understand::enabled(&settings).then_some(&local as &dyn Model);
+    submit_with(home, which, text, via, model)
+}
+
+pub fn submit_with(home: &Path, which: &str, text: &str, via: &str, model: Option<&dyn Model>) -> Result<Ask, Fail> {
+    let settings = cfg::load(home);
     let target = if which.is_empty() || which == "last" {
         open_list(home).pop().ok_or_else(|| Fail::new("no question is waiting for an answer"))?
     } else {
@@ -169,7 +193,7 @@ pub fn submit(home: &Path, which: &str, text: &str, via: &str) -> Result<Ask, Fa
     if !target.open() {
         return Err(Fail::new(format!("question {} is already {}", target.id, target.state)));
     }
-    let answer = resolve(&settings, &target.choices, text).ok_or_else(|| {
+    let verdict = decide(&settings, &target.question, &target.choices, text, model).ok_or_else(|| {
         let hint = if target.choices.is_empty() { "say something".to_string() } else { target.choices.join(" / ") };
         Fail::hint(
             format!("'{}' is not an answer to question {}", text.trim(), target.id),
@@ -181,7 +205,9 @@ pub fn submit(home: &Path, which: &str, text: &str, via: &str) -> Result<Ask, Fa
         return Err(Fail::new(format!("question {} is already {}", done.id, done.state)));
     }
     done.state = "answered".into();
-    done.answer = Some(answer);
+    done.answer = Some(verdict.choice);
+    done.note = Some(verdict.note).filter(|n| !n.is_empty());
+    done.how = verdict.how.to_string();
     done.via = via.to_string();
     write(home, &done)?;
     Ok(done)

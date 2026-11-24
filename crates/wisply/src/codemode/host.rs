@@ -35,7 +35,7 @@ const BLOCKED: &[&str] = &[
 ];
 const OWN: &[&str] = &[
     "more", "peek", "progress", "kit", "skill", "lint", "safe", "review", "analyze", "setup", "pupil", "headless",
-    "doctor", "squeeze", "call",
+    "doctor", "squeeze", "call", "local",
 ];
 const HOLE_OPEN: char = '\u{E000}';
 const HOLE_CLOSE: char = '\u{E001}';

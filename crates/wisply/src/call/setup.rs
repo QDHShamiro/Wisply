@@ -90,6 +90,9 @@ pub fn run(home: &Path, rest: &[String]) -> Result<String, Fail> {
         });
     }
     lines.push(guide(&settings));
+    if !crate::daemon::local::get::installed(home, crate::daemon::local::Kind::Llm) {
+        lines.push("local: run wisply local get to let call understand free answers on this PC".to_string());
+    }
     Ok(lines.join("\n"))
 }
 

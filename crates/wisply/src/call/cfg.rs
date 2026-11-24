@@ -44,7 +44,9 @@ fn talk() -> Value {
         "voice_target": "",
         "voice_join_url": "",
         "voice_wait_s": 240,
-        "voice_linger_s": 25
+        "voice_linger_s": 25,
+        "understand": "auto",
+        "understand_timeout_s": 8
     })
 }
 
@@ -109,6 +111,7 @@ fn spoken() -> Value {
         "say_choices": "Sag {choices}.",
         "say_unclear": "Das habe ich nicht verstanden. {choices}",
         "say_got": "Okay, notiert: {answer}.",
+        "say_got_note": "Okay, notiert: {answer}, {note}.",
         "say_idle": "Gerade ist nichts offen.",
         "say_bye": "Das war es von mir. Bis später."
     })
@@ -208,6 +211,9 @@ pub fn set(home: &Path, pairs: &[String]) -> Result<String, Fail> {
         let value = coerce(d, v).ok_or_else(|| Fail::new(format!("'{v}' does not fit {k}")))?;
         if (k == "quiet_from" || k == "quiet_to" || k == "briefing_at") && clock(v).is_none() {
             return Err(Fail::hint(format!("'{v}' is not a time"), format!("wisply call set {k}=07:30")));
+        }
+        if k == "understand" && !["auto", "off"].contains(&v) {
+            return Err(Fail::hint(format!("'{v}' is not auto or off"), "wisply call set understand=auto"));
         }
         cfg.insert(k.to_string(), value);
     }

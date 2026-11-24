@@ -116,15 +116,35 @@ fn joined(data: &Value, keep: impl Fn(&Value) -> bool) -> String {
 }
 
 impl Asr {
-    fn local(&mut self, audio: &[u8]) -> Result<String, String> {
+    fn prefers_local(&self) -> bool {
+        let (base, _) = crate::daemon::whisper_service(&self.p.home);
+        let cfg = crate::daemon::load_config(&self.p.home);
+        base.is_empty() && cfg.get("voice_asr").and_then(Value::as_str) == Some("local")
+    }
+
+    fn local_service(&self) -> Result<(String, String), String> {
         let (base, model) = crate::daemon::whisper_service(&self.p.home);
-        if base.is_empty() {
-            if !self.warned {
-                self.warned = true;
-                self.p.log("asr: no local speech-to-text (wisply config whisper_api <LocalAI url>)");
-            }
-            return Ok(String::new());
+        if !base.is_empty() {
+            return Ok((base, model));
         }
+        let url = crate::local::ensure(&self.p.home, crate::daemon::local::Kind::Asr).map_err(|why| why.line())?;
+        Ok((url, model))
+    }
+
+    fn local(&mut self, audio: &[u8]) -> Result<String, String> {
+        let (base, model) = match self.local_service() {
+            Ok(found) => found,
+            Err(why) => {
+                if self.prefers_local() {
+                    return Err(why);
+                }
+                if !self.warned {
+                    self.warned = true;
+                    self.p.log(&format!("asr: {why}"));
+                }
+                return Ok(String::new());
+            }
+        };
         let fields = [
             ("model", model.as_str()),
             ("language", "de"),
@@ -142,6 +162,13 @@ impl Asr {
 
     fn transcribe(&mut self, pcm: &[u8]) -> Result<String, String> {
         let audio = wav(pcm);
+        if self.prefers_local() {
+            match self.local(&audio) {
+                Ok(said) => return Ok(said),
+                Err(e) if self.groq.is_none() => return Err(e),
+                Err(e) => self.p.log(&format!("asr: local failed ({}), trying groq", cut(&e))),
+            }
+        }
         let Some(key) = self.groq.clone().filter(|_| now() >= self.cool_until) else { return self.local(&audio) };
         let fields = [
             ("model", "whisper-large-v3-turbo"),
@@ -269,11 +296,26 @@ fn finish(acts: Vec<crate::call::Act>, mouth: &Mouth, p: &Paths, stop: &AtomicBo
     true
 }
 
+pub fn local_asr_ready(home: &std::path::Path) -> bool {
+    let (base, _) = crate::daemon::whisper_service(home);
+    let cfg = crate::daemon::load_config(home);
+    !base.is_empty()
+        || (cfg.get("voice_asr").and_then(Value::as_str) == Some("local")
+            && crate::daemon::local::get::installed(home, crate::daemon::local::Kind::Asr))
+}
+
 pub fn call(p: &Paths, target: &str) -> Result<(), String> {
+    let done = call_session(p, target);
+    crate::local::release(&p.home, crate::daemon::local::Kind::Asr);
+    done
+}
+
+fn call_session(p: &Paths, target: &str) -> Result<(), String> {
     let cfg: Map<String, Value> = p.config();
     let k = keys();
+    let calling = p.current().get("mode").and_then(Value::as_str) == Some("call");
     let missing: Vec<&str> = ["GROQ_API_KEY", "GEMINI_API_KEY"].into_iter().filter(|n| !k.contains_key(*n)).collect();
-    if !missing.is_empty() {
+    if !missing.is_empty() && !(calling && local_asr_ready(&p.home)) {
         return Err(format!("missing keys: {}", missing.join(", ")));
     }
     let _ = fs::create_dir_all(p.say_dir());
