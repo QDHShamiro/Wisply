@@ -63,10 +63,12 @@ impl Desk<'_> {
             }
             return Ok(hwnd);
         }
-        let text = if spec.to_lowercase().starts_with("app:") { &spec[4..] } else { spec };
+        let app = spec.to_lowercase().starts_with("app:");
+        let text = if app { &spec[4..] } else { spec };
         let mut best: Option<(u8, isize)> = None;
         for w in win::windows() {
-            let s = score(text, &w.title, &w.exe);
+            let page = app && BROWSER_EXES.contains(&w.exe.to_lowercase().as_str());
+            let s = score(text, if page { "" } else { &w.title }, &w.exe);
             if s > 0 && best.is_none_or(|(b, _)| s > b) {
                 best = Some((s, w.hwnd));
             }
