@@ -5,7 +5,7 @@ if (args.dry === "1") {
   return true;
 }
 if (r.includes("not visible")) throw new Error(`the message did not show up in the chat: ${r.slice(0, 160)}`);
-const OUT = { whatsapp: "#main .message-out", telegram: ".bubble.is-out" };
+const OUT = { whatsapp: "#main .message-out", telegram: ".bubble.is-out", discord: 'li[id^="chat-messages-"]' };
 if (!OUT[app]) return true;
 const want = String(args.text || "").trim().split("\n")[0].slice(0, 40);
 const last = await wisply(["js", `return [...document.querySelectorAll(${JSON.stringify(OUT[app])})].slice(-3).map((m) => m.innerText).join(" | ")`]);

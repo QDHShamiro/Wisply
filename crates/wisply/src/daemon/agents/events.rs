@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 use super::secret::scrub;
 
-pub const KINDS: [&str; 8] = ["done", "waiting", "ci_red", "ci_green", "limit", "resumed", "disk", "bug"];
+pub const KINDS: [&str; 9] = ["done", "waiting", "ci_red", "ci_green", "limit", "resumed", "disk", "bug", "remind"];
 const KEEP: usize = 200;
 const FILE_MAX: u64 = 256 * 1024;
 const TITLE_MAX: usize = 80;

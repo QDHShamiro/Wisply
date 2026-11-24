@@ -14,7 +14,7 @@ use super::mouth::Mouth;
 use super::{Paths, defaults, keys, num, text};
 
 const GROQ_ASR: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
-const ASR_RATE: u32 = 16_000;
+pub(crate) const ASR_RATE: u32 = 16_000;
 const ASR_WAIT: Duration = Duration::from_secs(15);
 const ASR_COOL_S: f64 = 60.0;
 const POLL: Duration = Duration::from_millis(200);
@@ -42,7 +42,7 @@ fn cut(s: &str) -> String {
     s.chars().take(ERR_CHARS).collect()
 }
 
-fn wav(pcm: &[u8]) -> Vec<u8> {
+pub(crate) fn wav(pcm: &[u8]) -> Vec<u8> {
     let n = u32::try_from(pcm.len()).unwrap_or(u32::MAX);
     let mut out = Vec::with_capacity(pcm.len() + 44);
     out.extend(b"RIFF");

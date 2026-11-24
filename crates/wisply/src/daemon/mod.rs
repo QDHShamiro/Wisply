@@ -10,6 +10,7 @@ mod doctor;
 mod ext;
 mod flow;
 mod game;
+mod go;
 mod grep;
 mod hosts;
 mod hotkey;
@@ -255,6 +256,7 @@ pub fn serve() -> ExitCode {
     });
     memory::index::start(d.home.clone());
     pc::start(d.home.clone());
+    go::start(d.home.clone());
     agents::start(d.home.clone());
     servers::start(d.home.clone());
     start_update(&d);

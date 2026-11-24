@@ -39,6 +39,10 @@ pub use shot::{distinct_moved, fine, save_sheet, sheet};
 pub use url::{leak_check, local_file, normalize_url};
 pub use wait::parse_ms;
 
+pub fn site(home: &std::path::Path, word: &str) -> Option<String> {
+    sites::named(home, word)
+}
+
 pub const CALL_TIMEOUT: f64 = 20.0;
 pub const LOAD_TIMEOUT: f64 = 25.0;
 pub const SNAP_LINES: usize = 150;

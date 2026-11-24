@@ -29,6 +29,10 @@ static TRANSIENT: LazyLock<Regex> = LazyLock::new(|| {
     .expect("transient")
 });
 
+pub fn transient(msg: &str) -> bool {
+    TRANSIENT.is_match(msg)
+}
+
 struct Attempt {
     argv: Vec<String>,
     used: Option<Vec<String>>,

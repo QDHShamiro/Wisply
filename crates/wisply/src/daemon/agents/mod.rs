@@ -43,6 +43,10 @@ pub fn alert(home: &Path, title: &str, body: &str) {
     events::emit(home, "bug", None, title, body, toast);
 }
 
+pub fn remind(home: &Path, title: &str, body: &str) {
+    events::emit(home, "remind", None, title, body, true);
+}
+
 pub fn status_line(d: &Daemon) -> Option<String> {
     watch::status_line(&d.home)
 }
