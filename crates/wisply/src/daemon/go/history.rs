@@ -76,6 +76,7 @@ impl History {
         self.at = None;
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.items.len()
     }
