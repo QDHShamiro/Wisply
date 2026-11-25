@@ -12,6 +12,7 @@ mod growth;
 mod handoff;
 mod hook;
 pub mod index;
+mod insight;
 pub mod learn;
 mod learner;
 mod list;
@@ -70,6 +71,7 @@ pub fn run(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
         "wiki" => wiki::wiki(d, c),
         "code" => code::code(d, ctx, c),
         "board" => board::board(d, ctx, c),
+        "insight" => insight::run(d, c),
         name => Err(super::route::later(name)),
     }
 }

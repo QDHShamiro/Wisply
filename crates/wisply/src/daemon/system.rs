@@ -56,6 +56,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         headless [start|stop|status|install] (a browser without a window for servers and CI; install fetches Chrome for Testing)
         update [--check|--plugins|--rollback] (installs the newest release and the Claude/Codex plugin by itself in the background; config update auto|notify|off)
         pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
+        insight | insight add \"title | why | proof\" | insight list | insight sessions (reads the command log: errors, slow commands, token eaters, lessons; each real finding goes to the user as a proposal in wisply ui under Improvements)
         agents [--all] [--json] (every Claude session: running, waiting, done, limit, tokens, cost estimate; resumes limit-stopped background sessions once after the reset)
         mobile pair [--name handy] | list | revoke <name> | status | on | off (phone API for the Wisply app, localhost and Tailscale only)
         notify event <done|waiting|ci_red|ci_green|limit|resumed|disk|bug> <title> [text] (Windows toast that never takes focus, plus the phone feed)

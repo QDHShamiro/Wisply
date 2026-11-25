@@ -12,7 +12,7 @@ pub use cap::{OUT_CHARS, cap, out_file};
 pub use clock::{ago, local_now, local_parts, local_to_utc, stamp_secs};
 pub use close::close_match;
 pub use fail::Fail;
-pub use log::{Log, Row, listing, stats};
+pub use log::{CmdStat, Failure, Log, Row, command_stats, failures, listing, stats};
 pub use names::{APP_ONLY, CHAT, CLIENT, Lane, QUIET, SHARED, WEB_ONLY, built_later, lane, unknown};
 pub use save::save;
 

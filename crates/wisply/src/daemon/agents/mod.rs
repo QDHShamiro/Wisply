@@ -1,6 +1,6 @@
 mod api;
 mod auth;
-mod board;
+pub(in crate::daemon) mod board;
 mod cmd;
 mod events;
 mod extra;
