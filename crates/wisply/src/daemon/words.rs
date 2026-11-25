@@ -6,6 +6,15 @@ pub fn hit(words: &[String], texts: &[&str]) -> bool {
     texts.iter().map(|x| x.to_lowercase()).any(|x| words.iter().any(|w| x.contains(w.as_str())))
 }
 
+pub fn loose(text: &str) -> String {
+    let kept: String = text
+        .chars()
+        .filter(|c| !matches!(c, '\'' | '’' | '`'))
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    kept.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 pub fn tiers(words: &[String], texts: &[&str]) -> Vec<u8> {
     let lowered: Vec<String> = texts.iter().map(|x| x.to_lowercase()).collect();
     words
@@ -66,5 +75,14 @@ mod tests {
         assert_eq!(tiers(&w, &["none"]), [0, 0]);
         let rows = [(vec![3, 0], "a"), (vec![2, 0], "b"), (vec![0, 1], "c")];
         assert_eq!(best_only(&rows), ["a", "c"]);
+    }
+
+    #[test]
+    fn loose_drops_punctuation_and_apostrophes() {
+        assert_eq!(loose("Wenn Der Gommemode Angeht! wiedergeben"), "wenn der gommemode angeht wiedergeben");
+        assert_eq!(loose("Don’t Stop Me Now"), "dont stop me now");
+        assert_eq!(loose("don't  stop - me"), "dont stop me");
+        assert_eq!(loose("(Remake) Über"), "remake über");
+        assert_eq!(loose("?!"), "");
     }
 }

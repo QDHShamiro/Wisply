@@ -10,7 +10,7 @@ use wisply_core::{Call, Fail, OUT_CHARS};
 use super::super::brain;
 use super::super::ctx::now;
 use super::super::web::{SNAP_LINES, keys};
-use super::super::words::{best_only, terms, tiers};
+use super::super::words::{best_only, loose, terms, tiers};
 use super::uia::{self, El};
 use super::view::{changes, fold, short};
 use super::win::{self, Rect};
@@ -273,31 +273,40 @@ impl Desk<'_> {
 
     pub fn by_text(&mut self, hwnd: isize, text: &str, roles: Option<&[&str]>) -> Res<Option<(String, El)>> {
         let tl = text.to_lowercase();
+        let tl_loose = loose(text);
         for attempt in 0..2 {
             if attempt > 0 || self.st.refs.is_empty() || now() - self.st.snap_t > FRESH_S || self.st.snap_hwnd != hwnd {
                 self.snapshot(hwnd, &Look::default())?;
             }
-            let mut best: Option<(u8, u8, String, El)> = None;
-            for (r, el) in &self.st.refs {
-                let role = el.role();
-                if roles.is_some_and(|list| !list.contains(&role)) {
-                    continue;
-                }
-                let name = el.name().to_lowercase();
-                let hit = if name == tl { 4 } else { tiers(std::slice::from_ref(&tl), &[name.as_str()])[0] };
-                if hit == 0 {
-                    continue;
-                }
-                let better = best.as_ref().is_none_or(|(h, k, ..)| hit > *h || (hit == *h && rank(role) < *k));
-                if better {
-                    best = Some((hit, rank(role), r.clone(), el.clone()));
-                }
-            }
-            if let Some((_, _, r, el)) = best {
-                return Ok(Some((r, el)));
+            let found = self
+                .best_ref(&tl, roles, str::to_lowercase)
+                .or_else(|| if tl_loose.is_empty() { None } else { self.best_ref(&tl_loose, roles, loose) });
+            if found.is_some() {
+                return Ok(found);
             }
         }
         Ok(None)
+    }
+
+    fn best_ref(&self, want: &str, roles: Option<&[&str]>, shape: fn(&str) -> String) -> Option<(String, El)> {
+        let words = [want.to_string()];
+        let mut best: Option<(u8, u8, String, El)> = None;
+        for (r, el) in &self.st.refs {
+            let role = el.role();
+            if roles.is_some_and(|list| !list.contains(&role)) {
+                continue;
+            }
+            let name = shape(&el.name());
+            let hit = if name == want { 4 } else { tiers(&words, &[name.as_str()])[0] };
+            if hit == 0 {
+                continue;
+            }
+            let better = best.as_ref().is_none_or(|(h, k, ..)| hit > *h || (hit == *h && rank(role) < *k));
+            if better {
+                best = Some((hit, rank(role), r.clone(), el.clone()));
+            }
+        }
+        best.map(|(_, _, r, el)| (r, el))
     }
 }
 

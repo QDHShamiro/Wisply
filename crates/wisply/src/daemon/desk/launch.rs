@@ -23,7 +23,7 @@ use super::snap::Look;
 use super::state::State;
 use super::view::hint_words;
 use super::win::{self, Win};
-use super::{Desk, Res};
+use super::{BROWSER_EXES, Desk, Res};
 
 const NAV_CHARS: usize = 1600;
 const APPS_DAY_S: u64 = 86_400;
@@ -145,7 +145,10 @@ fn owner_of<'a>(wins: &'a [Win], hint: &str) -> Option<&'a Win> {
     let mut ordered: Vec<&Win> = wins.iter().collect();
     ordered.sort_by_key(|w| !w.fg);
     let exe_hit = ordered.iter().find(|w| words.contains(&w.exe.to_lowercase().trim_end_matches(".exe").to_string()));
-    exe_hit.or_else(|| ordered.iter().find(|w| words.iter().any(|word| w.title.to_lowercase().contains(word)))).copied()
+    let page = |w: &Win| BROWSER_EXES.contains(&w.exe.to_lowercase().as_str());
+    exe_hit
+        .or_else(|| ordered.iter().find(|w| !page(w) && words.iter().any(|word| w.title.to_lowercase().contains(word))))
+        .copied()
 }
 
 fn wait_window(before: &HashSet<isize>, fg0: isize, ms: u64, hint: &str, running: bool) -> Option<isize> {
@@ -306,4 +309,25 @@ pub fn cleanup(st: &mut State, ctx: &mut Ctx) -> (Vec<String>, Vec<String>) {
         win::set_foreground(front0);
     }
     (closed.into_iter().map(|(_, n)| n.clone()).collect(), left.into_iter().map(|(_, n)| n.clone()).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn w(hwnd: isize, exe: &str, title: &str) -> Win {
+        Win { hwnd, title: title.into(), cls: String::new(), exe: exe.into(), min: false, fg: false }
+    }
+
+    #[test]
+    fn a_browser_page_about_the_app_is_not_the_app() {
+        let page = w(1, "brave.exe", "Suche nach Gomme Mode | Spotify - Brave");
+        assert!(owner_of(std::slice::from_ref(&page), "spotify").is_none());
+        let wins = [page, w(2, "Spotify.exe", "Spotify Premium")];
+        assert_eq!(owner_of(&wins, "spotify").map(|x| x.hwnd), Some(2));
+        let hosted = [w(3, "ApplicationFrameHost.exe", "WhatsApp")];
+        assert_eq!(owner_of(&hosted, "whatsapp").map(|x| x.hwnd), Some(3));
+        let browser = [w(4, "brave.exe", "New Tab - Brave")];
+        assert_eq!(owner_of(&browser, "brave").map(|x| x.hwnd), Some(4));
+    }
 }

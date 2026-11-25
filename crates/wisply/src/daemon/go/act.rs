@@ -17,7 +17,8 @@ use super::parse::Act;
 
 const RETRY_FOR: Duration = Duration::from_secs(5);
 const RETRY_EVERY: Duration = Duration::from_millis(300);
-const PLAY_WAIT: Duration = Duration::from_secs(6);
+const PLAY_WAIT: Duration = Duration::from_secs(25);
+const SEARCH_AGAIN: Duration = Duration::from_secs(8);
 const WEB_SEARCH: &str = "google";
 const SEND: &str = "send-message";
 const NOT_WEB: &[&str] = &["exe", "lnk", "bat", "cmd", "msi", "txt", "png", "jpg", "pdf", "json", "yml", "jar"];
@@ -153,22 +154,41 @@ fn message(home: &Path, who: &[String], app: Option<&str>, text: &str, yes: bool
     Ok(wisply_proto::handoff_line(SEND, &pairs, true))
 }
 
+fn uri_part(text: &str) -> String {
+    text.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
 fn spotify(d: &Daemon, ctx: &mut Ctx, q: &str) -> Result<String, Fail> {
-    step(d, ctx, &argv(&["launch", &format!("spotify:search:{q}")]))?;
+    let search = argv(&["launch", &format!("spotify:search:{}", uri_part(q))]);
+    step(d, ctx, &search)?;
     hold_app(d, ctx, "spotify");
     let labels = [format!("{q} wiedergeben"), format!("Play {q}")];
-    let end = Instant::now() + PLAY_WAIT;
+    let start = Instant::now();
+    let mut search_at = SEARCH_AGAIN;
     loop {
         for label in &labels {
             if once(d, ctx, &argv(&["click", label, "--on=app"])).is_ok() {
                 return Ok(format!("playing \"{q}\" on spotify"));
             }
         }
-        if Instant::now() >= end || stopped(d) {
+        if start.elapsed() >= PLAY_WAIT || stopped(d) {
+            if once(d, ctx, &argv(&["snap", "app:spotify", "-f", "spotify"])).is_err() {
+                return Err(Fail::hint("spotify did not open a window", "open spotify once, then say it again"));
+            }
             return Err(Fail::hint(
                 format!("spotify shows the search for \"{q}\", but no play button matched"),
                 "say the exact song name, or press play in spotify",
             ));
+        }
+        if start.elapsed() >= search_at {
+            search_at += SEARCH_AGAIN;
+            let _ = once(d, ctx, &search);
+            hold_app(d, ctx, "spotify");
         }
         thread::sleep(RETRY_EVERY);
     }
@@ -274,6 +294,13 @@ pub fn preview(home: &Path, act: &Act, yes: bool) -> Result<String, Fail> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spotify_search_keeps_every_word() {
+        assert_eq!(uri_part("Wenn Der Gommemode Angeht"), "Wenn%20Der%20Gommemode%20Angeht");
+        assert_eq!(uri_part("SOS"), "SOS");
+        assert_eq!(uri_part("Über & Co/2"), "%C3%9Cber%20%26%20Co%2F2");
+    }
 
     #[test]
     fn urls_apps_and_links() {

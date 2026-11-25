@@ -13,6 +13,11 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   in the request still wins.
 - While a game runs with `local_game allow`, only the local language model drops to idle priority. Speech-to-text
   stays at below-normal, so a spoken command no longer waits behind every busy process on the PC.
+- `wisply go "play <song>"` plays songs with several words or punctuation on Spotify: the search link keeps every
+  word, the play button matches without `!`, `?` or apostrophes, and a cold Spotify start gets up to 25 s with the
+  search sent again every 8 s when Spotify dropped it.
+- `wisply launch` and `app:<name>` targets no longer pick a browser tab whose title only mentions the app: a
+  "… | Spotify - Brave" page is not Spotify.
 
 ## [3.8.0] - 2026-11-24
 
