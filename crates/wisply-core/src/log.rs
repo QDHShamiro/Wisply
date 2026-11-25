@@ -14,6 +14,7 @@ const ACTION_VERBS: &[&str] =
 const MAX_BYTES: u64 = 5_000_000;
 const REOPEN_EVERY: u32 = 500;
 const SNAP_GAP_S: i64 = 15;
+const ERROR_CHARS: usize = 90;
 
 pub struct Row<'a> {
     pub name: &'a str,
@@ -176,7 +177,7 @@ struct Tally {
     snap_after: i64,
 }
 
-pub fn stats(home: &Path, last: usize) -> Option<String> {
+fn tallies(home: &Path, last: usize) -> Option<Vec<(String, Tally)>> {
     let mut rows = rows(&home.join("log.jsonl"))?;
     rows.retain(|r| !r.get("x").is_some_and(truthy) && !NOT_COUNTED.contains(&r["cmd"].as_str().unwrap_or_default()));
     let rows = &rows[tail(rows.len(), last)..];
@@ -218,6 +219,11 @@ pub fn stats(home: &Path, last: usize) -> Option<String> {
         prev = Some(e);
     }
     seen.sort_by_key(|(_, s)| -s.runs);
+    Some(seen)
+}
+
+pub fn stats(home: &Path, last: usize) -> Option<String> {
+    let seen = tallies(home, last)?;
     let mut out = vec!["cmd          runs  err%  avg ms  avg tok  snap after".to_string()];
     for (cmd, s) in &seen {
         let tok = if s.sized > 0 { format!("{:7}", s.chars / s.sized / 4 + 1) } else { "      -".into() };
@@ -229,6 +235,73 @@ pub fn stats(home: &Path, last: usize) -> Option<String> {
         out.push(format!("{cmd:<12} {:5} {:4}% {:7}  {tok}  {after}", s.runs, 100 * s.err / s.runs, s.ms / s.runs));
     }
     Some(out.join("\n"))
+}
+
+pub struct CmdStat {
+    pub cmd: String,
+    pub runs: i64,
+    pub err: i64,
+    pub avg_ms: i64,
+    pub avg_tokens: i64,
+    pub tokens: i64,
+    pub snap_after_pct: Option<i64>,
+}
+
+pub fn command_stats(home: &Path, last: usize) -> Vec<CmdStat> {
+    tallies(home, last)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(cmd, s)| CmdStat {
+            snap_after_pct: ACTION_VERBS.contains(&cmd.as_str()).then(|| 100 * s.snap_after / s.runs),
+            avg_ms: s.ms / s.runs,
+            avg_tokens: if s.sized > 0 { s.chars / s.sized / 4 + 1 } else { 0 },
+            tokens: s.chars / 4,
+            err: s.err,
+            runs: s.runs,
+            cmd,
+        })
+        .collect()
+}
+
+pub struct Failure {
+    pub cmd: String,
+    pub error: String,
+    pub count: i64,
+}
+
+pub fn failures(home: &Path, last: usize) -> Vec<Failure> {
+    let Some(mut rows) = rows(&home.join("log.jsonl")) else { return Vec::new() };
+    rows.retain(|r| !r.get("x").is_some_and(truthy) && !NOT_COUNTED.contains(&r["cmd"].as_str().unwrap_or_default()));
+    let rows = &rows[tail(rows.len(), last)..];
+    let mut seen: Vec<Failure> = Vec::new();
+    for e in rows.iter().filter(|e| !e.get("ok").is_some_and(truthy)) {
+        let cmd = e["cmd"].as_str().unwrap_or_default();
+        let error = shape(e["e"].as_str().unwrap_or_default());
+        match seen.iter_mut().find(|f| f.cmd == cmd && f.error == error) {
+            Some(f) => f.count += 1,
+            None => seen.push(Failure { cmd: cmd.to_string(), error, count: 1 }),
+        }
+    }
+    seen.sort_by_key(|f| -f.count);
+    seen
+}
+
+fn shape(error: &str) -> String {
+    let first = error.lines().next().unwrap_or_default();
+    let mut out = String::new();
+    let mut in_digits = false;
+    for ch in first.chars().take(ERROR_CHARS) {
+        if ch.is_ascii_digit() {
+            if !in_digits {
+                out.push('#');
+            }
+            in_digits = true;
+        } else {
+            in_digits = false;
+            out.push(ch);
+        }
+    }
+    out
 }
 
 fn truthy(v: &Value) -> bool {
@@ -322,6 +395,30 @@ mod tests {
         let text = fs::read_to_string(home.join("log.jsonl")).unwrap();
         assert_eq!(text.lines().count(), lines.len() + 1);
         assert!(text.lines().last().unwrap().contains(r#""cmd": "version""#));
+        fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn commands_and_repeated_errors_come_out_structured() {
+        let home = std::env::temp_dir().join(format!("wisply-core-insight-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&home);
+        fs::create_dir_all(&home).unwrap();
+        let lines = [
+            r#"{"t": "2026-10-30 12:00:00", "cmd": "click", "ok": false, "ms": 100, "n": 400, "e": "no element e12 on tab 3"}"#,
+            r#"{"t": "2026-10-30 12:00:10", "cmd": "click", "ok": false, "ms": 300, "n": 400, "e": "no element e48 on tab 9"}"#,
+            r#"{"t": "2026-10-30 12:00:20", "cmd": "click", "ok": true, "ms": 200, "n": 400}"#,
+            r#"{"t": "2026-10-30 12:00:30", "cmd": "open", "ok": false, "ms": 50, "n": 8, "e": "timeout"}"#,
+        ];
+        fs::write(home.join("log.jsonl"), lines.join("\n") + "\n").unwrap();
+        let rows = command_stats(&home, 2000);
+        let click = rows.iter().find(|r| r.cmd == "click").unwrap();
+        assert_eq!((click.runs, click.err, click.avg_ms, click.tokens, click.avg_tokens), (3, 2, 200, 300, 101));
+        assert_eq!(click.snap_after_pct, Some(0));
+        assert_eq!(rows.iter().find(|r| r.cmd == "open").unwrap().snap_after_pct, Some(0));
+        let bad = failures(&home, 2000);
+        assert_eq!((bad[0].cmd.as_str(), bad[0].error.as_str(), bad[0].count), ("click", "no element e# on tab #", 2));
+        assert_eq!(bad[1].cmd, "open");
+        assert!(command_stats(&home.join("none"), 10).is_empty() && failures(&home.join("none"), 10).is_empty());
         fs::remove_dir_all(&home).unwrap();
     }
 }

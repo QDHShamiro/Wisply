@@ -8,6 +8,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- `wisply insight` reads the command log and prints suspicious commands (high error rate, slow, token eaters, extra
+  snaps), repeated errors, lessons and open proposals, for any AI. `insight sessions` adds the costliest Claude
+  sessions, `insight add "title | why | proof"` files a proposal (a proof is required) and `insight list` shows the
+  open ones. Wisply UI: new Improvements page (accept or dismiss proposals) and Speed and errors page (sortable
+  command table, repeated errors, token eaters). The sidebar has groups, badges for open to-dos and new proposals, a
+  box with what runs now, a speed light, and quick actions (copy the find-improvements prompt, remember, pause or
+  resume memory). Headroom left the sidebar; it is linked from the Tokens page.
 - `wisply go` remembers orders it does not understand (`go/unknown.json`, max 50, counted); from the second time the
   hint names the count and suggests `wisply go --teach`. `wisply go --unknown` lists them, most asked first,
   `--unknown clear` empties the list, and a successful `--teach` removes the sentence. `--dry` never records.

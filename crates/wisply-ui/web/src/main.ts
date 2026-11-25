@@ -1,4 +1,4 @@
-import { board, call, type Pulse } from "./api";
+import { board, call, plain, type Pulse, type Side } from "./api";
 import { enc, go, h, icon, mount } from "./dom";
 import { hashParts } from "./hash";
 import { T } from "./text";
@@ -6,6 +6,8 @@ import { agents } from "./views/agents";
 import { blind } from "./views/blind";
 import { headroom } from "./views/headroom";
 import { home } from "./views/home";
+import { improve } from "./views/improve";
+import { badgeOf, findPrompt, groupLinks } from "./views/insight-logic";
 import { intel } from "./views/intel";
 import { list, type ListTab, TABS } from "./views/list";
 import { live } from "./views/live";
@@ -13,6 +15,7 @@ import { memory } from "./views/memory";
 import { project, type Tab } from "./views/project";
 import { search } from "./views/search";
 import { learned, settings, tokens } from "./views/side";
+import { speed } from "./views/speed";
 
 const STATUS_MS = 5000;
 const THEME_KEY = "wisply.theme";
@@ -36,12 +39,32 @@ const links: [string, string, string][] = [
   ["#/live", "live", T.nav.live],
   ["#/agents", "agents", T.nav.agents],
   ["#/tokens", "tokens", T.nav.tokens],
-  ["#/headroom", "headroom", T.nav.headroom],
+  ["#/improve", "improve", T.nav.improve],
+  ["#/speed", "speed", T.nav.speed],
   ["#/learned", "learned", T.nav.learned],
   ["#/blind", "blind", T.nav.blind],
   ["#/settings", "settings", T.nav.settings],
 ];
-const nav = h("nav", { id: "nav" }, links.map(([href, name, text]) => h("a", { href, title: text }, icon(name), h("span", {}, text))));
+const nav = h("nav", { id: "nav" });
+const badges = new Map<string, HTMLElement>();
+function drawNav(): void {
+  mount(
+    nav,
+    ...groupLinks(links).flatMap((g) => [
+      h("div", { class: "group" }, T.groups[g.title as keyof typeof T.groups] ?? g.title),
+      ...g.links.map(([href, name, text]) => {
+        const badge = h("em", { class: "badge", hidden: "" });
+        badges.set(name, badge);
+        return h("a", { href, title: text }, icon(name), h("span", {}, text), badge);
+      }),
+    ]),
+  );
+}
+drawNav();
+const nowBox = h("div", { id: "now" });
+const light = h("div", { id: "light" });
+const actions = h("div", { id: "actions" });
+let sideData: Side | null = null;
 const find = h("input", {
   type: "search",
   placeholder: T.find,
@@ -85,6 +108,9 @@ mount(
   h("a", { class: "brand", href: "#/" }, h("img", { src: "icon.svg", alt: "" }), h("span", {}, T.app)),
   h("div", { class: "search" }, icon("search"), find, h("kbd", {}, "Ctrl K")),
   nav,
+  nowBox,
+  actions,
+  light,
   status,
   themes,
 );
@@ -126,6 +152,8 @@ const PAGES: Record<string, Page> = {
   agents: () => agents(view),
   tokens: () => tokens(view),
   headroom: () => headroom(view),
+  improve: () => improve(view),
+  speed: () => speed(view),
   learned: () => learned(view),
   blind: () => blind(view),
   settings: () => settings(view),
@@ -167,7 +195,71 @@ async function pulse(): Promise<void> {
   );
 }
 
+const remember = h("input", {
+  type: "text",
+  placeholder: T.side.remember,
+  onkeydown: async (e: Event) => {
+    const k = e as KeyboardEvent;
+    const input = k.target as HTMLInputElement;
+    const text = input.value.trim();
+    if (k.key !== "Enter" || !text) return;
+    input.value = "";
+    input.placeholder = await plain("remember", text).then(() => T.side.remembered).catch((x: Error) => x.message);
+    window.setTimeout(() => (input.placeholder = T.side.remember), 2500);
+  },
+});
+const finder = h("button", {
+  type: "button",
+  onclick: async () => {
+    const ok = await navigator.clipboard.writeText(findPrompt()).then(() => true, () => false);
+    finder.textContent = ok ? T.side.findDone : T.side.findFail;
+    window.setTimeout(() => (finder.textContent = T.side.find), 2500);
+    go("#/improve");
+  },
+}, T.side.find);
+const pauser = h("button", {
+  type: "button",
+  onclick: async () => {
+    const next = sideData?.memory === false ? "on" : "off";
+    await plain("config", "memory", next).catch(() => "");
+    void sidebar();
+  },
+});
+mount(actions, h("div", { class: "group" }, T.side.actions), finder, remember, pauser);
+
+function drawSide(data: Side | null): void {
+  sideData = data;
+  for (const [name, el] of badges) {
+    const n = badgeOf(name, data);
+    el.textContent = String(n);
+    el.hidden = n === 0;
+  }
+  if (!data) {
+    mount(nowBox);
+    mount(light);
+    return;
+  }
+  pauser.textContent = data.memory ? T.side.pause : T.side.resume;
+  mount(
+    nowBox,
+    h("div", { class: "group" }, T.side.live),
+    ...(data.live.length
+      ? data.live.map((r) => h("a", { class: "run", href: "#/live", title: r.title ?? r.cmd }, h("span", { class: "dot on" }), h("span", {}, r.title ?? r.cmd), r.project ? h("small", {}, r.project) : null))
+      : [h("div", { class: "faint idle" }, T.side.idle)]),
+    data.working > data.live.length ? h("div", { class: "faint idle" }, T.side.working(data.working)) : null,
+  );
+  mount(light, h("a", { href: "#/speed", class: `lamp ${data.light.tone}`, title: T.side.lightNote(data.light.err_pct, data.light.avg_ms, data.light.runs) }, h("span", { class: "dot" }), h("span", {}, T.side.light[data.light.tone])));
+}
+
+async function sidebar(): Promise<void> {
+  drawSide(await board<Side>("side").catch(() => null));
+}
+
 window.addEventListener("hashchange", () => void route());
 void route();
 void pulse();
-setInterval(() => void pulse(), STATUS_MS);
+void sidebar();
+setInterval(() => {
+  void pulse();
+  void sidebar();
+}, STATUS_MS);

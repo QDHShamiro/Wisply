@@ -172,7 +172,7 @@ export async function tokens(view: HTMLElement): Promise<void> {
       h("p", { class: "footnote" }, T.tokens.how(d.page.toLocaleString("en-US"), d.screenshot.toLocaleString("en-US"), d.video.toLocaleString("en-US"))),
     );
   };
-  mount(view, h("div", { class: "page" }, h("div", { class: "row head" }, h("div", { class: "grow" }, h("h1", {}, T.tokens.title), h("div", { class: "sub" }, T.tokens.sub)), seg), body));
+  mount(view, h("div", { class: "page" }, h("div", { class: "row head" }, h("div", { class: "grow" }, h("h1", {}, T.tokens.title), h("div", { class: "sub" }, T.tokens.sub)), seg), body, h("p", { class: "footnote" }, h("a", { href: "#/headroom", class: "link" }, T.tokens.headroom))));
   await draw();
 }
 

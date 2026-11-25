@@ -26,6 +26,8 @@ const ICONS: Record<string, string> = {
   agents: "M4 5h16v4H4zM4 11h16v4H4zM4 17h10v2H4z",
   tokens: "M5 20V10M12 20V4M19 20v-7",
   headroom: "M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7",
+  improve: "M12 3l2.2 5.3L20 9l-4.2 3.8L17 18.5 12 15.7 7 18.5l1.2-5.7L4 9l5.8-.7zM12 21v0",
+  speed: "M4 18a8 8 0 1 1 16 0M12 18l4-6M7 18h10",
   learned: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v14H6.5A2.5 2.5 0 0 0 4 19.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5",
   blind: "M4 4h16v16H4zM12 4v16",
   settings: "M4 7h10M18 7h2M4 17h2M10 17h10M16 4v6M8 14v6",

@@ -123,7 +123,30 @@ button, input, textarea, select { font: inherit; color: inherit; }
 #nav a.on { background: var(--hover); color: var(--text); font-weight: 600; }
 #nav a.on svg { color: var(--accent); }
 
-#status { margin-top: auto; margin-bottom: 4px; display: flex; flex-direction: column; gap: 5px; padding: 12px 8px 2px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+#nav { overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+.group { padding: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: var(--faint); }
+#nav a { position: relative; }
+#nav a span { flex: 1 1 auto; }
+.badge { font-style: normal; font-size: 11px; font-weight: 600; min-width: 18px; padding: 0 6px; line-height: 18px; text-align: center; border-radius: 9px; background: var(--accent); color: var(--bg, #fff); }
+.badge[hidden] { display: none; }
+#now, #actions { display: flex; flex-direction: column; gap: 4px; }
+#now .group, #actions .group { padding: 0 8px 2px; }
+#now .run { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border-radius: 6px; color: var(--muted); font-size: 12.5px; }
+#now .run:hover { background: var(--raise); color: var(--text); }
+#now .run span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+#now .run small { color: var(--faint); font-size: 11px; }
+#now .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: none; }
+#now .idle { padding: 0 8px; font-size: 12.5px; }
+#actions button { text-align: left; font-size: 12.5px; padding: 4px 10px; }
+#actions input { width: 100%; font-size: 12.5px; padding: 4px 10px; }
+#light .lamp { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; font-size: 12.5px; color: var(--muted); }
+#light .lamp:hover { background: var(--raise); color: var(--text); }
+#light .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
+#light .good .dot { background: var(--good); }
+#light .warn .dot { background: var(--warn, #d9a400); }
+#light .bad .dot { background: var(--bad); }
+.link { color: var(--accent); }
+#status { margin-top: 0; margin-bottom: 4px; display: flex; flex-direction: column; gap: 5px; padding: 12px 8px 2px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
 #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); margin-right: 8px; }
 #status .dot.on { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
 #status .dot.off { background: var(--bad); }
@@ -338,7 +361,7 @@ section + section { margin-top: 4px; }
 
 @media (max-width: 860px) {
   #app { grid-template-columns: 64px minmax(0, 1fr); }
-  .brand span, #nav a span, .search, #status { display: none; }
+  .brand span, #nav a span, .search, #status, #now, #actions, #light, .group, .badge { display: none; }
   #nav a { justify-content: center; padding: 0; }
   .card { grid-template-columns: minmax(0, 1fr) 28px; }
   .card .title, .card .meta, .card .when { display: none; }

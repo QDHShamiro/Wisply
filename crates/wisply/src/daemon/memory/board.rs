@@ -15,7 +15,7 @@ use super::super::{Daemon, config};
 use super::{QUERY_BUDGET, embed, index, with_store};
 
 const USAGE: &str = "wisply board home | pulse | project <name> | note <id> | save <path> --mtime <ms> | todo <id> <status> | \
-                     todo-add <project> <task> | search <words> | graph [project] | live | lessons | unlearn <sig> | settings | tokens [today|<days>|all] | blind | blind-pick <run> <n> 1|2|same | \
+                     todo-add <project> <task> | search <words> | graph [project] | live | side | insight | lessons | unlearn <sig> | settings | tokens [today|<days>|all] | blind | blind-pick <run> <n> 1|2|same | \
                      headroom [today|<days>|all] | learning | skills | \
                      memory [--source s --project p --words w --offset n] | forget <id> | intelligence [days|all] | list | entry <id> | entry-set | entry-add | entry-undo | entry-note | mute | unmute | server";
 const MEMORY_PAGE: usize = 200;
@@ -28,6 +28,7 @@ const FILE_MAX: u64 = 4_000_000;
 const LOG_TAIL: u64 = 256 * 1024;
 const LIVE_S: f64 = 900.0;
 const WORKING_S: f64 = 60.0;
+const SIDE_LIVE: usize = 3;
 const STATUSES: &[&str] = &["todo", "doing", "waiting", "done", "dropped"];
 
 static TAG: LazyLock<Regex> =
@@ -306,6 +307,25 @@ fn live(d: &Daemon) -> Result<Value, Fail> {
     Ok(json!({"sessions": rows, "working_s": WORKING_S, "poll_ms": Duration::from_secs(2).as_millis() as u64}))
 }
 
+fn side_view(d: &Daemon) -> Result<Value, Fail> {
+    let mut out = super::insight::side(d)?;
+    let working: Vec<Value> =
+        live_rows(&d.home).into_iter().filter(|r| r["age"].as_f64().is_some_and(|a| a <= WORKING_S)).collect();
+    let ids: Vec<String> = working.iter().filter_map(|r| r["sid"].as_str().map(String::from)).collect();
+    let titles = with_store(d, |s| s.run_titles(&ids))?;
+    out["live"] = working
+        .iter()
+        .take(SIDE_LIVE)
+        .map(|r| {
+            let named = r["sid"].as_str().and_then(|s| titles.get(s));
+            json!({"cmd": r["cmd"], "age": r["age"], "project": named.map(|n| n.0.clone()), "title": named.map(|n| n.1.clone())})
+        })
+        .collect();
+    out["working"] = json!(working.len());
+    out["memory"] = json!(config::on(&config::load(&d.home), "memory"));
+    Ok(out)
+}
+
 fn lessons(d: &Daemon) -> Result<Value, Fail> {
     let all = with_store(d, |s| s.lessons())?;
     let rows: Vec<Value> = all
@@ -343,6 +363,8 @@ pub fn board(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
         "search" => search(d, c)?,
         "graph" => graph(d, c)?,
         "live" => live(d)?,
+        "side" => side_view(d)?,
+        "insight" => super::insight::board(d)?,
         "lessons" => lessons(d)?,
         "unlearn" => unlearn(d, c)?,
         "settings" => Value::Object(config::load(&d.home)),
