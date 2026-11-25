@@ -98,6 +98,25 @@ mod imp {
         ok.then_some((counters.working as u64) >> 20)
     }
 
+    #[repr(C)]
+    struct MemoryStatus {
+        length: u32,
+        load: u32,
+        total: u64,
+        rest: [u64; 6],
+    }
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GlobalMemoryStatusEx(status: *mut MemoryStatus) -> i32;
+    }
+
+    pub fn total_mb() -> u64 {
+        let mut status = MemoryStatus { length: size_of::<MemoryStatus>() as u32, load: 0, total: 0, rest: [0; 6] };
+        let ok = unsafe { GlobalMemoryStatusEx(&raw mut status) } != 0;
+        if ok { status.total >> 20 } else { 0 }
+    }
+
     pub fn image(pid: u32) -> Option<String> {
         let process = unsafe { OpenProcess(QUERY_LIMITED, 0, pid) };
         if process.is_null() {
@@ -136,6 +155,18 @@ mod imp {
     pub fn image(pid: u32) -> Option<String> {
         ps("args=", pid)
     }
+
+    pub fn total_mb() -> u64 {
+        let proc = std::fs::read_to_string("/proc/meminfo").ok().and_then(|t| {
+            let line = t.lines().find(|l| l.starts_with("MemTotal:"))?;
+            line.split_whitespace().nth(1)?.parse::<u64>().ok().map(|kb| kb >> 10)
+        });
+        proc.or_else(|| {
+            let out = Command::new("sysctl").args(["-n", "hw.memsize"]).stderr(Stdio::null()).output().ok()?;
+            String::from_utf8_lossy(&out.stdout).trim().parse::<u64>().ok().map(|b| b >> 20)
+        })
+        .unwrap_or(0)
+    }
 }
 
 pub fn alive(pid: u32) -> bool {
@@ -170,6 +201,10 @@ pub fn free_port() -> Option<u16> {
     listener.local_addr().ok().map(|a| a.port())
 }
 
+pub fn total_mb() -> u64 {
+    imp::total_mb()
+}
+
 pub fn cores() -> usize {
     std::thread::available_parallelism().map_or(2, usize::from)
 }
@@ -193,6 +228,11 @@ mod tests {
         assert!(alive(me));
         assert!(rss_mb(me).is_some());
         assert!(!alive(0));
+    }
+
+    #[test]
+    fn the_installed_ram_is_read() {
+        assert!(total_mb() >= 256);
     }
 
     #[test]

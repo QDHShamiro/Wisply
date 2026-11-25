@@ -13,6 +13,14 @@ pub struct Slot {
     pub used: f64,
     pub mb: u64,
     pub started: f64,
+    pub flight: u32,
+    pub flight_at: f64,
+}
+
+impl Slot {
+    pub fn busy(&self, now: f64) -> bool {
+        super::plan::flying(self.flight, self.flight_at, now)
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -35,14 +43,22 @@ fn file(home: &Path) -> PathBuf {
 }
 
 fn slot_json(s: &Slot) -> Value {
-    json!({"pid": s.pid, "port": s.port, "used": s.used, "mb": s.mb, "started": s.started})
+    json!({"pid": s.pid, "port": s.port, "used": s.used, "mb": s.mb, "started": s.started, "flight": s.flight, "flight_at": s.flight_at})
 }
 
 fn slot_from(v: &Value) -> Option<Slot> {
     let n = |k: &str| v.get(k).and_then(Value::as_f64).unwrap_or(0.0);
     let pid = u32::try_from(v.get("pid")?.as_u64()?).ok().filter(|p| *p > 0)?;
     let port = u16::try_from(v.get("port")?.as_u64()?).ok().filter(|p| *p > 0)?;
-    Some(Slot { pid, port, used: n("used"), mb: n("mb") as u64, started: n("started") })
+    Some(Slot {
+        pid,
+        port,
+        used: n("used"),
+        mb: n("mb") as u64,
+        started: n("started"),
+        flight: n("flight") as u32,
+        flight_at: n("flight_at"),
+    })
 }
 
 impl State {
@@ -107,7 +123,10 @@ mod tests {
     #[test]
     fn the_state_survives_a_round_trip_and_garbage() {
         let mut s = State::default();
-        s.put(Kind::Asr, Some(Slot { pid: 12, port: 4000, used: 5.5, mb: 300, started: 1.0 }));
+        s.put(
+            Kind::Asr,
+            Some(Slot { pid: 12, port: 4000, used: 5.5, mb: 300, started: 1.0, flight: 2, flight_at: 3.5 }),
+        );
         s.seen = [640, 0];
         let back = State::parse(&s.render());
         assert_eq!(back, s);
