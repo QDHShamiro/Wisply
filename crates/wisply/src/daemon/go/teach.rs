@@ -181,11 +181,15 @@ pub fn learn(d: &Daemon, ctx: &mut Ctx, sentence: &str) -> Result<String, Fail> 
     Ok(format!("taught {name}: \"{said}\" ({} steps{slots})", steps.len()))
 }
 
-pub fn unknown(sentence: &str) -> Fail {
-    Fail::hint(
-        format!("unknown order \"{}\"", clean(sentence)),
-        format!("do it once, then: wisply go --teach \"{}\"", clean(sentence)),
-    )
+pub fn unknown(sentence: &str, asked: Option<u32>) -> Fail {
+    let said = clean(sentence);
+    match asked {
+        Some(n) if n >= 2 => Fail::hint(
+            format!("unknown order \"{said}\" (asked {n}x)"),
+            format!("do it once, then: wisply go --teach \"{said}\""),
+        ),
+        _ => Fail::hint(format!("unknown order \"{said}\""), format!("do it once, then: wisply go --teach \"{said}\"")),
+    }
 }
 
 #[cfg(test)]

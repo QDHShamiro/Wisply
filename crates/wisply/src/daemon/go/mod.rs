@@ -15,6 +15,7 @@ mod input;
 mod later;
 mod parse;
 mod teach;
+mod unknown;
 mod words;
 
 use std::path::{Path, PathBuf};
@@ -26,7 +27,7 @@ use super::ctx::{Ctx, now};
 use super::{Daemon, Out, web};
 use parse::{Act, Know, Plan, describe, label};
 
-pub const USAGE: &str = "wisply go \"schreib Anna bin gleich da\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<order>\"";
+pub const USAGE: &str = "wisply go \"schreib Anna bin gleich da\" [--dry] [--yes] [--now] | go --list | go --cancel N | go --teach \"<order>\" | go --unknown [clear]";
 
 pub fn start(home: PathBuf) {
     #[cfg(windows)]
@@ -82,8 +83,16 @@ fn parsed(home: &Path, said: &str, t: f64) -> Result<Option<Plan>, Fail> {
     parse::parse(said, t, &Know { person: &person, site: &site })
 }
 
-fn plan(home: &Path, said: &str, t: f64) -> Result<Plan, Fail> {
-    parsed(home, said, t)?.ok_or_else(|| teach::unknown(said))
+fn plan(home: &Path, said: &str, t: f64, learn: bool) -> Result<Plan, Fail> {
+    parsed(home, said, t)?.ok_or_else(|| teach::unknown(said, learn.then(|| unknown::note(home, said))))
+}
+
+fn unknown_orders(c: &Call) -> Option<bool> {
+    if !c.flags.contains_key("unknown") {
+        return None;
+    }
+    let arg = c.val("unknown").or_else(|| c.pos.first().map(String::as_str)).unwrap_or("");
+    Some(arg.eq_ignore_ascii_case("clear"))
 }
 
 fn shown(home: &Path, plan: Plan, yes: bool, t: f64) -> Result<String, Fail> {
@@ -125,7 +134,7 @@ fn go(d: &Daemon, ctx: &mut Ctx, c: &Call, said: &str) -> Result<Out, Fail> {
         return done;
     }
     let t = now();
-    let plan = plan(&d.home, said, t)?;
+    let plan = plan(&d.home, said, t, !dry)?;
     let later_at = plan.when.filter(|at| !c.on("now") && *at > t);
     if dry {
         let line = shown(&d.home, Plan { act: plan.act, when: later_at }, yes, t)?;
@@ -153,12 +162,17 @@ pub fn command(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
     if c.flags.contains_key("cancel") {
         return cancel(d, c);
     }
+    if let Some(clear) = unknown_orders(c) {
+        return Ok(Out::Text(if clear { unknown::clear(&d.home) } else { unknown::list(&d.home) }));
+    }
     let said = c.pos.join(" ").trim().to_string();
     if said.is_empty() {
         return Err(Fail::hint("say what to do", USAGE));
     }
     if c.on("teach") {
-        return teach::learn(d, ctx, &said).map(Out::Text);
+        let out = teach::learn(d, ctx, &said)?;
+        unknown::forget(&d.home, &said);
+        return Ok(Out::Text(out));
     }
     go(d, ctx, c, &said)
 }
