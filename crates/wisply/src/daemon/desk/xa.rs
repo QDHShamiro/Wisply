@@ -7,7 +7,7 @@ use xa11y::{App, AppExt, Element, Error, Toggled};
 
 use super::super::ctx::{Ctx, SESSION_IDLE_S, now};
 use super::super::web::{SNAP_LINES, capped, ref_kind};
-use super::super::words::{best_only, terms, tiers};
+use super::super::words::{best_only, loose, terms, tiers};
 use super::super::{Daemon, Out};
 use super::view::{changes, fold, score, short};
 use super::xact;
@@ -258,10 +258,12 @@ impl State {
         let want = spec.to_lowercase();
         let controls: Vec<String> = lines.iter().filter(|l| l.starts_with('d')).map(|l| l.to_lowercase()).collect();
         let quoted = format!("\"{want}\"");
+        let plain = loose(spec);
         let at = controls
             .iter()
             .position(|l| l.contains(&quoted))
-            .or_else(|| controls.iter().position(|l| l.contains(&want)));
+            .or_else(|| controls.iter().position(|l| l.contains(&want)))
+            .or_else(|| controls.iter().position(|l| !plain.is_empty() && loose(l).contains(&plain)));
         let hit = at.map(|i| &controls[i]);
         let dref = hit
             .and_then(|l| l.split(' ').next())
