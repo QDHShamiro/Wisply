@@ -70,7 +70,7 @@ fn whole(h: &Path, t: f64) -> Option<String> {
     if teach::find(h, SENTENCE).is_some() {
         return None;
     }
-    let p = plan(h, SENTENCE, t).ok()?;
+    let p = plan(h, SENTENCE, t, false).ok()?;
     let who = act::preview(h, &p.act, false).ok()?;
     Some(format!("{}{who}", describe(&Plan { act: p.act, when: None }, t)))
 }
@@ -85,8 +85,8 @@ fn bench_daemon_side_of_go_dry() {
     both("teach::find miss (100 routines)", &homes, |h| drop(teach::find(h, SENTENCE)));
     both("web::site hit (youtube)", &homes, |h| drop(web::site(h, "youtube")));
     both("web::site miss", &homes, |h| drop(web::site(h, "person150")));
-    both("plan = load + parse", &homes, |h| drop(plan(h, SENTENCE, t)));
-    let p = plan(&homes[0], SENTENCE, t).expect("plan");
+    both("plan = load + parse", &homes, |h| drop(plan(h, SENTENCE, t, false)));
+    let p = plan(&homes[0], SENTENCE, t, false).expect("plan");
     both("describe", &homes, |_| drop(describe(&Plan { act: p.act.clone(), when: None }, t)));
     both("act::preview", &homes, |h| drop(act::preview(h, &p.act, false)));
     both("whole dry", &homes, |h| drop(whole(h, t)));

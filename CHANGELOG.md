@@ -5,6 +5,13 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [Unreleased]
+
+### Added
+- `wisply go` remembers orders it does not understand (`go/unknown.json`, max 50, counted); from the second time the
+  hint names the count and suggests `wisply go --teach`. `wisply go --unknown` lists them, most asked first,
+  `--unknown clear` empties the list, and a successful `--teach` removes the sentence. `--dry` never records.
+
 ## [3.8.1] - 2026-11-25
 
 ### Fixed
