@@ -4,12 +4,11 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use serde_json::{Map, Value};
-
+use super::conf::{self, Settings, index, settings};
 use super::plan::{self, Budget, Live};
 use super::state::{self, Slot, State};
 use super::{Kind, Why, get, sys};
-use crate::daemon::{config, game};
+use crate::daemon::game;
 
 const START_WAIT: Duration = Duration::from_secs(30);
 const POLL: Duration = Duration::from_millis(250);
@@ -23,37 +22,6 @@ const MB: u64 = 1 << 20;
 
 static GATE: Mutex<()> = Mutex::new(());
 static STATE: Mutex<()> = Mutex::new(());
-
-struct Settings {
-    ram_mb: u64,
-    idle_s: u64,
-    threads: usize,
-    game_mode: String,
-    start_mb: [u64; 2],
-}
-
-fn num(cfg: &Map<String, Value>, key: &str, fallback: i64) -> i64 {
-    cfg.get(key).and_then(Value::as_i64).unwrap_or(fallback)
-}
-
-fn settings(home: &Path) -> Settings {
-    let cfg = config::load(home);
-    let pos = |key: &str, fallback: i64| u64::try_from(num(&cfg, key, fallback)).unwrap_or(0);
-    Settings {
-        ram_mb: pos("local_ram_mb", 1024),
-        idle_s: pos("local_idle_s", 120),
-        threads: plan::threads(num(&cfg, "local_threads", 0), sys::cores()),
-        game_mode: config::text(&cfg, "local_game"),
-        start_mb: [pos("local_llm_start_mb", 650), pos("local_asr_start_mb", 450)],
-    }
-}
-
-fn index(kind: Kind) -> usize {
-    match kind {
-        Kind::Llm => 0,
-        Kind::Asr => 1,
-    }
-}
 
 fn edit<R>(home: &Path, f: impl FnOnce(&mut State) -> R) -> R {
     let _lock = STATE.lock().unwrap_or_else(|e| e.into_inner());
@@ -116,7 +84,10 @@ pub fn args(kind: Kind, model: &Path, port: u16, threads: usize) -> Vec<String> 
 }
 
 fn live(st: &State) -> Vec<Live> {
-    st.running().into_iter().map(|(kind, s)| Live { kind, mb: s.mb, used: s.used }).collect()
+    st.running()
+        .into_iter()
+        .map(|(kind, s)| Live { kind, mb: s.mb, used: s.used, busy: s.busy(state::now()) })
+        .collect()
 }
 
 fn drop_dead(st: &mut State) {
@@ -151,6 +122,21 @@ pub fn stop_all(home: &Path) -> usize {
     })
 }
 
+pub fn flight(home: &Path, kind: Kind, begin: bool) {
+    edit(home, |st| {
+        let now = state::now();
+        let Some(s) = st.slot_mut(kind) else { return };
+        let open = s.busy(now);
+        s.used = now;
+        if begin {
+            s.flight = if open { s.flight + 1 } else { 1 };
+            s.flight_at = now;
+        } else {
+            s.flight = s.flight.saturating_sub(1);
+        }
+    });
+}
+
 fn cleanup(home: &Path) {
     stop_all(home);
 }
@@ -180,7 +166,7 @@ fn make_room(home: &Path, kind: Kind, set: &Settings) -> Result<(), Why> {
             }
         }
         let expect = plan::expect(st.seen[index(kind)], set.start_mb[index(kind)]);
-        match plan::budget(set.ram_mb, &live(st), kind, expect, state::now()) {
+        match plan::budget(set.ram_mb, &live(st), kind, expect) {
             Budget::Fits => Ok(()),
             Budget::Kill(kinds) => {
                 kinds.into_iter().for_each(|k| stop_in(st, k, &root));
@@ -209,7 +195,7 @@ fn launch(home: &Path, kind: Kind, set: &Settings, playing: &str) -> Result<Slot
         }
         if healthy(port) {
             let mb = sys::rss_mb(pid).unwrap_or(0);
-            return Ok(Slot { pid, port, used: state::now(), mb, started: began });
+            return Ok(Slot { pid, port, used: state::now(), mb, started: began, flight: 0, flight_at: 0.0 });
         }
         thread::sleep(POLL);
         waited += POLL;
@@ -254,8 +240,10 @@ fn tick(home: &Path) {
     }
     let set = settings(home);
     let paused = plan::gaming(&set.game_mode, &game::running());
-    let lives: Vec<Live> = running.iter().map(|(kind, s)| Live { kind: *kind, mb: s.mb, used: s.used }).collect();
-    let due = plan::due(&lives, state::now(), set.idle_s, paused);
+    let now = state::now();
+    let lives: Vec<Live> =
+        running.iter().map(|(kind, s)| Live { kind: *kind, mb: s.mb, used: s.used, busy: s.busy(now) }).collect();
+    let due = plan::due(&lives, now, set.idle_s, paused);
     edit(home, |st| {
         for kind in due {
             stop_in(st, kind, &root);
@@ -292,7 +280,8 @@ pub fn status(home: &Path) -> String {
         st.clone()
     });
     let now = state::now();
-    [Kind::Llm, Kind::Asr]
+    let limit = conf::limit_line(&settings(home));
+    let lines = [Kind::Llm, Kind::Asr]
         .into_iter()
         .map(|kind| {
             if !get::installed(home, kind) {
@@ -309,8 +298,9 @@ pub fn status(home: &Path) -> String {
                 None => format!("{}: installed, stopped", kind.label()),
             }
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .chain([limit])
+        .collect::<Vec<_>>();
+    lines.join("\n")
 }
 
 fn size_of_dir(dir: &Path) -> u64 {
@@ -395,7 +385,12 @@ mod tests {
         let home = std::env::temp_dir().join(format!("wisply-local-dead-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&home).unwrap();
-        edit(&home, |st| st.put(Kind::Asr, Some(Slot { pid: 4_000_000_000, port: 9, used: 0.0, mb: 1, started: 0.0 })));
+        edit(&home, |st| {
+            st.put(
+                Kind::Asr,
+                Some(Slot { pid: 4_000_000_000, port: 9, used: 0.0, mb: 1, started: 0.0, flight: 0, flight_at: 0.0 }),
+            )
+        });
         assert!(status(&home).contains("asr: not installed"));
         assert!(edit(&home, |st| st.slot(Kind::Asr).is_none()));
         let _ = fs::remove_dir_all(&home);

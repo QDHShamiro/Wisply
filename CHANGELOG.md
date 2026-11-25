@@ -11,6 +11,11 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 - `wisply go` remembers orders it does not understand (`go/unknown.json`, max 50, counted); from the second time the
   hint names the count and suggests `wisply go --teach`. `wisply go --unknown` lists them, most asked first,
   `--unknown clear` empties the list, and a successful `--teach` removes the sentence. `--dry` never records.
+### Fixed
+- A local model counts as busy only while a request really runs (`local-url <asr|llm> begin|done`, capped at 180 s),
+  not for 10 s after any use, so speech-to-text followed by the language model no longer answers "busy".
+- The local RAM limit follows the installed RAM (RAM/16, between 1 and 3 GB) unless `local_ram_mb` is set; the size
+  guess of each model includes its runtime buffers, and `wisply local status` shows the limit and where it comes from.
 
 ## [3.8.1] - 2026-11-25
 

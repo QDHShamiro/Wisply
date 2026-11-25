@@ -1,3 +1,4 @@
+mod conf;
 pub mod get;
 pub mod plan;
 mod run;
@@ -6,7 +7,7 @@ mod sys;
 
 use std::path::Path;
 
-pub use run::{ensure, release, start, status, stop_all, wipe};
+pub use run::{ensure, flight, release, start, status, stop_all, wipe};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -68,10 +69,16 @@ pub fn url_line(home: &Path, args: &[String]) -> (i32, String) {
     let Some(kind) = args.first().and_then(|a| Kind::parse(a)) else {
         return (1, "local: say asr or llm".to_string());
     };
-    if args.get(1).is_some_and(|a| a == "stop") {
-        release(home, kind);
-        return (0, "ok".to_string());
+    match args.get(1).map(String::as_str) {
+        Some("stop") => release(home, kind),
+        Some("begin") => flight(home, kind, true),
+        Some("done") => flight(home, kind, false),
+        _ => return ensure_line(home, kind),
     }
+    (0, "ok".to_string())
+}
+
+fn ensure_line(home: &Path, kind: Kind) -> (i32, String) {
     match ensure(home, kind) {
         Ok(url) => (0, url),
         Err(why) => (why.code(), why.line()),
