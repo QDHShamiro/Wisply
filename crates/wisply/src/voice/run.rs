@@ -122,17 +122,18 @@ impl Asr {
         base.is_empty() && cfg.get("voice_asr").and_then(Value::as_str) == Some("local")
     }
 
-    fn local_service(&self) -> Result<(String, String), String> {
+    fn local_service(&self) -> Result<(String, String, Option<crate::local::Busy>), String> {
         let (base, model) = crate::daemon::whisper_service(&self.p.home);
         if !base.is_empty() {
-            return Ok((base, model));
+            return Ok((base, model, None));
         }
-        let url = crate::local::ensure(&self.p.home, crate::daemon::local::Kind::Asr).map_err(|why| why.line())?;
-        Ok((url, model))
+        let kind = crate::daemon::local::Kind::Asr;
+        let url = crate::local::ensure(&self.p.home, kind).map_err(|why| why.line())?;
+        Ok((url, model, Some(crate::local::busy(&self.p.home, kind))))
     }
 
     fn local(&mut self, audio: &[u8]) -> Result<String, String> {
-        let (base, model) = match self.local_service() {
+        let (base, model, _busy) = match self.local_service() {
             Ok(found) => found,
             Err(why) => {
                 if self.prefers_local() {

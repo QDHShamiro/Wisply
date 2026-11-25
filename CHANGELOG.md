@@ -5,6 +5,14 @@ zip and `SHA256SUMS.txt`: up to 2.x `lighting.exe`, `lighting-macos`, `lighting-
 and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`, `wisply-linux-arm64`,
 `wisply.mcpb` and one archive per system with the window and the extension.
 
+## [Unreleased]
+
+### Fixed
+- A local model counts as busy only while a request really runs (`local-url <asr|llm> begin|done`, capped at 180 s),
+  not for 10 s after any use, so speech-to-text followed by the language model no longer answers "busy".
+- The local RAM limit follows the installed RAM (RAM/16, between 1 and 3 GB) unless `local_ram_mb` is set; the size
+  guess of each model includes its runtime buffers, and `wisply local status` shows the limit and where it comes from.
+
 ## [3.8.1] - 2026-11-25
 
 ### Fixed

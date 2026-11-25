@@ -92,12 +92,12 @@ fn defaults() -> Map<String, Value> {
         ("codemode", json!(true)),
         ("codemode_save", json!(true)),
         ("coach", json!(true)),
-        ("local_ram_mb", json!(1024)),
+        ("local_ram_mb", json!(0)),
         ("local_idle_s", json!(120)),
         ("local_threads", json!(0)),
         ("local_game", json!("pause")),
-        ("local_llm_start_mb", json!(650)),
-        ("local_asr_start_mb", json!(450)),
+        ("local_llm_start_mb", json!(0)),
+        ("local_asr_start_mb", json!(0)),
         ("voice_asr", json!("local")),
     ];
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()

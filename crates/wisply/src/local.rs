@@ -12,6 +12,7 @@ use crate::daemon::local::{self, Kind, Why, get};
 const HELP: &str = "wisply local [status] (what is installed and running)
 wisply local get [--only llm|asr] (loads the small models, about 750 MB, checked by sha256)
 wisply local stop (ends both programs) | rm [--yes] (deletes everything loaded)
+RAM for both together: wisply config local_ram_mb <MB> (0 = automatic, RAM/16 between 1 and 3 GB)
 used by wisply call for answers the word rules cannot place (call set understand=auto|off, default auto)";
 const MODEL_NAME: &str = "local";
 const ANSWER_TOKENS: i64 = 120;
@@ -69,6 +70,22 @@ pub fn ensure(home: &Path, kind: Kind) -> Result<String, Why> {
     }
 }
 
+pub struct Busy {
+    home: std::path::PathBuf,
+    kind: Kind,
+}
+
+pub fn busy(home: &Path, kind: Kind) -> Busy {
+    let _ = crate::client::ask(home, &["local-url", kind.label(), "begin"]);
+    Busy { home: home.to_path_buf(), kind }
+}
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        let _ = crate::client::ask(&self.home, &["local-url", self.kind.label(), "done"]);
+    }
+}
+
 #[cfg(windows)]
 pub fn release(home: &Path, kind: Kind) {
     let _ = crate::client::ask(home, &["local-url", kind.label(), "stop"]);
@@ -110,6 +127,7 @@ pub fn ask_json(home: &Path, system: &str, user: &str, schema: &Value, timeout: 
     };
     let left = timeout.saturating_sub(began.elapsed()).max(MIN_WAIT);
     let payload = body(system, user, schema).to_string();
+    let _busy = busy(home, Kind::Llm);
     let mut resp = ureq::post(&format!("{url}/v1/chat/completions"))
         .config()
         .timeout_global(Some(left))
