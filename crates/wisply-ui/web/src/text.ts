@@ -195,7 +195,7 @@ export const T = {
     dismissed: (n: number) => (n === 1 ? "1 dismissed" : `${n} dismissed`),
     stats: { waiting: "Waiting", taken: "Accepted", suspicious: "Suspicious", errors: "Errors" },
     errNote: "of the last commands failed",
-    kinds: { errors: "errors", slow: "slow", tokens: "tokens", snap: "extra snap" } as Record<string, string>,
+    kinds: { errors: "errors", slow: "slow", tokens: "tokens", snap: "extra snap", loop: "loop", app: "own app" } as Record<string, string>,
   },
   speed: {
     title: "Speed and errors",

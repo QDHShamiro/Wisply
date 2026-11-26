@@ -6,15 +6,17 @@ mod fail;
 mod log;
 mod names;
 mod save;
+mod tally;
 
 pub use args::{Call, Flag, parse, wants_help};
 pub use cap::{OUT_CHARS, cap, out_file};
 pub use clock::{ago, local_now, local_parts, local_to_utc, stamp_secs};
 pub use close::close_match;
 pub use fail::Fail;
-pub use log::{CmdStat, Failure, Log, Row, command_stats, failures, listing, stats};
+pub use log::{Log, Row, listing};
 pub use names::{APP_ONLY, CHAT, CLIENT, Lane, QUIET, SHARED, WEB_ONLY, built_later, lane, unknown};
 pub use save::save;
+pub use tally::{Caller, CmdStat, Failure, LogView, Loop, command_stats, failures, own_app, stats, view};
 
 pub fn ext_version(version: &str) -> &str {
     version.split(['-', '+']).next().unwrap_or(version)

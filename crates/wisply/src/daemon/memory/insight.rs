@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 
 use serde_json::{Value, json};
-use wisply_core::{Call, CmdStat, Fail, Failure, command_stats, failures};
+use wisply_core::{Call, Caller, CmdStat, Fail, Failure, LogView, Loop, command_stats, view};
 use wisply_memory::{Todo, oneline};
 
 use super::super::Daemon;
@@ -25,6 +25,7 @@ const LESSON_SHOWN: usize = 5;
 const TASK_CHARS: usize = 120;
 const PROOF_CHARS: usize = 160;
 const SESSIONS_SHOWN: usize = 4;
+const SID_CHARS: usize = 8;
 const QUIET: &[&str] = &["board", "hook"];
 const WAITS: &[&str] = &["wait", "listen", "watch", "research", "launch", "agents", "reply", "inbox"];
 
@@ -90,6 +91,48 @@ pub fn findings(stats: &[CmdStat], fails: &[Failure]) -> Vec<Finding> {
     out
 }
 
+pub fn callers(loops: &[Loop], apps: &[Caller]) -> Vec<Finding> {
+    let mut out: Vec<Finding> = loops
+        .iter()
+        .map(|l| Finding {
+            kind: "loop",
+            cmd: l.cmd.clone(),
+            text: format!(
+                "one session repeated the same failing {} {}x: {}",
+                l.cmd,
+                l.count,
+                oneline(&l.error, PROOF_CHARS)
+            ),
+            proof: format!(
+                "session {}, last at {}; a script loop, left out of the rates above: stop it or fix its target",
+                l.sid.get(..SID_CHARS).unwrap_or(&l.sid),
+                l.last
+            ),
+        })
+        .collect();
+    for a in apps.iter().filter(|a| a.runs >= MIN_RUNS && pct(a.err, a.runs) >= ERR_PCT) {
+        let top = a.top.as_ref().map_or_else(String::new, |f| {
+            format!("most common: {}x {}: {}; ", f.count, f.cmd, oneline(&f.error, PROOF_CHARS))
+        });
+        out.push(Finding {
+            kind: "app",
+            cmd: a.sid.clone(),
+            text: format!(
+                "{} is a Wisply app, not an AI session: {}% of {} runs failed",
+                a.sid,
+                pct(a.err, a.runs),
+                a.runs
+            ),
+            proof: format!("{top}left out of the rates above"),
+        });
+    }
+    out
+}
+
+fn fails_of(v: &LogView) -> Vec<Failure> {
+    v.failures().into_iter().filter(|f| !QUIET.contains(&f.cmd.as_str())).collect()
+}
+
 fn light(stats: &[CmdStat]) -> Value {
     let runs: i64 = stats.iter().map(|s| s.runs).sum();
     let err: i64 = stats.iter().filter(|s| !WAITS.contains(&s.cmd.as_str())).map(|s| s.err).sum();
@@ -119,10 +162,11 @@ pub fn side(d: &Daemon) -> Result<Value, Fail> {
 }
 
 pub fn board(d: &Daemon) -> Result<Value, Fail> {
-    let stats = counted(command_stats(&d.home, LAST));
-    let fails: Vec<Failure> =
-        failures(&d.home, LAST).into_iter().filter(|f| !QUIET.contains(&f.cmd.as_str())).collect();
-    let found = findings(&stats, &fails);
+    let v = view(&d.home, LAST);
+    let stats = counted(v.stats());
+    let fails = fails_of(&v);
+    let mut found = findings(&stats, &fails);
+    found.extend(callers(&v.loops, &v.apps()));
     let commands: Vec<Value> = stats
         .iter()
         .map(|s| {
@@ -139,16 +183,23 @@ pub fn board(d: &Daemon) -> Result<Value, Fail> {
 }
 
 fn report(d: &Daemon, with_sessions: bool) -> Result<String, Fail> {
-    let stats = counted(command_stats(&d.home, LAST));
-    if stats.is_empty() {
+    let v = view(&d.home, LAST);
+    let stats = counted(v.stats());
+    let apps = v.apps();
+    if stats.is_empty() && apps.is_empty() && v.loops.is_empty() {
         return Ok("insight: the log is empty, nothing to read yet".into());
     }
-    let fails: Vec<Failure> =
-        failures(&d.home, LAST).into_iter().filter(|f| !QUIET.contains(&f.cmd.as_str())).collect();
+    let fails = fails_of(&v);
     let runs: i64 = stats.iter().map(|s| s.runs).sum();
     let err: i64 = stats.iter().map(|s| s.err).sum();
-    let mut out = format!("wisply insight: {runs} commands read, {}% failed\n", pct(err, runs));
-    let found = findings(&stats, &fails);
+    let mut out = format!("wisply insight: {runs} commands from AI sessions read, {}% failed\n", pct(err, runs));
+    let apart: Vec<String> = apps.iter().map(|a| format!("{} {} runs", a.sid, a.runs)).collect();
+    if !apart.is_empty() || !v.loops.is_empty() {
+        let from = if apart.is_empty() { String::new() } else { format!("{} from Wisply apps; ", apart.join(", ")) };
+        let _ = writeln!(out, "left out: {from}{} failed runs of {} loop(s)", v.looped_runs(), v.loops.len());
+    }
+    let mut found = findings(&stats, &fails);
+    found.extend(callers(&v.loops, &apps));
     out.push_str("\nsuspicious (check each one before you believe it):\n");
     if found.is_empty() {
         out.push_str("  nothing stands out\n");
@@ -297,5 +348,30 @@ mod tests {
         assert_eq!(light(&[stat("click", 10, 5, 100, 1)])["tone"], "bad");
         assert_eq!(light(&[stat("click", 10, 1, 100, 1)])["tone"], "warn");
         assert_eq!(light(&[stat("click", 10, 0, 100, 1), stat("wait", 10, 10, 100, 1)])["tone"], "good");
+    }
+
+    #[test]
+    fn loops_and_own_apps_are_named_apart_from_real_errors() {
+        let loops = [Loop {
+            sid: "3765a469-0963".into(),
+            cmd: "click".into(),
+            error: "nothing matches \"Mum\"".into(),
+            count: 85,
+            last: "2026-11-26 12:10:00".into(),
+        }];
+        let top = Failure { cmd: "go".into(), error: "unknown order \"spielat\"".into(), count: 8 };
+        let apps = [
+            Caller { sid: "wisply-ai".into(), runs: 1029, err: 397, top: Some(top) },
+            Caller { sid: "wisply-ui".into(), runs: 1457, err: 0, top: None },
+        ];
+        let found = callers(&loops, &apps);
+        assert_eq!(found.iter().map(|f| f.kind).collect::<Vec<_>>(), ["loop", "app"]);
+        assert!(
+            found[0].text.contains("click 85x") && found[0].proof.contains("session 3765a469,"),
+            "{}",
+            found[0].proof
+        );
+        assert!(found[1].text.starts_with("wisply-ai is a Wisply app") && found[1].text.contains("38% of 1029"));
+        assert!(found[1].proof.contains("8x go: unknown order"));
     }
 }
