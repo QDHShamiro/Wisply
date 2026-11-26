@@ -2,7 +2,7 @@ mod api;
 mod auth;
 pub(in crate::daemon) mod board;
 mod cmd;
-mod events;
+pub(in crate::daemon) mod events;
 mod extra;
 mod limit;
 mod model;

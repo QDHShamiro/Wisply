@@ -21,6 +21,7 @@ pub(crate) mod memory;
 mod pc;
 mod phone;
 mod record;
+mod relay;
 mod research;
 mod route;
 mod routines;
@@ -260,6 +261,7 @@ pub fn serve() -> ExitCode {
     local::start(d.home.clone());
     go::start(d.home.clone());
     agents::start(d.home.clone());
+    relay::start(&d);
     servers::start(d.home.clone());
     start_update(&d);
     let mut sessions = Some(sessions);
