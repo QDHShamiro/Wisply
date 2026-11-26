@@ -5,7 +5,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { board, save, type Note } from "../api";
-import { ago, enc, h, mount } from "../dom";
+import { ago, enc, every, h, mount } from "../dom";
 import { render } from "../md";
 import { T } from "../text";
 import { seenPanel } from "./seen";
@@ -130,7 +130,7 @@ export async function note(view: HTMLElement, spec: { id?: number; title?: strin
     show(mode);
   };
 
-  const timer = window.setInterval(async () => {
+  const timer = every(async () => {
     if (!n.path) return;
     const fresh = await board<Note>("note", String(n.id)).catch(() => null);
     if (!fresh || fresh.mtime === n.mtime) return;
@@ -184,7 +184,7 @@ export async function note(view: HTMLElement, spec: { id?: number; title?: strin
   );
   show("read");
   return () => {
-    clearInterval(timer);
+    timer();
     editor?.destroy();
   };
 }

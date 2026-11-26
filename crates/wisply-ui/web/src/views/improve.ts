@@ -1,5 +1,5 @@
 import { board, type Entry, type Insight, type ListData } from "../api";
-import { ago, h, mount } from "../dom";
+import { ago, every, h, mount } from "../dom";
 import { T } from "../text";
 import { findPrompt, proposalsOf } from "./insight-logic";
 import { stat } from "./side";
@@ -108,6 +108,5 @@ export async function improve(view: HTMLElement): Promise<() => void> {
     );
   };
   await draw();
-  const timer = window.setInterval(() => void draw(), POLL_MS);
-  return () => clearInterval(timer);
+  return every(() => void draw(), POLL_MS);
 }

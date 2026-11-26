@@ -1,5 +1,5 @@
 import { board, type Insight, type InsightCmd } from "../api";
-import { h, mount } from "../dom";
+import { every, h, mount } from "../dom";
 import { T } from "../text";
 import { lapse, SORTS, type SortKey, sortCommands } from "./insight-logic";
 import { pct, short, stat } from "./side";
@@ -98,6 +98,5 @@ export async function speed(view: HTMLElement): Promise<() => void> {
   mount(view, h("div", { class: "page" }, h("div", { class: "row head" }, h("div", { class: "grow" }, h("h1", {}, T.speed.title), h("div", { class: "sub" }, T.speed.sub)), seg), body));
   draw();
   await load();
-  const timer = window.setInterval(() => void load(), POLL_MS);
-  return () => clearInterval(timer);
+  return every(() => void load(), POLL_MS);
 }

@@ -1,4 +1,4 @@
-import { h, mount, pick } from "../dom";
+import { every, h, mount, pick } from "../dom";
 import { T } from "../text";
 import { bar } from "./agent-bar";
 import { type Agent, type Overview, STATUSES, type Status, clock, list, modelLabel, overview, tokens, watch } from "./agent-data";
@@ -207,14 +207,14 @@ export async function agents(view: HTMLElement): Promise<() => void> {
   mount(grid, h("div", { class: "ag-grid" }, ...Array.from({ length: 8 }, () => h("div", { class: "ag-tile skel" }))));
   drawChips();
   await pull();
-  const poll = window.setInterval(() => void pull(), POLL_MS);
+  const poll = every(() => void pull(), POLL_MS);
   const unwatch = watch(() => void pull());
   const tick = window.setInterval(() => {
     const now = Date.now() / 1000;
     for (const el of grid.querySelectorAll<HTMLElement>(".s-running .ag-time")) el.textContent = clock(now - Number(el.dataset.since));
   }, TICK_MS);
   return () => {
-    clearInterval(poll);
+    poll();
     clearInterval(tick);
     unwatch();
     open?.close();

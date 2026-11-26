@@ -113,6 +113,10 @@ fn main() -> wry::Result<()> {
                 let _ = webview.evaluate_script(&format!("window.lt && window.lt.done({id}, {code}, {text})"));
             }
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => *flow = ControlFlow::Exit,
+            #[cfg(windows)]
+            Event::WindowEvent { event: WindowEvent::Resized(_), .. } => {
+                let _ = webview.set_visible(!window.is_minimized());
+            }
             _ => {}
         }
     })

@@ -1,5 +1,5 @@
 import { board, boardWith, type Entry, type ListData } from "../api";
-import { ago, debounce, enc, h, mount, pick } from "../dom";
+import { ago, debounce, enc, every, h, mount, pick } from "../dom";
 import { T } from "../text";
 import { entryPanel } from "./entry";
 import { boardView, serversView } from "./list-board";
@@ -247,7 +247,7 @@ function context(data: ListData, args: string[], p: Parts, redraw: () => void): 
 }
 
 function watch(c: Ctx, drawer: HTMLElement): () => void {
-  const timer = window.setInterval(() => {
+  const timer = every(() => {
     if (!document.querySelector(BUSY)) void c.refresh();
   }, POLL_MS);
   const keys = (k: KeyboardEvent) => {
@@ -257,7 +257,7 @@ function watch(c: Ctx, drawer: HTMLElement): () => void {
   };
   window.addEventListener("keydown", keys);
   return () => {
-    clearInterval(timer);
+    timer();
     window.removeEventListener("keydown", keys);
   };
 }
