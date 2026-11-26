@@ -112,17 +112,40 @@ pub fn tail(row: &Row) -> Vec<String> {
     log_tail(&raw, &row.id).lines().map(|l| scrub(l, TAIL_LINE_MAX)).filter(|l| !l.is_empty()).collect()
 }
 
-pub fn resume(row_sid: &str, dir: &str, text: &str) -> Result<(), Fail> {
-    if !safe_id(row_sid) {
-        return Err(Fail::new("bad session id"));
-    }
+fn prompt_of(text: &str) -> Result<String, Fail> {
     let clean: String = text.chars().filter(|c| !c.is_control() || *c == '\n').take(TEXT_MAX).collect();
     let clean = clean.trim();
     if clean.is_empty() {
         return Err(Fail::new("empty text"));
     }
-    let prompt = if clean.starts_with('-') { format!(" {clean}") } else { clean.to_string() };
+    Ok(if clean.starts_with('-') { format!(" {clean}") } else { clean.to_string() })
+}
+
+pub fn resume(row_sid: &str, dir: &str, text: &str) -> Result<(), Fail> {
+    if !safe_id(row_sid) {
+        return Err(Fail::new("bad session id"));
+    }
+    let prompt = prompt_of(text)?;
     claude_in(&["--bg", "--resume", row_sid, &prompt], Some(Path::new(dir))).map(|_| ())
+}
+
+fn flag_value(text: &str) -> Option<&str> {
+    Some(text).filter(|t| {
+        !t.is_empty() && !t.starts_with('-') && t.bytes().all(|b| b.is_ascii_alphanumeric() || b"-._[]".contains(&b))
+    })
+}
+
+pub fn start_fresh(name: &str, dir: &str, text: &str, model: &str, effort: &str) -> Result<(), Fail> {
+    let prompt = prompt_of(text)?;
+    let label: String = name.chars().filter(|c| !c.is_control()).take(NAME_MAX).collect();
+    let mut args = vec!["--bg", "--name", label.as_str()];
+    for (flag, value) in [("--model", model), ("--effort", effort)] {
+        if let Some(v) = flag_value(value) {
+            args.extend([flag, v]);
+        }
+    }
+    args.push(&prompt);
+    claude_in(&args, Some(Path::new(dir))).map(|_| ())
 }
 
 pub fn stop(id: &str) -> Result<(), Fail> {
@@ -136,6 +159,15 @@ pub fn stop(id: &str) -> Result<(), Fail> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn only_plain_model_and_effort_words_become_flags() {
+        assert_eq!(flag_value("claude-sonnet-5-5"), Some("claude-sonnet-5-5"));
+        assert_eq!(flag_value("high"), Some("high"));
+        assert_eq!(flag_value(""), None);
+        assert_eq!(flag_value("x; rm"), None);
+        assert_eq!(flag_value("--model"), None);
+    }
 
     #[test]
     fn rows_come_from_the_claude_list_and_hide_the_full_path() {

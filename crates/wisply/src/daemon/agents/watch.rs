@@ -8,10 +8,11 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 use wisply_core::local_parts;
 
-use super::board::{self, now, resume};
+use super::board::{self, now, resume, start_fresh, stop};
 use super::events::emit;
 use super::limit::{Change, Guard};
 use super::model::{Row, Status};
+use super::rotate;
 use crate::daemon::config;
 use crate::daemon::pc;
 
@@ -150,10 +151,26 @@ pub fn tick(home: &Path, guard: &mut Guard) {
         guard.save(home);
     }
     for w in due {
+        let name = rows.iter().find(|r| r.id == w.id).map_or("session", |r| r.name.as_str());
+        let fresh = rotate::plan(&cfg, &w.sid, RESUME_TEXT).and_then(|p| {
+            start_fresh(&rotate::name(name), &w.dir, &p.prompt, &p.model, &p.effort).ok().map(|()| p.context)
+        });
+        if let Some(context) = fresh {
+            let _ = stop(&w.id);
+            log_line(home, &format!("rotated {} ({}k tokens) into a fresh session", w.id, context / 1000));
+            emit(
+                home,
+                "resumed",
+                Some(&w.id),
+                "session rotated",
+                &format!("{name} continues fresh with a handoff instead of {}k tokens of context", context / 1000),
+                toast,
+            );
+            continue;
+        }
         match resume(&w.sid, &w.dir, RESUME_TEXT) {
             Ok(()) => {
                 log_line(home, &format!("resumed {}", w.id));
-                let name = rows.iter().find(|r| r.id == w.id).map_or("session", |r| r.name.as_str());
                 emit(
                     home,
                     "resumed",

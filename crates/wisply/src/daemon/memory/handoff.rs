@@ -26,6 +26,8 @@ const DIR: &str = "handoff";
 const CLEAR_SLOT: &str = "clear-";
 const HEAD: &str = "Wisply handoff, written before the compact from your transcript (no model):";
 const CLEAR_HEAD: &str = "Wisply handoff, written at /clear from the transcript of the session before (no model):";
+const ROTATE_HEAD: &str =
+    "Wisply handoff, written for a session rotation from the transcript of the session before (no model):";
 const USER: &str = "USER: ";
 const CLAUDE: &str = "CLAUDE: ";
 const EDIT: &str = "EDIT ";
@@ -136,6 +138,10 @@ pub fn from_transcript(path: &Path, todos: &[String]) -> String {
     let at = tail_offset(path).unwrap_or(0);
     let Ok(tail) = condense(path, at, Some(TAIL_CHARS)) else { return String::new() };
     told(path, at, &tail.text, &tail.title, todos)
+}
+
+pub fn for_rotation(path: &Path) -> String {
+    from_transcript(path, &[]).replacen(HEAD, ROTATE_HEAD, 1)
 }
 
 pub fn for_compact(path: &Path, here: &str, todos: impl FnOnce(&str) -> Vec<String>) -> String {

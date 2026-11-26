@@ -9,7 +9,7 @@ mod code;
 mod early;
 mod embed;
 mod growth;
-mod handoff;
+pub(in crate::daemon) mod handoff;
 mod hook;
 pub mod index;
 mod insight;

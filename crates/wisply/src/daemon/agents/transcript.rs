@@ -27,6 +27,8 @@ pub struct Stats {
     pub ended_ms: i64,
     pub model: String,
     pub effort: String,
+    pub context: i64,
+    pub goal: String,
 }
 
 #[derive(Clone, Default)]
@@ -46,6 +48,8 @@ pub struct Parser {
     ended_ms: i64,
     model: String,
     effort: String,
+    context: i64,
+    goal: String,
     offset: u64,
     len: u64,
 }
@@ -76,6 +80,10 @@ fn millis(stamp: &str) -> i64 {
 impl Parser {
     pub fn feed(&mut self, chunk: &str) {
         for line in chunk.lines() {
+            if line.contains(r#""type":"goal_status""#) {
+                self.take_goal(line);
+                continue;
+            }
             if line.contains(r#""effort":""#) && !line.contains(r#""type":"assistant""#) {
                 if let Some(effort) =
                     serde_json::from_str::<Value>(line).ok().and_then(|e| e["effort"].as_str().map(String::from))
@@ -115,6 +123,18 @@ impl Parser {
         }
     }
 
+    fn take_goal(&mut self, line: &str) {
+        let Ok(e) = serde_json::from_str::<Value>(line) else { return };
+        let a = &e["attachment"];
+        if a["type"] != "goal_status" {
+            return;
+        }
+        self.goal = match (a["met"].as_bool().unwrap_or(false), a["condition"].as_str()) {
+            (false, Some(text)) => text.trim().to_string(),
+            _ => String::new(),
+        };
+    }
+
     fn take_usage(&mut self, e: &Value, m: &Value) {
         let u = &m["usage"];
         if !u.is_object() {
@@ -127,6 +147,7 @@ impl Parser {
         slot.write = slot.write.max(n("cache_creation_input_tokens"));
         slot.read = slot.read.max(n("cache_read_input_tokens"));
         slot.out = slot.out.max(n("output_tokens"));
+        self.context = slot.input + slot.write + slot.read;
         if let Some(model) = m["model"].as_str().filter(|s| !s.is_empty()) {
             slot.model = model.to_string();
             self.model = model.to_string();
@@ -147,6 +168,8 @@ impl Parser {
             ended_ms: self.ended_ms,
             model: self.model.clone(),
             effort: self.effort.clone(),
+            context: self.context,
+            goal: self.goal.clone(),
         }
     }
 
@@ -178,6 +201,10 @@ pub struct Cache {
 }
 
 impl Cache {
+    pub fn path(&mut self, root: &Path, sid: &str) -> Option<PathBuf> {
+        plain(sid).then(|| self.locate(root, sid)).flatten()
+    }
+
     fn locate(&mut self, root: &Path, sid: &str) -> Option<PathBuf> {
         if let Some(p) = self.paths.get(sid).filter(|p| p.is_file()) {
             return Some(p.clone());
@@ -190,7 +217,7 @@ impl Cache {
     }
 
     pub fn stats(&mut self, root: &Path, sid: &str) -> Stats {
-        if sid.is_empty() || !sid.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+        if !plain(sid) {
             return Stats::default();
         }
         let Some(path) = self.locate(root, sid) else { return Stats::default() };
@@ -200,12 +227,22 @@ impl Cache {
     }
 }
 
+fn plain(sid: &str) -> bool {
+    !sid.is_empty() && sid.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
 static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
 
 pub fn stats_of(sid: &str) -> Stats {
     let root = claude_home().join("projects");
     let mut guard = CACHE.lock().unwrap_or_else(PoisonError::into_inner);
     guard.get_or_insert_with(Cache::default).stats(&root, sid)
+}
+
+pub fn path_of(sid: &str) -> Option<PathBuf> {
+    let root = claude_home().join("projects");
+    let mut guard = CACHE.lock().unwrap_or_else(PoisonError::into_inner);
+    guard.get_or_insert_with(Cache::default).path(&root, sid)
 }
 
 #[cfg(test)]
@@ -227,6 +264,30 @@ mod tests {
         assert_eq!(s.last_text, "building now");
         assert!(s.limit.as_deref().is_some_and(|l| l.contains("resets 3:40am")));
         assert!(s.ended_ms > 0);
+    }
+
+    const GOAL: &str =
+        r#"{"type":"attachment","attachment":{"type":"goal_status","met":false,"condition":"fix every issue"}}"#;
+    const MET: &str =
+        r#"{"type":"attachment","attachment":{"type":"goal_status","met":true,"condition":"fix every issue"}}"#;
+    const QUOTED: &str = r#"{"type":"user","message":{"content":"he wrote \"type\":\"goal_status\" in a text"}}"#;
+
+    #[test]
+    fn the_context_is_the_last_request_and_the_goal_follows_its_status() {
+        let mut p = Parser::default();
+        p.feed(&format!(
+            "{GOAL}
+{QUOTED}
+{ANSWER}
+"
+        ));
+        let s = p.stats();
+        assert_eq!((s.context, s.goal.as_str()), (1110, "fix every issue"));
+        p.feed(&format!(
+            "{MET}
+"
+        ));
+        assert_eq!(p.stats().goal, "");
     }
 
     #[test]
