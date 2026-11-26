@@ -50,6 +50,8 @@ const TITLE_MAX: usize = 160;
 const SESSION_CHARS: usize = 8;
 const FILES_SHOWN: usize = 8;
 const TASK_SHORT: usize = 80;
+const LONG_TODOS: usize = 15;
+const DIGEST_PER_LIST: usize = 5;
 const QUERY_BUDGET: Duration = Duration::from_secs(4);
 const EMBED_BUDGET: Duration = Duration::from_secs(10);
 
@@ -289,6 +291,25 @@ fn todo_list(rows: &[Todo], short: bool) -> String {
     out.join("\n")
 }
 
+fn todo_digest(rows: &[Todo]) -> String {
+    let mut out = Vec::new();
+    let mut rest = rows;
+    while let Some(first) = rest.first() {
+        let name = first.list.as_str();
+        let n = rest.iter().take_while(|t| t.list == name).count();
+        let (group, tail) = rest.split_at(n);
+        rest = tail;
+        let keep = if name.is_empty() { n } else { DIGEST_PER_LIST };
+        out.push(format!("{}:", if name.is_empty() { "to-dos" } else { name }));
+        out.extend(group.iter().take(keep).map(|t| format!("  {}", todo_line(t, true))));
+        if n > keep {
+            out.push(format!("  +{} more: wisply todo list {name}", n - keep));
+        }
+    }
+    out.push("(wisply todo <id> shows one in full, --full lists every line)".into());
+    out.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,5 +346,17 @@ mod tests {
         let rows = vec![Todo { list: String::new(), ..t.clone() }, Todo { id: 6, list: "release".into(), ..t }];
         let list = todo_list(&rows, false);
         assert!(list.starts_with("to-dos:\n  #5 ") && list.contains("\nrelease:\n  #6 "));
+        let mut many: Vec<Todo> = (0..3).map(|i| Todo { id: i, task: "loose".into(), ..Todo::default() }).collect();
+        many.extend((10..18).map(|i| Todo {
+            id: i,
+            list: "big".into(),
+            task: "x".into(),
+            note: "n".into(),
+            ..Todo::default()
+        }));
+        let digest = todo_digest(&many);
+        assert!(digest.starts_with("to-dos:\n  #0 loose\n  #1 loose\n  #2 loose\nbig:\n  #10 x\n"), "{digest}");
+        assert!(digest.contains("  #14 x\n  +3 more: wisply todo list big\n") && !digest.contains("#15"), "{digest}");
+        assert!(!digest.contains("(n)"), "{digest}");
     }
 }
