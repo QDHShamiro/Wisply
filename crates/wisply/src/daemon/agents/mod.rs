@@ -10,6 +10,7 @@ mod net;
 mod price;
 mod push;
 mod qr;
+mod rotate;
 mod secret;
 mod server;
 mod transcript;

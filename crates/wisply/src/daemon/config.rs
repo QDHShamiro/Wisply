@@ -76,6 +76,8 @@ fn defaults() -> Map<String, Value> {
         ("agents", json!(true)),
         ("agents_resume", json!(true)),
         ("agents_notify", json!(true)),
+        ("agents_rotate", json!(false)),
+        ("agents_rotate_tokens", json!(100_000)),
         ("agents_work", json!("")),
         ("agents_lock", json!("")),
         ("phone_api", json!(false)),
@@ -237,6 +239,8 @@ mod tests {
 agents_lock = \"\"
 agents_notify = true
 agents_resume = true
+agents_rotate = false
+agents_rotate_tokens = 100000
 agents_work = \"\"
 audio = \"auto\"
 brain = true
@@ -251,7 +255,7 @@ browser = \"auto\""
         assert_eq!(text(&load(&h), "browser"), "auto");
         let fail = |a: &[&str]| command(&h, &args(a)).unwrap_err().text();
         assert!(fail(&["nope"]).starts_with(
-            "err: unknown config key 'nope' -> try: one of: agents, agents_lock, agents_notify, agents_resume, agents_work, audio, brain"
+            "err: unknown config key 'nope' -> try: one of: agents, agents_lock, agents_notify, agents_resume, agents_rotate, agents_rotate_tokens, agents_work, audio, brain"
         ));
         assert_eq!(
             fail(&["focus", "sometimes"]),
