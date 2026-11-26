@@ -264,11 +264,12 @@ pub fn click(x: &mut Desk, c: &Call) -> Res<String> {
         }
     };
     x.note_target(&el);
-    let (px, py) = Desk::center(&el)?;
+    let spot = Desk::center(&el);
     let before = x.before_action(hwnd);
     let known = window_set();
     let bg = x.bg(hwnd);
     if c.on("mouse") || c.on("right") || c.on("double") {
+        let (px, py) = spot?;
         let (b, n) = button(c);
         focus::click(bg, px, py, b, n, hwnd)?;
         let after = x.after_action(hwnd, before, 0.6, None);
@@ -284,6 +285,7 @@ pub fn click(x: &mut Desk, c: &Call) -> Res<String> {
         let back = back.or_else(|| focus::put_back(prev, hwnd)).map_or(String::new(), |b| format!("\n{b}"));
         return Ok(format!("ok {name} ({how} in background){after}{back}{}", x.new_windows(&known)));
     }
+    let (px, py) = spot?;
     focus::click(bg, px, py, Button::Left, 1, hwnd)?;
     let after = x.after_action(hwnd, before, 0.6, None);
     Ok(format!("ok {name} (mouse click, cursor restored){after}{}", x.new_windows(&known)))
