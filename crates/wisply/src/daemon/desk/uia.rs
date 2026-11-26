@@ -10,20 +10,20 @@ use windows::Win32::System::Variant::{
 use windows::Win32::UI::Accessibility::{
     CUIAutomation8, ExpandCollapseState_Expanded, IUIAutomation, IUIAutomation2, IUIAutomationCacheRequest,
     IUIAutomationCondition, IUIAutomationElement, IUIAutomationExpandCollapsePattern, IUIAutomationInvokePattern,
-    IUIAutomationLegacyIAccessiblePattern, IUIAutomationScrollPattern, IUIAutomationSelectionItemPattern,
-    IUIAutomationTextPattern, IUIAutomationTogglePattern, IUIAutomationValuePattern, ScrollAmount,
-    ScrollAmount_LargeDecrement, ScrollAmount_LargeIncrement, ScrollAmount_NoAmount, TreeScope, TreeScope_Children,
-    TreeScope_Descendants, TreeScope_Subtree, UIA_AcceleratorKeyPropertyId, UIA_AccessKeyPropertyId,
-    UIA_AutomationIdPropertyId, UIA_BoundingRectanglePropertyId, UIA_ClassNamePropertyId, UIA_ControlTypePropertyId,
-    UIA_ExpandCollapseExpandCollapseStatePropertyId, UIA_ExpandCollapsePatternId, UIA_HasKeyboardFocusPropertyId,
-    UIA_InvokePatternId, UIA_IsEnabledPropertyId, UIA_IsExpandCollapsePatternAvailablePropertyId,
-    UIA_IsOffscreenPropertyId, UIA_IsPasswordPropertyId, UIA_IsScrollPatternAvailablePropertyId,
-    UIA_IsSelectionItemPatternAvailablePropertyId, UIA_IsTogglePatternAvailablePropertyId,
-    UIA_IsValuePatternAvailablePropertyId, UIA_LegacyIAccessiblePatternId, UIA_NamePropertyId,
-    UIA_NativeWindowHandlePropertyId, UIA_PATTERN_ID, UIA_PROPERTY_ID, UIA_RuntimeIdPropertyId, UIA_ScrollPatternId,
-    UIA_ScrollVerticallyScrollablePropertyId, UIA_SelectionItemIsSelectedPropertyId, UIA_SelectionItemPatternId,
-    UIA_TextPatternId, UIA_TogglePatternId, UIA_ToggleToggleStatePropertyId, UIA_ValuePatternId,
-    UIA_ValueValuePropertyId,
+    IUIAutomationLegacyIAccessiblePattern, IUIAutomationScrollItemPattern, IUIAutomationScrollPattern,
+    IUIAutomationSelectionItemPattern, IUIAutomationTextPattern, IUIAutomationTogglePattern, IUIAutomationValuePattern,
+    ScrollAmount, ScrollAmount_LargeDecrement, ScrollAmount_LargeIncrement, ScrollAmount_NoAmount, TreeScope,
+    TreeScope_Children, TreeScope_Descendants, TreeScope_Subtree, UIA_AcceleratorKeyPropertyId,
+    UIA_AccessKeyPropertyId, UIA_AutomationIdPropertyId, UIA_BoundingRectanglePropertyId, UIA_ClassNamePropertyId,
+    UIA_ControlTypePropertyId, UIA_ExpandCollapseExpandCollapseStatePropertyId, UIA_ExpandCollapsePatternId,
+    UIA_HasKeyboardFocusPropertyId, UIA_InvokePatternId, UIA_IsEnabledPropertyId,
+    UIA_IsExpandCollapsePatternAvailablePropertyId, UIA_IsOffscreenPropertyId, UIA_IsPasswordPropertyId,
+    UIA_IsScrollPatternAvailablePropertyId, UIA_IsSelectionItemPatternAvailablePropertyId,
+    UIA_IsTogglePatternAvailablePropertyId, UIA_IsValuePatternAvailablePropertyId, UIA_LegacyIAccessiblePatternId,
+    UIA_NamePropertyId, UIA_NativeWindowHandlePropertyId, UIA_PATTERN_ID, UIA_PROPERTY_ID, UIA_RuntimeIdPropertyId,
+    UIA_ScrollItemPatternId, UIA_ScrollPatternId, UIA_ScrollVerticallyScrollablePropertyId,
+    UIA_SelectionItemIsSelectedPropertyId, UIA_SelectionItemPatternId, UIA_TextPatternId, UIA_TogglePatternId,
+    UIA_ToggleToggleStatePropertyId, UIA_ValuePatternId, UIA_ValueValuePropertyId,
 };
 use windows::core::{BSTR, Interface};
 
@@ -469,6 +469,11 @@ impl El {
         let Some(p) = self.pattern::<IUIAutomationScrollPattern>(UIA_ScrollPatternId) else { return false };
         let amount: ScrollAmount = if down { ScrollAmount_LargeIncrement } else { ScrollAmount_LargeDecrement };
         unsafe { p.Scroll(ScrollAmount_NoAmount, amount) }.is_ok()
+    }
+
+    pub fn scroll_into_view(&self) -> bool {
+        self.pattern::<IUIAutomationScrollItemPattern>(UIA_ScrollItemPatternId)
+            .is_some_and(|p| unsafe { p.ScrollIntoView() }.is_ok())
     }
 
     pub fn pid(&self) -> u32 {

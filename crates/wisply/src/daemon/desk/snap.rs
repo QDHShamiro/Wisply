@@ -67,6 +67,10 @@ fn from_name(name: &str) -> Option<(String, String)> {
     Some((m[1].to_string(), HINT.replace(name, "").into_owned()))
 }
 
+fn has_area(r: Rect) -> bool {
+    r.2 - r.0 >= 1
+}
+
 fn inside(a: Rect, b: Rect) -> bool {
     a.1 >= b.1 - 2 && a.3 <= b.3 + 2 && a.0 >= b.0 - 2
 }
@@ -264,8 +268,12 @@ impl Desk<'_> {
     }
 
     pub fn center(el: &El) -> Res<(i32, i32)> {
-        let (l, t, r, b) = el.live_rect();
-        if r - l < 1 {
+        let mut rect = el.live_rect();
+        if !has_area(rect) && el.scroll_into_view() {
+            rect = el.live_rect();
+        }
+        let (l, t, r, b) = rect;
+        if !has_area(rect) {
             return Err(Fail::hint("element has no position on screen", "wisply snap").into());
         }
         Ok(((l + r) / 2, (t + b) / 2))
@@ -342,4 +350,16 @@ pub fn snap(x: &mut Desk, c: &Call) -> Res<String> {
     let text = format!("{head}{hint}\n{rest}");
     let text = if c.on("full") || c.on("web") { text } else { brain::prune(x.d, x.ctx, &text, &format!("app:{exe}")) };
     Ok(x.cap(&text, "app-snap", Some(SNAP_LINES), OUT_CHARS))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_area;
+
+    #[test]
+    fn an_element_scrolled_out_of_view_has_no_area() {
+        assert!(!has_area((0, 0, 0, 0)));
+        assert!(!has_area((40, 10, 40, 30)));
+        assert!(has_area((40, 10, 41, 30)));
+    }
 }
