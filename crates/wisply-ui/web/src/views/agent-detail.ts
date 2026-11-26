@@ -1,4 +1,4 @@
-import { h, mount } from "../dom";
+import { every, h, mount } from "../dom";
 import { T } from "../text";
 import { type Agent, type Detail, clock, modelLabel, say, show, stop, tokens } from "./agent-data";
 
@@ -119,7 +119,7 @@ export function detail(agent: Agent, onClose: () => void): { el: HTMLElement; cl
   out.append(h("div", { class: "ag-line skel-line" }, T.agents.noOutput));
   paint({ ...agent, tail: [] });
   void pull();
-  const timer = window.setInterval(() => void pull(), TAIL_MS);
+  const timer = every(() => void pull(), TAIL_MS);
   const key = (e: KeyboardEvent) => {
     if (e.key === "Escape" && document.activeElement !== input) onClose();
   };
@@ -128,7 +128,7 @@ export function detail(agent: Agent, onClose: () => void): { el: HTMLElement; cl
     el,
     close: () => {
       alive = false;
-      clearInterval(timer);
+      timer();
       clearTimeout(armed);
       document.removeEventListener("keydown", key);
     },

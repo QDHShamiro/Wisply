@@ -159,3 +159,15 @@ export function debounce<A extends unknown[]>(f: (...a: A) => void, ms: number):
     timer = window.setTimeout(() => f(...a), ms);
   };
 }
+
+export function every(run: () => unknown, ms: number): () => void {
+  const awake = () => {
+    if (!document.hidden) void run();
+  };
+  const timer = window.setInterval(awake, ms);
+  document.addEventListener("visibilitychange", awake);
+  return () => {
+    clearInterval(timer);
+    document.removeEventListener("visibilitychange", awake);
+  };
+}

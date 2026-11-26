@@ -1,5 +1,5 @@
 import { board, call, plain, type Pulse, type Side } from "./api";
-import { enc, go, h, icon, mount } from "./dom";
+import { enc, every, go, h, icon, mount } from "./dom";
 import { hashParts } from "./hash";
 import { T } from "./text";
 import { agents } from "./views/agents";
@@ -259,7 +259,7 @@ window.addEventListener("hashchange", () => void route());
 void route();
 void pulse();
 void sidebar();
-setInterval(() => {
+every(() => {
   void pulse();
   void sidebar();
 }, STATUS_MS);
