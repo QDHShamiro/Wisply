@@ -23,7 +23,7 @@ const LEGEND: &str = "whole = read it all, parts = Read with offset/limit, grep 
 pub fn run(args: &[String]) -> ExitCode {
     match peek(args) {
         Ok(text) => {
-            println!("{text}");
+            println!("{}", wisply_memory::scrub(&text));
             ExitCode::SUCCESS
         }
         Err(fail) => {
