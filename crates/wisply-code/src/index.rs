@@ -172,20 +172,12 @@ impl Index {
                 self.left += 1;
                 continue;
             }
+            let Some(parser) = parsers.entry(*lang).or_insert_with(|| parser_for(lang)).as_mut() else {
+                self.left += 1;
+                continue;
+            };
             let Ok(data) = fs::read(self.root.join(rel)) else { continue };
-            let parser = parsers.entry(*lang).or_insert_with(|| {
-                if lock(&FAILED).get(*lang).is_some_and(|at| at.elapsed() < RETRY) {
-                    return None;
-                }
-                let Ok(language) = get_language(lang) else {
-                    lock(&FAILED).insert(lang.to_string(), Instant::now());
-                    return None;
-                };
-                let mut p = Parser::new();
-                p.set_language(&language).ok()?;
-                Some(p)
-            });
-            let (defs, refs) = parser.as_mut().map(|p| extract(p, &data)).unwrap_or_default();
+            let (defs, refs) = extract(parser, &data);
             tx.execute("delete from vecs where id in (select id from symbols where path = ?1)", [rel])?;
             tx.execute("delete from symbols where path = ?1", [rel])?;
             tx.execute("delete from refs where path = ?1", [rel])?;
@@ -226,6 +218,19 @@ impl Index {
         }
         Ok(changed + gone.len())
     }
+}
+
+fn parser_for(lang: &str) -> Option<Parser> {
+    if lock(&FAILED).get(lang).is_some_and(|at| at.elapsed() < RETRY) {
+        return None;
+    }
+    let Ok(language) = get_language(lang) else {
+        lock(&FAILED).insert(lang.to_string(), Instant::now());
+        return None;
+    };
+    let mut p = Parser::new();
+    p.set_language(&language).ok()?;
+    Some(p)
 }
 
 fn git_files(root: &Path, args: &[&str], skip: &[&str]) -> Option<Vec<String>> {
@@ -293,5 +298,23 @@ mod tests {
         assert_eq!(lang_of("README.md"), None);
         let s = slug(Path::new("E:/plugins/My Plugin"));
         assert!(s.starts_with("My_Plugin-") && s.len() == "My_Plugin-".len() + 8, "{s}");
+    }
+
+    #[test]
+    fn a_file_whose_parser_failed_is_read_again_later() {
+        let base = std::env::temp_dir().join(format!("wisply-code-noparser-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("proj");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("a.kt"), "fun main() {}\n").unwrap();
+        lock(&FAILED).insert("kotlin".into(), Instant::now());
+        let mut index = Index::open(&base.join("home"), &root).unwrap();
+        index.refresh(None).unwrap();
+        let stored: i64 = index.db.query_row("select count(*) from files", [], |r| r.get(0)).unwrap();
+        let left = index.left;
+        lock(&FAILED).remove("kotlin");
+        drop(index);
+        let _ = fs::remove_dir_all(&base);
+        assert_eq!((stored, left), (0, 1), "a file without symbols must stay unread and be counted as left");
     }
 }
