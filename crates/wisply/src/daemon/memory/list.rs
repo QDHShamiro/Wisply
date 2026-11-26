@@ -5,11 +5,11 @@ use wisply_memory::{KINDS, NewEntry, PRIOS, Todo, WAITS, date, day, oneline, val
 
 use super::super::ctx::Ctx;
 use super::super::{Daemon, agents, servers};
-use super::{LINE, TASK_SHORT, ident, is_ident, project, todo_list, with_store};
+use super::{LINE, LONG_TODOS, TASK_SHORT, ident, is_ident, project, todo_digest, todo_list, with_store};
 
 pub const TODO_HELP: &str = "wisply todo | todo add \"task\" [--kind bug|feature|task|idea] [--prio high|mid|low] [--list name] \
      | todo done|doing|drop|open <id> [note] | todo wait <id> restart|you | todo prio|kind <id> <value> \
-     | todo note <id> \"text\" | todo undo <id> | todo tidy [--done 3,7] [--drop 4]";
+     | todo note <id> \"text\" | todo undo <id> | todo tidy [--done 3,7] [--drop 4] | todo --full (every line of a long list)";
 const BUG_HELP: &str = "wisply bug add <server> \"what is broken\" [--prio high|mid|low] | wisply bug [server]";
 const LIST_HELP: &str = "wisply list [--server s] [--kind bug] [--warn] [--done] | list servers | list check [server] \
      | list ignore <id> | list on|off <server> | list log <server> <path> | list accept|reject <id>";
@@ -222,6 +222,8 @@ pub fn todo(d: &Daemon, ctx: &Ctx, c: &Call) -> Result<String, Fail> {
             }
             Ok(if rows.is_empty() {
                 "no open to-dos (wisply todo add \"task\")".into()
+            } else if list.is_empty() && rows.len() > LONG_TODOS && !c.on("full") {
+                todo_digest(&rows)
             } else {
                 todo_list(&rows, false)
             })
