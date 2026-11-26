@@ -58,6 +58,7 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
         insight | insight add \"title | why | proof\" | insight list | insight sessions (reads the command log of AI sessions: errors, slow commands, token eaters, lessons; Wisply apps and one-session loops are named apart; each real finding goes to the user as a proposal in wisply ui under Improvements)
         agents [--all] [--json] (every Claude session: running, waiting, done, limit, tokens, cost estimate; resumes limit-stopped background sessions once after the reset)
+        fallback [on|off|status|keys|test [provider]] (when the Claude limit hits, answers go on through free cloud models and the local model; a relay on 127.0.0.1 that speaks the Claude API, ANTHROPIC_BASE_URL=http://127.0.0.1:9947; big sessions stay local, private text never leaves the PC)
         mobile pair [--name handy] | list | revoke <name> | status | on | off (phone API for the Wisply app, localhost and Tailscale only)
         notify event <done|waiting|ci_red|ci_green|limit|resumed|disk|bug> <title> [text] (Windows toast that never takes focus, plus the phone feed)
 code    codemode \"<javascript>\" [--yes] [--timeout 5m] [--file f | -] (many shell, file and wisply steps in one call, only the result comes back; wisply codemode help)
@@ -228,6 +229,7 @@ fn status(d: &Daemon, ctx: &Ctx) -> String {
     lines.extend(media::usage(&d.home));
     lines.extend(super::pc::status_line(d));
     lines.extend(super::agents::status_line(d));
+    lines.extend(super::relay::status_line());
     lines.extend(crate::update::status_line(&d.home));
     lines.push(format!("home {}", posix(&d.home)));
     lines.join("\n")

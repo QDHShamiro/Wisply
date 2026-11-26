@@ -164,6 +164,7 @@ pub fn route(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<Out, Fail> {
         "think" => think::run(d, ctx, c),
         "pc" => super::pc::run(d, c),
         "agents" | "mobile" | "notify" => agents::run(d, ctx, c),
+        "fallback" => super::relay::run(d, c),
         "research" => super::research::run(d, ctx, c).map(Out::Text),
         "autoload" => autoload(d, c),
         "ext-reload" => super::ext::reload(d).map(Out::Text),
