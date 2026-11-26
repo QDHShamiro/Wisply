@@ -73,6 +73,31 @@ fn shell(cmd: &str) -> Command {
     c
 }
 
+#[cfg(windows)]
+fn direct(cmd: &str) -> Option<Command> {
+    if cmd.contains(['&', '|', '<', '>', '^', '%', '(', ')', '"', '\'', '!']) {
+        return None;
+    }
+    let mut words = cmd.split_whitespace();
+    let mut c = Command::new(words.next()?);
+    c.args(words);
+    Some(c)
+}
+
+fn spawn(cmd: &str, cwd: &Path) -> std::io::Result<Child> {
+    let start = |mut c: Command| {
+        quiet(&mut c).current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()
+    };
+    #[cfg(windows)]
+    if let Some(c) = direct(cmd) {
+        match start(c) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            started => return started,
+        }
+    }
+    start(shell(cmd))
+}
+
 #[cfg(not(windows))]
 fn shell(cmd: &str) -> Command {
     let mut c = Command::new("sh");
@@ -104,10 +129,7 @@ fn kill_tree(child: &mut Child) {
 
 pub fn run(cmd: &str, cwd: &Path, limit: Duration) -> Ran {
     let started = Instant::now();
-    let mut c = shell(cmd);
-    let child =
-        quiet(&mut c).current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
-    let mut child = match child {
+    let mut child = match spawn(cmd, cwd) {
         Ok(ch) => ch,
         Err(e) => return Ran { code: 127, secs: 0.0, out: format!("cannot start {cmd}: {e}") },
     };
@@ -299,6 +321,15 @@ mod tests {
         let cut = run(slow, Path::new("."), Duration::from_secs(1));
         assert_eq!(cut.code, 124);
         assert!(cut.secs < 15.0, "the child tree kept the pipes open for {} s", cut.secs);
+        #[cfg(windows)]
+        {
+            assert!(direct("cargo test -q").is_some());
+            assert!(direct("cargo build -q && cargo test -q").is_none());
+            assert!(direct("type \"a b.txt\"").is_none());
+            let plain = run("where.exe where", Path::new("."), Duration::from_secs(20));
+            assert_eq!(plain.code, 0, "{}", plain.out);
+            assert!(run("no-such-tool-wisply --x", Path::new("."), Duration::from_secs(20)).code != 0);
+        }
         let v = result("x", &[ok]);
         assert_eq!(line(&v).split(',').next(), Some("OK"));
         let a = json!({"exit": 0, "median_s": 2.0, "runs": 5, "tests": {"passed": 3, "total": 4}});
