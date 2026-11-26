@@ -10,7 +10,7 @@ const MAX_CHARS: usize = 25_000;
 pub fn run(home: &Path, args: &[String]) -> ExitCode {
     match read(home, args) {
         Ok(text) => {
-            println!("{text}");
+            println!("{}", wisply_memory::scrub(&text));
             ExitCode::SUCCESS
         }
         Err(fail) => {
