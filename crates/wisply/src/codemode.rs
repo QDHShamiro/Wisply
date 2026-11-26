@@ -281,7 +281,8 @@ fn for_routine(text: String, ask: &Ask) -> String {
 }
 
 fn emit(home: &Path, text: &str, seen: usize, code: i32, started: Instant) -> ExitCode {
-    let (shown, _) = wisply_core::cap(&home.join("out"), text, "codemode", None, OUT_CHARS);
+    let text = wisply_memory::scrub(text);
+    let (shown, _) = wisply_core::cap(&home.join("out"), &text, "codemode", None, OUT_CHARS);
     println!("{shown}");
     let argv = ["codemode".to_string()];
     let sid = env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();

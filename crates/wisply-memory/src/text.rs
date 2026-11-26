@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
@@ -45,11 +46,12 @@ pub fn stop_word(word: &str) -> bool {
 pub fn scrub(text: &str) -> String {
     let mut out = text.to_string();
     for rx in SECRETS.iter() {
-        out = rx
-            .replace_all(&out, |m: &Captures| {
-                format!("{}[secret]{}", m.get(1).map_or("", |g| g.as_str()), m.get(2).map_or("", |g| g.as_str()))
-            })
-            .into_owned();
+        let hit = rx.replace_all(&out, |m: &Captures| {
+            format!("{}[secret]{}", m.get(1).map_or("", |g| g.as_str()), m.get(2).map_or("", |g| g.as_str()))
+        });
+        if let Cow::Owned(changed) = hit {
+            out = changed;
+        }
     }
     out
 }
@@ -122,6 +124,17 @@ pub fn short(n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn output_secrets_are_scrubbed_and_clean_text_stays_the_same() {
+        let clicked = scrub("opened https://shop.example/pay?token=Zx81kQ9mPa&step=2");
+        assert!(clicked.starts_with("opened https://shop.example/pay?token=[secret]"), "{clicked}");
+        assert_eq!(scrub("license_key: ABCD-1234-EFGH-5678"), "license_key: [secret]");
+        assert_eq!(scrub("pass is in https://bob:hunter22@host/x"), "pass is in https://bob:[secret]@host/x");
+        let plain = "e17 button \"Send\"
+e18 link \"Docs\" -> https://example.com/docs?page=2";
+        assert_eq!(scrub(plain), plain);
+    }
 
     #[test]
     fn text_helpers_match_2x() {
