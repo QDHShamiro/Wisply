@@ -1,11 +1,13 @@
 import { board, type GraphData } from "../api";
 import { ago, enc, go, h, mount } from "../dom";
 import { T } from "../text";
-import { KINDS, forget, packs, seed, tint, type Attrs, type Kind } from "./graph-data";
+import { KINDS, NEON, forget, packs, seed, swell, tint, type Attrs, type Kind } from "./graph-data";
 import { curtain, fit, spotlight } from "./graph-light";
+import { motion } from "./graph-motion";
 import { box, brief, nameless, spread, type Spot } from "./graph-names";
 import { frame, idle } from "./graph-pace";
 import { scatter } from "./graph-place";
+import { sky } from "./graph-sky";
 import { crown, grow, LABEL_MIN, LABEL_SIZE, lift, rgba, stage, veil, type Crown } from "./graph-style";
 
 const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -21,14 +23,18 @@ const LEGEND = 12;
 const CROSS = 0.4;
 const PLATES = 24;
 const CENTER_MS = 350;
+const VIEW_FALLBACK = 640;
 
 export async function graph(view: HTMLElement, project?: string): Promise<() => void> {
   const tones = { label: css("--g-label"), dim: css("--g-dim"), edge: css("--g-edge"), edgeOn: css("--g-edge-on"), back: css("--g-back"), backLine: css("--g-back-line"), shadow: css("--g-shadow") };
   mount(view, h("div", { class: "empty", style: "margin:24px" }, T.graph.loading));
   const data = await board<GraphData>("graph", ...(project ? [project] : []));
-  const { g, colors, names } = seed(data, css("--g-other"));
+  const big = document.documentElement.dataset.theme !== "light";
+  const { g, colors, names } = seed(data, css("--g-other"), big ? NEON : undefined);
   tint(g, scatter(g), colors, rgba(tones.edge), CROSS);
+  const k = big ? swell(g, Math.min(view.clientWidth || VIEW_FALLBACK, view.clientHeight || VIEW_FALLBACK)) : 1;
   forget();
+  const dome = big ? h("canvas", { class: "sky" }) : null;
   const canvas = h("div", { class: "canvas" });
   const upper = h("div", { class: "canvas", style: "pointer-events:none" });
   const info = h("span", { class: "info" });
@@ -71,7 +77,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
       .map((n) => {
         const a = g.getNodeAttributes(n);
         const p = live.graphToViewport(a);
-        return { n, x: p.x, y: p.y, r: live.scaleSize(a.size, ratio), text: a.tag };
+        return { n, x: p.x, y: p.y, r: live.scaleSize(a.size, ratio) * k, text: a.tag };
       });
     const keep = new Set(seen(spots));
     const now = [...keep].join("\u0000");
@@ -109,7 +115,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
     const spots = ranked().map((n) => {
       const a = top.getNodeAttributes(n);
       const p = live.graphToViewport(a);
-      return { n, x: p.x, y: p.y, r: live.scaleSize(a.size, ratio), text: a.tag };
+      return { n, x: p.x, y: p.y, r: live.scaleSize(a.size, ratio) * k, text: a.tag };
     });
     const keep = new Set(seen(spots).slice(0, PLATES));
     top.forEachNode((n, a) => {
@@ -123,7 +129,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
     glow = lit;
     quiet = false;
     if (lit) {
-      over ??= crown(top, upper, tones);
+      over ??= crown(top, upper, tones, k);
       over.setCustomBBox(live.getBBox());
       over.getCamera().setState(live.getCamera().getState());
       plate();
@@ -141,7 +147,8 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
     grid = window.setTimeout(() => live.refresh({ partialGraph: { nodes: [] }, schedule: true }), GRID_MS);
   });
 
-  const swatch = (n: string) => h("span", { class: "swatch", style: `background:${g.getNodeAttribute(n, "color")}` });
+  const dye = (c: string) => `background:${c};--c:${c}`;
+  const swatch = (n: string) => h("span", { class: "swatch", style: dye(g.getNodeAttribute(n, "color")) });
   const link = (n: string) =>
     h(
       "a",
@@ -205,12 +212,14 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
         "a",
         {
           href: "#",
+          class: "team",
+          style: `--c:${p.color}`,
           onclick: (e: Event) => {
             e.preventDefault();
             pick(p.hub);
           },
         },
-        h("span", { class: "swatch", style: `background:${p.color}` }),
+        h("span", { class: "swatch", style: dye(p.color) }),
         p.name,
         h("span", { class: "faint" }, ` · ${p.count.toLocaleString("en-US")}`),
       ),
@@ -314,29 +323,46 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
     h(
       "div",
       { class: "graph" },
-      h("div", { class: "stage" }, canvas, upper, h("div", { class: "tools" }, find, info), h("div", { class: "hint-box" }, T.graph.focus), t1 > t0 ? h("div", { class: "time" }, slider, label) : null),
+      h("div", { class: "stage" }, dome, canvas, upper, h("div", { class: "tools" }, find, info), h("div", { class: "hint-box" }, T.graph.focus), t1 > t0 ? h("div", { class: "time" }, slider, label) : null),
       side,
     ),
   );
   const teams = packs(g, colors, names);
   overview();
 
-  const live = stage(g, canvas, tones);
+  const live = stage(g, canvas, tones, k);
   const filter = curtain(g, live);
   const { top, spot, ranked } = spotlight(g, filter.gone);
   live.addCustomLayerProgram("veil", "veil", veil(rgba(tones.dim), lift(rgba(tones.edge)), () => glow));
   filter.sift(shown);
   place();
   count();
+  const heaven = dome ? sky(dome, live, { ring: css("--g-ring"), dust: css("--g-dust") }) : null;
+  const drive = big
+    ? motion({
+        live,
+        canvas,
+        busy: () => glow,
+        paint: (seconds) => {
+          heaven?.draw(seconds);
+          if (glow) over?.scheduleRender();
+        },
+        settle: name,
+      })
+    : null;
+  heaven?.draw();
   naming = window.setTimeout(name, NAME_MS);
   live.getCamera().on("updated", (state) => {
+    if (drive?.own()) return;
+    drive?.poke();
+    heaven?.draw();
     clearTimeout(naming);
     naming = window.setTimeout(name, NAME_MS);
     if (!glow) return;
     over?.getCamera().setState(state);
     hush(true);
   });
-  const cool = idle(() => (over ??= crown(top, upper, tones)), WARM_MS);
+  const cool = idle(() => (over ??= crown(top, upper, tones, k)), WARM_MS);
   live.on("enterNode", ({ node }) => {
     hover = node;
     light();
@@ -353,6 +379,7 @@ export async function graph(view: HTMLElement, project?: string): Promise<() => 
     clearTimeout(grid);
     clearTimeout(rest);
     clearTimeout(naming);
+    drive?.stop();
     cool();
     over?.kill();
     live.kill();

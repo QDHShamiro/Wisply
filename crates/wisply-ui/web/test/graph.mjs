@@ -2,13 +2,16 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
+globalThis.WebGL2RenderingContext = { UNSIGNED_BYTE: 5121 };
+
 const entry = `
-export { PALETTE, forget, packs, seed, tint } from "./src/views/graph-data";
+export { NEON, PALETTE, forget, packs, seed, swell, tint } from "./src/views/graph-data";
 export { frame, idle } from "./src/views/graph-pace";
 export { box, brief, nameless, spread } from "./src/views/graph-names";
 export { elders, homes, kin, rings, scatter } from "./src/views/graph-place";
 export { curtain, fit, spotlight } from "./src/views/graph-light";
-export { crownOptions, lift, rgba, stageOptions } from "./src/views/graph-style";
+export { LABEL_MIN, crownOptions, lift, rgba, stageOptions } from "./src/views/graph-style";
+export { HALO, reach } from "./src/views/graph-glow";
 export { analyzeStyleDeclaration } from "sigma/types";
 `;
 const out = await build({ stdin: { contents: entry, resolveDir: fileURLToPath(new URL("..", import.meta.url)), loader: "ts" }, bundle: true, format: "esm", write: false, logLevel: "silent" });
@@ -196,12 +199,48 @@ assert.equal(m.brief(long).length, 30);
 assert.ok(m.brief(long).endsWith("…"));
 assert.equal(m.brief(" short "), "short");
 
+const tones = { label: "#fff", dim: "rgba(0,0,0,0.5)", edge: "rgba(255,255,255,0.1)", edgeOn: "#fff", back: "#000", backLine: "#333", shadow: "#000" };
 for (const options of [m.stageOptions, m.crownOptions]) {
-  const o = options({ label: "#fff", dim: "rgba(0,0,0,0.5)", edge: "rgba(255,255,255,0.1)", edgeOn: "#fff", back: "#000", backLine: "#333", shadow: "#000" });
-  assert.notEqual(m.analyzeStyleDeclaration(o.styles.nodes).dependency, "graph-state");
-  assert.notEqual(m.analyzeStyleDeclaration(o.styles.edges).dependency, "graph-state");
-  for (const slow of ["nodeReducer", "edgeReducer", "hideEdgesOnMove", "hideLabelsOnMove"]) assert.ok(!(slow in o.settings), slow);
+  for (const k of [1, m.HALO, 120]) {
+    const o = options(tones, k);
+    assert.notEqual(m.analyzeStyleDeclaration(o.styles.nodes).dependency, "graph-state");
+    assert.notEqual(m.analyzeStyleDeclaration(o.styles.edges).dependency, "graph-state");
+    for (const slow of ["nodeReducer", "edgeReducer", "hideEdgesOnMove", "hideLabelsOnMove"]) assert.ok(!(slow in o.settings), slow);
+    assert.equal(o.settings.labelRenderedSizeThreshold, m.LABEL_MIN * k);
+    assert.equal("nodes" in o.primitives, k > 1);
+    const sized = o.styles.nodes.filter((s) => s.size && s.size.attribute === "bulk");
+    assert.equal(sized.length, k > 1 ? 1 : 0);
+    if (k > 1) assert.equal(sized[0].size.defaultValue, k);
+    for (const rule of [...o.styles.nodes, ...o.styles.edges]) for (const v of Object.values(rule)) assert.notEqual(typeof v, "function");
+  }
 }
+
+assert.equal(new Set(m.NEON).size, m.NEON.length);
+assert.ok(m.NEON.every((c) => /^#[0-9a-f]{6}$/.test(c)));
+assert.equal(m.NEON.length, m.PALETTE.length);
+const bright = m.seed(data, "#888888", m.NEON);
+assert.equal(bright.g.getNodeAttribute("n1", "color"), m.NEON[0]);
+assert.equal(bright.g.getNodeAttribute("n5", "color"), m.NEON[1]);
+assert.equal(m.seed(data, "#888888").g.getNodeAttribute("n1", "color"), m.PALETTE[0]);
+const flat = m.seed(data, "#888888").g;
+flat.forEachNode((_, a) => assert.equal(a.bulk, a.size));
+const swollen = m.seed(data, "#888888", m.NEON).g;
+const grown = m.swell(swollen, 600);
+assert.ok(grown >= m.HALO);
+flat.forEachNode((n, a) => {
+  assert.ok(Math.abs(swollen.getNodeAttribute(n, "bulk") - a.size * grown) < 1e-9);
+  assert.equal(swollen.getNodeAttribute(n, "size"), a.size);
+});
+assert.equal(m.swell(m.seed({ nodes: [], edges: [] }, "#888888").g, 600), 1);
+const dense = m.seed(big, "#888888").g;
+m.scatter(dense);
+const swelled = m.swell(dense, 600);
+assert.ok(swelled > m.HALO);
+assert.ok(swelled <= 400);
+assert.equal(m.reach(1, 600), m.HALO);
+assert.equal(m.reach(1e12, 600), 400);
+assert.ok(m.reach(10000, 600) > m.reach(5000, 600));
+assert.ok(m.reach(10000, 1200) < m.reach(10000, 600));
 
 assert.deepEqual(m.rgba("#fff"), [1, 1, 1, 1]);
 assert.deepEqual(m.rgba("#ff000080").map((v) => Math.round(v * 100)), [100, 0, 0, 50]);

@@ -1,6 +1,7 @@
 import Sigma from "sigma";
 import { DEPTHLESS_STYLES, type RenderParams } from "sigma/types";
 import type { Net } from "./graph-data";
+import { galaxy } from "./graph-glow";
 import { EDGE_FLAGS, GLOW_FLAGS, NODE_FLAGS, type Glow } from "./graph-light";
 
 export const LABEL_MIN = 7;
@@ -81,9 +82,13 @@ function text(t: Tones) {
   return { labelColor: t.label, labelFont: FONT, labelSize: LABEL_SIZE } as const;
 }
 
-function settings() {
+function bulk(k: number) {
+  return k === 1 ? {} : { size: { attribute: "bulk", defaultValue: k } };
+}
+
+function settings(k: number) {
   return {
-    labelRenderedSizeThreshold: LABEL_MIN,
+    labelRenderedSizeThreshold: LABEL_MIN * k,
     labelDensity: 0.35,
     labelGridCellSize: 110,
     minEdgeThickness: 0.8,
@@ -93,10 +98,10 @@ function settings() {
   };
 }
 
-export function rules(t: Tones) {
+export function rules(t: Tones, k = 1) {
   const nodes = [
     DEPTHLESS_STYLES.nodes,
-    { ...text(t), label: { attribute: "tag" }, cursor: "pointer", depth: "nodes" } as const,
+    { ...text(t), ...bulk(k), label: { attribute: "tag" }, cursor: "pointer", depth: "nodes" } as const,
     { whenState: "named", then: { labelVisibility: "visible" } } as const,
     { whenState: "mute", then: { labelVisibility: "hidden" } } as const,
     { whenState: "off", then: { visibility: "hidden" } } as const,
@@ -105,11 +110,12 @@ export function rules(t: Tones) {
   return { nodes, edges };
 }
 
-export function glowRules(t: Tones) {
+export function glowRules(t: Tones, k = 1) {
   const nodes = [
     DEPTHLESS_STYLES.nodes,
     {
       ...text(t),
+      ...bulk(k),
       label: { attribute: "tag" },
       backdropColor: t.back,
       backdropBorderColor: t.backLine,
@@ -126,20 +132,22 @@ export function glowRules(t: Tones) {
   return { nodes, edges };
 }
 
-export function stageOptions(t: Tones) {
-  return { primitives: { depthLayers: ["edges", "nodes", "veil"] as ["edges", "nodes", "veil"] }, customNodeState: { ...NODE_FLAGS }, customEdgeState: { ...EDGE_FLAGS }, styles: rules(t), settings: settings() };
+export function stageOptions(t: Tones, k = 1) {
+  const nodes = k > 1 ? { nodes: galaxy() } : {};
+  return { primitives: { ...nodes, depthLayers: ["edges", "nodes", "veil"] as ["edges", "nodes", "veil"] }, customNodeState: { ...NODE_FLAGS }, customEdgeState: { ...EDGE_FLAGS }, styles: rules(t, k), settings: settings(k) };
 }
 
-export function crownOptions(t: Tones) {
-  return { primitives: { depthLayers: ["edges", "nodes", "pin"] as ["edges", "nodes", "pin"] }, customNodeState: { ...GLOW_FLAGS }, styles: glowRules(t), settings: settings() };
+export function crownOptions(t: Tones, k = 1) {
+  const nodes = k > 1 ? { nodes: galaxy() } : {};
+  return { primitives: { ...nodes, depthLayers: ["edges", "nodes", "pin"] as ["edges", "nodes", "pin"] }, customNodeState: { ...GLOW_FLAGS }, styles: glowRules(t, k), settings: settings(k) };
 }
 
-export function stage(g: Net, canvas: HTMLElement, t: Tones) {
-  return new Sigma(g, canvas, stageOptions(t));
+export function stage(g: Net, canvas: HTMLElement, t: Tones, k = 1) {
+  return new Sigma(g, canvas, stageOptions(t, k));
 }
 
-export function crown(top: Glow, canvas: HTMLElement, t: Tones) {
-  return new Sigma(top, canvas, crownOptions(t));
+export function crown(top: Glow, canvas: HTMLElement, t: Tones, k = 1) {
+  return new Sigma(top, canvas, crownOptions(t, k));
 }
 
 export type Stage = ReturnType<typeof stage>;
