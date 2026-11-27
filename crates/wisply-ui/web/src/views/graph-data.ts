@@ -1,14 +1,16 @@
 import Graph from "graphology";
 import type { GraphData } from "../api";
+import { reach } from "./graph-glow";
 
 export const PALETTE = ["#4f7cff", "#ff3d8b", "#12c99b", "#ff9f1a", "#a259ff", "#ff5c39", "#1bb8f0", "#8bc34a", "#e040fb", "#00bfa5"];
+export const NEON = ["#a066ff", "#19e3ff", "#ffe014", "#ff7a1f", "#2dff8a", "#ff2e6e", "#4d7dff", "#f2f5ff", "#ff4df0", "#9dff3d"];
 export const KINDS = ["note", "project", "session"] as const;
 const FAMILY = "wisply.graph.";
 const CLUSTER_MIN = 3;
 const ROUNDS = 15;
 
 export type Kind = (typeof KINDS)[number];
-export type Attrs = { label: string; tag: string; kind: Kind; group: string; cluster: string; t: number; x: number; y: number; size: number; color: string; deg: number };
+export type Attrs = { label: string; tag: string; kind: Kind; group: string; cluster: string; t: number; x: number; y: number; size: number; bulk: number; color: string; deg: number };
 export type Net = Graph<Attrs>;
 export type Pack = { key: string; name: string; color: string; count: number; hub: string };
 
@@ -69,7 +71,23 @@ function communities(g: Net): Map<string, string> {
   return lab;
 }
 
-export function seed(data: GraphData, other: string): { g: Net; colors: Map<string, string>; names: Map<string, string> } {
+export function swell(g: Net, view: number): number {
+  const x: [number, number] = [Infinity, -Infinity];
+  const y: [number, number] = [Infinity, -Infinity];
+  g.forEachNode((_, a) => {
+    x[0] = Math.min(x[0], a.x);
+    x[1] = Math.max(x[1], a.x);
+    y[0] = Math.min(y[0], a.y);
+    y[1] = Math.max(y[1], a.y);
+  });
+  const k = g.order ? reach(Math.max(x[1] - x[0], y[1] - y[0]), view) : 1;
+  g.forEachNode((_, a) => {
+    a.bulk = a.size * k;
+  });
+  return k;
+}
+
+export function seed(data: GraphData, other: string, palette: readonly string[] = PALETTE): { g: Net; colors: Map<string, string>; names: Map<string, string> } {
   const g: Net = new Graph<Attrs>({ type: "undirected", multi: false, allowSelfLoops: false });
   const deg = new Array<number>(data.nodes.length).fill(0);
   for (const [a, b] of data.edges) {
@@ -78,6 +96,7 @@ export function seed(data: GraphData, other: string): { g: Net; colors: Map<stri
   }
   data.nodes.forEach(([id, label, kind, group, t], i) => {
     const k = kind as Kind;
+    const size = k === "project" ? 3 + Math.sqrt(deg[i]) * 0.5 : 1.2 + Math.sqrt(deg[i]) * 0.5;
     g.mergeNode(id, {
       label: label || id,
       tag: "",
@@ -87,7 +106,8 @@ export function seed(data: GraphData, other: string): { g: Net; colors: Map<stri
       t,
       x: 0,
       y: 0,
-      size: k === "project" ? 3 + Math.sqrt(deg[i]) * 0.5 : 1.2 + Math.sqrt(deg[i]) * 0.5,
+      size,
+      bulk: size,
       color: other,
       deg: deg[i],
     });
@@ -113,7 +133,7 @@ export function seed(data: GraphData, other: string): { g: Net; colors: Map<stri
     if (hub === undefined || a.deg > g.getNodeAttribute(hub, "deg")) hubs.set(a.cluster, n);
   });
   top.forEach(([c], i) => {
-    colors.set(c, PALETTE[i % PALETTE.length]);
+    colors.set(c, palette[i % palette.length]);
     names.set(c, lab ? g.getNodeAttribute(hubs.get(c) as string, "label") : c);
   });
   g.forEachNode((_, a) => {
