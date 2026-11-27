@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use wisply_memory::{Record, Store, Unsummarized, now, project_of_files, titled};
+use wisply_memory::{Record, Store, Unsummarized, now, project_of_work, titled};
 
 use super::handoff;
 use super::learner::{MIN_CHARS, MIN_USERS};
@@ -15,7 +15,9 @@ pub type Seen = HashMap<String, f64>;
 
 fn write(store: &mut Store, row: &Unsummarized) -> Option<i64> {
     let found = handoff::early(Path::new(&row.transcript), MIN_CHARS, MIN_USERS)?;
-    let project = Some(project_of_files(&found.paths)).filter(|p| !p.is_empty()).unwrap_or_else(|| row.project.clone());
+    let project = Some(project_of_work(&found.paths, &found.servers))
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| row.project.clone());
     if project != row.project {
         store.session_project(&row.id, &project).ok()?;
     }

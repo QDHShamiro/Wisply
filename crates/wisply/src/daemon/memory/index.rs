@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use wisply_memory::{Store, claude_dirs};
+use wisply_memory::{Store, claude_dirs, know};
 
 use super::super::{config, game};
 use super::{early, embed, learner, watch};
@@ -88,6 +88,12 @@ pub fn vault(home: &Path) -> PathBuf {
     if own.trim().is_empty() { home.join(VAULT_DIR) } else { PathBuf::from(own.trim()) }
 }
 
+fn families(home: &Path, store: &mut Store) -> Result<(), String> {
+    store.fold_projects(home).map_err(|e| format!("project families: {e}"))?;
+    know(store.known_projects().map_err(|e| format!("project names: {e}"))?);
+    Ok(())
+}
+
 fn pass(
     home: &Path,
     slot: &mut Option<Store>,
@@ -104,12 +110,16 @@ fn pass(
     }
     let Some(store) = slot.as_mut() else { return Ok(()) };
     if force || due(last.claude, EVERY) {
+        families(home, store)?;
         store.index_claude(&claude_dirs(&wisply_proto::user_dir())).map_err(|e| format!("Claude memory index: {e}"))?;
         last.claude = Some(Instant::now());
     }
     if force || due(last.vault, vault_every) {
         let inbox = config::text(&cfg, "vault_inbox");
-        store.index_vault(&vault(home), &inbox).map_err(|e| format!("vault index: {e}"))?;
+        let root = vault(home);
+        store.write_project_pages(&root).map_err(|e| format!("project pages: {e}"))?;
+        store.index_vault(&root, &inbox).map_err(|e| format!("vault index: {e}"))?;
+        store.index_extra(&config::paths(&cfg, "memory_files")).map_err(|e| format!("memory files index: {e}"))?;
         last.vault = Some(Instant::now());
     }
     if let Ok(mut p) = PROBLEM.lock() {

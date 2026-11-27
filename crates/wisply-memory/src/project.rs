@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, RwLock};
+
+use super::family;
 
 const BUILD_FILES: &[&str] = &[
     "pom.xml",
@@ -20,9 +22,11 @@ const BUILD_FILES: &[&str] = &[
 ];
 const MONOREPO_MIN: usize = 3;
 const CACHE_MAX: usize = 8192;
+const MIRROR: [&str; 2] = ["sftp", "server"];
 const SCRATCH: &[&str] = &["AppData", ".claude", ".cache", ".local", "Downloads", ".wisply", ".lighting"];
 
 static NAMES: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static KNOWN: LazyLock<RwLock<Vec<String>>> = LazyLock::new(|| RwLock::new(Vec::new()));
 static MONO: LazyLock<Mutex<HashMap<PathBuf, bool>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn key(p: &Path) -> String {
@@ -99,7 +103,38 @@ fn main_of(root: &Path) -> PathBuf {
     }
 }
 
+fn mirror(p: &Path) -> Option<String> {
+    let parts: Vec<String> = p.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+    parts
+        .windows(MIRROR.len() + 1)
+        .find(|w| w.iter().zip(MIRROR).all(|(a, b)| a.eq_ignore_ascii_case(b)))
+        .map(|w| w[MIRROR.len()].clone())
+        .filter(|n| !n.is_empty())
+}
+
+pub fn know(names: Vec<String>) {
+    if let Ok(mut k) = KNOWN.write() {
+        *k = names;
+    }
+    if let Ok(mut m) = NAMES.lock() {
+        m.clear();
+    }
+}
+
+pub(crate) fn fold(name: String) -> String {
+    if name.is_empty() {
+        return name;
+    }
+    match KNOWN.read() {
+        Ok(k) => family::root(&name, &k),
+        Err(_) => name,
+    }
+}
+
 fn find(p: &Path) -> String {
+    if let Some(profile) = mirror(p) {
+        return profile;
+    }
     match root_of(p) {
         Some(root) => name(&main_of(&root)),
         None if scratch(p, &home()) => String::new(),
@@ -114,7 +149,7 @@ pub fn project_of(cwd: &str) -> String {
     if let Some(known) = NAMES.lock().ok().and_then(|m| m.get(cwd).cloned()) {
         return known;
     }
-    let found = find(Path::new(cwd));
+    let found = fold(find(Path::new(cwd)));
     if let Ok(mut m) = NAMES.lock() {
         if m.len() >= CACHE_MAX {
             m.clear();
@@ -162,5 +197,21 @@ mod tests {
         assert_eq!(project_of(&s(&home().join("Downloads").join("x"))), "");
         assert_eq!(project_of(""), "");
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn server_mirrors_and_known_families_name_the_project() {
+        let s = |p: &Path| p.to_string_lossy().into_owned();
+        let mirror = home().join(".claude").join("skills").join("sftp").join("sftp").join("server").join("famsrv");
+        let file = mirror.join("plugins").join("X").join("config.yml");
+        assert_eq!(super::mirror(&file).as_deref(), Some("famsrv"));
+        assert_eq!(super::mirror(&home().join(".claude").join("skills")), None);
+        assert_eq!(project_of(&s(&file)), "famsrv");
+        know(vec!["FamSrv".into(), "FamSrvStore".into()]);
+        assert_eq!(project_of(&s(&file)), "FamSrv");
+        assert_eq!(fold("FamSrvStore".into()), "FamSrv");
+        assert_eq!(fold("Other".into()), "Other");
+        assert_eq!(project_of(&s(&home().join(".claude"))), "");
+        know(Vec::new());
     }
 }

@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use wisply_memory::{condense, oneline, project_of_files, typed_in};
+use wisply_memory::{condense, oneline, project_of_work, typed_in};
 
 const TAIL_BYTES: u64 = 1_000_000;
 const HEAD_BYTES: u64 = 400_000;
@@ -44,6 +44,7 @@ pub struct Early {
     pub title: String,
     pub body: String,
     pub paths: Vec<String>,
+    pub servers: Vec<String>,
 }
 
 fn lines<'a>(text: &'a str, prefix: &str) -> Vec<&'a str> {
@@ -147,7 +148,7 @@ pub fn for_rotation(path: &Path) -> String {
 pub fn for_compact(path: &Path, here: &str, todos: impl FnOnce(&str) -> Vec<String>) -> String {
     let at = tail_offset(path).unwrap_or(0);
     let Ok(tail) = condense(path, at, Some(TAIL_CHARS)) else { return String::new() };
-    let found = if here.is_empty() { project_of_files(&tail.paths) } else { String::new() };
+    let found = if here.is_empty() { project_of_work(&tail.paths, &tail.servers) } else { String::new() };
     let project = if here.is_empty() { found.as_str() } else { here };
     let text = told(path, at, &tail.text, &tail.title, &todos(project));
     match text.split_once('\n') {
@@ -189,7 +190,8 @@ pub fn early(path: &Path, min_chars: usize, min_users: usize) -> Option<Early> {
         let line = body.remove(at);
         body.insert(0, line);
     }
-    Some(Early { title: tail.title, body: body.join("\n"), paths: tail.paths }).filter(|e| !e.body.is_empty())
+    Some(Early { title: tail.title, body: body.join("\n"), paths: tail.paths, servers: tail.servers })
+        .filter(|e| !e.body.is_empty())
 }
 
 fn file_of(home: &Path, sid: &str) -> Option<PathBuf> {

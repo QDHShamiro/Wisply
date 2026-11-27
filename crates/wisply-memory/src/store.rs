@@ -24,7 +24,7 @@ const BUSY: Duration = Duration::from_secs(15);
 const BUSY_PAUSE: Duration = Duration::from_millis(20);
 const TITLE_CHARS: usize = 200;
 pub(crate) const TASK_CHARS: usize = 300;
-const FILE_SOURCES: &[&str] = &["vault", "claude"];
+const FILE_SOURCES: &[&str] = &["vault", "claude", "files"];
 const SCHEMA: &str = "
 create table if not exists vecs(id integer primary key, v blob);
 create table if not exists notes(id integer primary key, project text, kind text, title text, body text,
@@ -88,7 +88,14 @@ pub struct Note {
 
 impl Note {
     pub fn path(&self) -> Option<&str> {
-        if FILE_SOURCES.contains(&self.source.as_str()) { self.origin.split_once(':').map(|(_, p)| p) } else { None }
+        if !FILE_SOURCES.contains(&self.source.as_str()) {
+            return None;
+        }
+        let path = self.origin.split_once(':').map(|(_, p)| p)?;
+        match path.rsplit_once('#') {
+            Some((file, n)) if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) => Some(file),
+            _ => Some(path),
+        }
     }
 }
 

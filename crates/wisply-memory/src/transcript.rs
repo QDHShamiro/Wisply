@@ -7,7 +7,7 @@ use regex::Regex;
 use serde_json::Value;
 
 use super::asked::asked;
-use super::project::project_of;
+use super::project::{fold, project_of};
 use super::text::scrub;
 
 pub const CHUNK_CHARS: usize = 24_000;
@@ -41,6 +41,8 @@ static DECISION: LazyLock<Regex> = LazyLock::new(|| {
         .expect("decision pattern")
 });
 static FENCE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)```.*?(?:```|$)").expect("fence pattern"));
+static SERVER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"--(?:profile|server)[ =]+([A-Za-z0-9][\w.-]*)").expect("server pattern"));
 static ABSOLUTE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:[A-Za-z]:[\\/]|/)").expect("path pattern"));
 
 #[derive(Debug, Default)]
@@ -49,6 +51,7 @@ pub struct Condensed {
     pub end: u64,
     pub title: String,
     pub paths: Vec<String>,
+    pub servers: Vec<String>,
     pub more: bool,
     pub users: usize,
     pub edits: usize,
@@ -133,13 +136,17 @@ fn said(text: &str, lean: bool) -> String {
     }
 }
 
-fn used(c: &Value, paths: &mut Vec<String>, lean: bool) -> String {
+fn used(c: &Value, paths: &mut Vec<String>, servers: &mut Vec<String>, lean: bool) -> String {
     let name = c.get("name").and_then(Value::as_str).unwrap_or("");
     let input = c.get("input").cloned().unwrap_or(Value::Null);
     let file = ["file_path", "notebook_path", "path"].iter().find_map(|k| input.get(*k)).and_then(Value::as_str);
     if let Some(f) = file.filter(|f| ABSOLUTE.is_match(f)) {
         let times = if EDITS.contains(&name) { EDIT_WEIGHT } else { 1 };
         paths.extend(std::iter::repeat_n(f.to_string(), times));
+    }
+    if name == "Bash" || name == "PowerShell" {
+        let cmd = input.get("command").map(shown).unwrap_or_default();
+        servers.extend(SERVER.captures_iter(&cmd).map(|m| m[1].to_string()));
     }
     if !lean {
         return format!("TOOL {}", tool_line(name, &input));
@@ -155,7 +162,7 @@ fn used(c: &Value, paths: &mut Vec<String>, lean: bool) -> String {
     kept.map(|at| format!("RAN {}", cut(&cmd[at..], LEAN_CMD))).unwrap_or_default()
 }
 
-fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>, style: Style) -> Vec<String> {
+fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>, servers: &mut Vec<String>, style: Style) -> Vec<String> {
     let lean = style == Style::Lean;
     let content = d.get("message").and_then(|m| m.get("content"));
     let mut out = vec![user_line(&asked(d), style)];
@@ -165,7 +172,7 @@ fn pieces(d: &Value, kind: &str, paths: &mut Vec<String>, style: Style) -> Vec<S
     for c in content.and_then(Value::as_array).into_iter().flatten() {
         out.push(match c.get("type").and_then(Value::as_str) {
             Some("text") if kind == "assistant" => said(c.get("text").and_then(Value::as_str).unwrap_or(""), lean),
-            Some("tool_use") => used(c, paths, lean),
+            Some("tool_use") => used(c, paths, servers, lean),
             Some("tool_result") if c.get("is_error").is_some_and(truthy) => {
                 format!("ERROR: {}", cut(&result_text(c), if lean { LEAN_ERROR } else { TOOL_CHARS }))
             }
@@ -220,7 +227,7 @@ pub fn condense_as(path: &Path, offset: u64, limit: Option<usize>, style: Style)
         if !["user", "assistant", "attachment"].contains(&kind) || side {
             continue;
         }
-        let found = pieces(&d, kind, &mut out.paths, style);
+        let found = pieces(&d, kind, &mut out.paths, &mut out.servers, style);
         out.users += usize::from(turn(&d, kind, &found));
         for piece in found {
             if style == Style::Lean && parts.last() == Some(&piece) {
@@ -269,21 +276,35 @@ pub fn chunks_of(text: &str, limit: usize) -> Vec<String> {
     out
 }
 
+fn vote(seen: &mut Vec<(String, usize)>, name: String) {
+    if name.is_empty() {
+        return;
+    }
+    match seen.iter_mut().find(|(n, _)| *n == name) {
+        Some((_, c)) => *c += 1,
+        None => seen.push((name, 1)),
+    }
+}
+
+fn winner(seen: Vec<(String, usize)>) -> String {
+    let best = seen.iter().map(|(_, c)| *c).max().unwrap_or(0);
+    seen.into_iter().find(|(_, c)| *c == best).map(|(n, _)| n).unwrap_or_default()
+}
+
 pub fn project_of_files(paths: &[String]) -> String {
+    project_of_work(paths, &[])
+}
+
+pub fn project_of_work(paths: &[String], servers: &[String]) -> String {
     let mut seen: Vec<(String, usize)> = Vec::new();
     for f in paths {
         let Some(parent) = Path::new(f).parent().filter(|_| Path::new(f).is_absolute()) else { continue };
-        let name = project_of(&parent.to_string_lossy());
-        if name.is_empty() {
-            continue;
-        }
-        match seen.iter_mut().find(|(n, _)| *n == name) {
-            Some((_, c)) => *c += 1,
-            None => seen.push((name, 1)),
-        }
+        vote(&mut seen, project_of(&parent.to_string_lossy()));
     }
-    let best = seen.iter().map(|(_, c)| *c).max().unwrap_or(0);
-    seen.into_iter().find(|(_, c)| *c == best).map(|(n, _)| n).unwrap_or_default()
+    for name in servers {
+        vote(&mut seen, fold(name.clone()));
+    }
+    winner(seen)
 }
 
 #[cfg(test)]
@@ -333,6 +354,35 @@ EDIT C:/x/a.rs
 ERROR: boom token: [secret]"
         );
         assert_eq!((lean.users, lean.edits), (1, 1));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn shell_commands_name_their_server_profile() {
+        let dir = std::env::temp_dir().join(format!("ltm-servers-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let lines = [
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"python sftp.py get x.yml --profile alpha-srv"}}]}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"sftp.py worker status --server=alpha-srv"}}]}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"C:/x/a.rs","command":"--profile nope"}}]}}"#,
+        ];
+        let path = dir.join("t.jsonl");
+        fs::write(
+            &path,
+            lines.join(
+                "
+",
+            ) + "
+",
+        )
+        .unwrap();
+        for style in [Style::Full, Style::Lean] {
+            let c = condense_as(&path, 0, None, style).unwrap();
+            assert_eq!(c.servers, vec!["alpha-srv".to_string(), "alpha-srv".to_string()]);
+        }
+        assert_eq!(project_of_work(&[], &["alpha-srv".to_string()]), "alpha-srv");
+        assert_eq!(project_of_work(&[], &[]), "");
         let _ = fs::remove_dir_all(&dir);
     }
 
