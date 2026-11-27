@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde_json::{Value, json};
 use wisply_memory::{
-    Due, NewNote, Record, Store, WIKI_KINDS, chunks_of, condense, now, oneline, points, project_of_files, render_page,
+    Due, NewNote, Record, Store, WIKI_KINDS, chunks_of, condense, now, oneline, points, project_of_work, render_page,
     scrub, similar, template, titled, write_draft, write_session,
 };
 
@@ -257,7 +257,8 @@ fn learn(home: &Path, store: &mut Store, all: &[Provider], words: &[Vec<String>]
     }
     let began = now();
     let c = condense(path, row.offset, None).map_err(|e| Stop::Fail(format!("transcript: {e}")))?;
-    let project = Some(project_of_files(&c.paths)).filter(|p| !p.is_empty()).unwrap_or_else(|| row.project.clone());
+    let project =
+        Some(project_of_work(&c.paths, &c.servers)).filter(|p| !p.is_empty()).unwrap_or_else(|| row.project.clone());
     let db = |e: wisply_memory::DbError| Stop::Fail(format!("memory.db: {e}"));
     if project != row.project {
         store.session_project(&row.id, &project).map_err(db)?;

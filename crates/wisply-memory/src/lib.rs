@@ -2,11 +2,14 @@ mod asked;
 mod bench;
 mod board;
 mod expand;
+mod extra;
+mod family;
 mod growth;
 mod learner;
 mod lessons;
 mod list;
 mod nindex;
+mod page;
 mod pages;
 mod project;
 pub mod projects;
@@ -26,6 +29,7 @@ pub use bench::{
 };
 pub use board::{Card, Graph, Node, Run, links};
 pub use expand::{near, stem_word};
+pub use family::root as family_root;
 pub use growth::DayCount;
 pub use learner::{Due, Record, Unsummarized, points, titled};
 pub use lessons::Lesson;
@@ -34,12 +38,14 @@ pub use list::{
     WAITS, prio_of, valid,
 };
 pub use pages::{WIKI_KINDS, render as render_page, safe_name, template, write_draft, write_session};
-pub use project::{project_of, root_of};
+pub use project::{know, project_of, root_of};
 pub use rank::{mentions, snippet, terms, words};
 pub use start::{Counts, DRAFTS_MAX, Session};
 pub use store::{Hit, NewNote, Note, Store, VEC_DIM, date, day, now};
 pub use text::{fact, fts_query, oneline, scrub, short, similar, stop_word};
-pub use transcript::{CHUNK_CHARS, Condensed, Style, chunks, chunks_of, condense, condense_as, project_of_files};
+pub use transcript::{
+    CHUNK_CHARS, Condensed, Style, chunks, chunks_of, condense, condense_as, project_of_files, project_of_work,
+};
 pub use uses::{Origin, Use, agent_of};
 pub use vault::{Page, claude_dirs, parse as parse_page};
 pub use wiki::{Draft, accept as accept_draft, drafts, drop_draft, rel_path};

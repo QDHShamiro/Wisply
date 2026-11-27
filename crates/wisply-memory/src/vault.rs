@@ -103,7 +103,7 @@ pub fn parse(text: &str, rel: &str, claude: bool, inbox: &str) -> Page {
     Page { project: project_of_rel(rel, &meta), kind: kind_of(rel, inbox), title, body: body.to_string() }
 }
 
-fn walk(dir: &Path, rel: &str, out: &mut Vec<(PathBuf, String)>) {
+pub(crate) fn walk(dir: &Path, rel: &str, out: &mut Vec<(PathBuf, String)>) {
     let Ok(entries) = fs::read_dir(dir) else { return };
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
@@ -136,7 +136,7 @@ fn files(base: &Path, claude: bool) -> Vec<(PathBuf, String)> {
     out
 }
 
-fn mtime(p: &Path) -> Option<f64> {
+pub(crate) fn mtime(p: &Path) -> Option<f64> {
     fs::metadata(p).ok()?.modified().ok()?.duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs_f64())
 }
 

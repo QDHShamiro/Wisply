@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 use wisply_core::Fail;
@@ -72,6 +72,7 @@ fn defaults() -> Map<String, Value> {
         ("models_dir", json!("")),
         ("vault", json!("")),
         ("vault_inbox", json!("Inbox")),
+        ("memory_files", json!("")),
         ("update", json!("auto")),
         ("agents", json!(true)),
         ("agents_resume", json!(true)),
@@ -125,6 +126,23 @@ pub fn text(cfg: &Map<String, Value>, key: &str) -> String {
         Some(Value::Null) | None => String::new(),
         Some(other) => other.to_string(),
     }
+}
+
+pub fn paths(cfg: &Map<String, Value>, key: &str) -> Vec<PathBuf> {
+    let listed: Vec<String> = match cfg.get(key) {
+        Some(Value::Array(items)) => items.iter().filter_map(Value::as_str).map(String::from).collect(),
+        Some(Value::String(s)) => s.split([';', '\n']).map(String::from).collect(),
+        _ => Vec::new(),
+    };
+    listed
+        .iter()
+        .map(|p| p.trim().trim_matches('"'))
+        .filter(|p| !p.is_empty())
+        .map(|p| match p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")) {
+            Some(rest) => wisply_proto::user_dir().join(rest),
+            None => PathBuf::from(p),
+        })
+        .collect()
 }
 
 pub fn payload(home: &Path) -> Value {
