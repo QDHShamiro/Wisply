@@ -30,6 +30,8 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   `--unknown clear` empties the list, and a successful `--teach` removes the sentence. `--dry` never records.
 
 ### Fixed
+- `js` and `open` answer at once when the page shows `alert`, `confirm`, `prompt` or a leave-page dialog (the
+  dialog and `wisply dialog accept|dismiss`), instead of waiting 15 to 35 s for a timeout. `click` already did.
 - `listen` without a speech-to-text service names `--local` first (on this PC, no key, `wisply local get --only asr`
   once), then the Groq key or a LocalAI URL.
 - `js` with `ReferenceError: x is not defined` and no backtick left in the code says the shell ate the backticks or

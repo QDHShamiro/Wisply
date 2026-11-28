@@ -153,4 +153,4 @@ async function guard(tabId, what) {
   return tab;
 }
 
-export { trunc, blockedHost, risky, FRAME_REF, tabOf, guard, LOAD_MS, LOADING_WAIT_MS, PAGE_FILES };
+export { trunc, blockedHost, risky, FRAME_REF, tabOf, guard, withDialog, LOAD_MS, LOADING_WAIT_MS, PAGE_FILES };
