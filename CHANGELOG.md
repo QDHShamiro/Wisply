@@ -30,6 +30,8 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   `--unknown clear` empties the list, and a successful `--teach` removes the sentence. `--dry` never records.
 
 ### Fixed
+- `listen` without a speech-to-text service names `--local` first (on this PC, no key, `wisply local get --only asr`
+  once), then the Groq key or a LocalAI URL.
 - `js` with `ReferenceError: x is not defined` and no backtick left in the code says the shell ate the backticks or
   `$names` and names '...' quoting or `js --file`; `tabs -f <number>` explains that tabs go by ref (`t3`) or title.
 - `<cmd> --help` on a command the client runs (`uninstall`, `setup`, `doctor`, `update`) prints its help and never
