@@ -1,7 +1,9 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use wisply_core::{Call, Fail, Flag, OUT_CHARS, ago, built_later, listing, parse, stats, unknown, wants_help};
+use wisply_core::{
+    Call, Fail, Flag, INTERNAL, OUT_CHARS, ago, built_later, listing, parse, same, stats, unknown, wants_help,
+};
 
 use super::ctx::Ctx;
 use super::{Daemon, Out, VERSION, config, media, route, web};
@@ -44,6 +46,7 @@ cleanup done [--quiet]   keep [t]   config cleanup on|off
 system  status   channels   stop   abort   config [key value]   log [n] | log stats [n]   version
         wait ci [--pr N|--branch B|--sha S] [--repo o/r] [--timeout 30m] (one green/red line)   wait until \"<command>\" [--every 5s --timeout 10m]
         more <ref> (a squeezed tool output in full, --lines a-b, --grep \"word|other\")
+        squeeze <file> | <command> 2>&1 | wisply squeeze (keeps the lines of a long output that matter, the rest goes to a file)
         peek <file|folder> ... [--head 10] [--outline] (size, lines and read advice for many files in one call, before reading them)
         progress [<percent> | <done>/<total>] [\"what you are doing\"] | progress show [--color] [--ascii] | progress clear (how far the task is, shown in the status line; plan tools are noted by themselves)
         call ask \"<question>\" [--choices ja,nein] [--wait 300] (rings the user free via ntfy, blocks until the answer, prints it) | call notice \"<text>\" | call away on|off | call briefing | call setup | call hook-config (a free way for any AI to call the user, help: call help)
@@ -55,6 +58,11 @@ system  status   channels   stop   abort   config [key value]   log [n] | log st
         think <step> (finds, fixes and proves improvements without AI; wisply think help lists the steps)
         headless [start|stop|status|install] (a browser without a window for servers and CI; install fetches Chrome for Testing)
         update [--check|--plugins|--rollback] (installs the newest release and the Claude/Codex plugin by itself in the background; config update auto|notify|off)
+        setup [--manual] [--register] [browser]   install <app>   uninstall [--purge] (setup: first run on a PC, the daemon, the browser extension and the MCP entry; install adds Wisply to an AI app: claude-desktop, codex, cursor, gemini, vscode, windsurf, cline, roo, lmstudio, antigravity; the user runs install and uninstall in a terminal)
+        doctor [--fix] | doctor ai [<app>] [--fix|--undo] (checks the install, tools and AI apps; --fix repairs what it can)
+        pupil hear <file> [--only speech|sound] | pupil watch|info|captions <YouTube link> | pupil chat|ask|status|stop (local models for video, sound and chat, nothing leaves the PC; wisply pupil lists every part)
+        lint|safe \"<prompt>\" [--log] | lint --list (words in a prompt that trip AI filters)   review|analyze \"<goal>\" [--file f] (ideas from a local model only)
+        statusline [on [--force] | off | status | set <segment> on|off | preview] (the Claude Code status line: branch, PR, tokens, limits, task)
         pc (checks this PC: score and the 3 biggest slowdowns; fix <n>|all, clean [--dry], startup [off|on <n>], game, afk|play|auto, net [host], disk, updates, on|off, log [n])
         insight | insight add \"title | why | proof\" | insight list | insight sessions (reads the command log of AI sessions: errors, slow commands, token eaters, lessons; Wisply apps and one-session loops are named apart; each real finding goes to the user as a proposal in wisply ui under Improvements)
         agents [--all] [--json] (every Claude session: running, waiting, done, limit, tokens, cost estimate; resumes limit-stopped background sessions once after the reset)
@@ -84,9 +92,13 @@ pub fn used(ctx: &mut Ctx, argv: &[String]) -> Vec<String> {
 }
 
 pub fn run_one(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<(Out, String), Fail> {
-    let call = parse(argv);
+    let mut call = parse(argv);
     if call.name.is_empty() {
         return Err(Fail::hint("no command", "wisply help"));
+    }
+    if let Some(real) = same(&call.name) {
+        ctx.note(&format!("{} is called {real} in wisply, ran that (use {real} next time)", call.name));
+        call.name = real.into();
     }
     let asks_help = matches!(call.name.as_str(), "help" | "-h" | "--help");
     if !asks_help && wants_help(argv).is_some() {
@@ -155,15 +167,29 @@ fn old_client() -> Fail {
     )
 }
 
-fn help(name: Option<&str>) -> Result<String, Fail> {
-    let Some(name) = name.map(str::to_lowercase).filter(|n| !n.is_empty()) else { return Ok(HELP.into()) };
-    if !built_later(&name) {
-        return Err(unknown(&name));
+pub fn help(name: Option<&str>) -> Result<String, Fail> {
+    let Some(asked) = name.map(str::to_lowercase).filter(|n| !n.is_empty()) else { return Ok(HELP.into()) };
+    let real = same(&asked);
+    let name = real.unwrap_or(&asked);
+    if !built_later(name) {
+        return Err(unknown(name));
     }
-    if name == "codemode" {
-        return Ok(crate::codemode::HELP.trim_end().into());
-    }
-    Ok(about(&name).unwrap_or_else(|| HELP.into()))
+    let text = if name == "codemode" {
+        crate::codemode::HELP.trim_end().into()
+    } else if INTERNAL.contains(&name) {
+        format!(
+            "{name} is started by Wisply itself (daemon, browser host, voice, launcher); there is nothing to run by hand"
+        )
+    } else {
+        about(name).unwrap_or_else(|| HELP.into())
+    };
+    Ok(match real {
+        Some(real) => format!(
+            "{asked} is called {real} in wisply:
+{text}"
+        ),
+        None => text,
+    })
 }
 
 fn about(name: &str) -> Option<String> {

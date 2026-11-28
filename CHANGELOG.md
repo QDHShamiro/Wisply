@@ -8,6 +8,13 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- Names from other browser tools run the Wisply command (`screenshot`, `navigate`, `goto`, `evaluate_script`,
+  `press_key`, Playwright and Chrome DevTools MCP names like `browser_take_screenshot`, `wisply_<cmd>`) with a
+  `! screenshot is called shot in wisply, ran that` note; unclear words (`exec`, `shell`, `hear`, `new_tab`, `fix`,
+  `init`, `restart`) get a hint naming the right command.
+- `wisply help <cmd>` knows every command, also the client ones (`setup`, `doctor`, `pupil`, `lint`, `review`,
+  `statusline`, `insight`, `squeeze`). Code mode: `wisply.open(url)`, `wisply.click("Merge", {f: "merged"})`.
+  MCP runs `pupil`, `lint`, `safe`, `review` and `analyze` too.
 - `wisply insight` reads the command log and prints suspicious commands (high error rate, slow, token eaters, extra
   snaps), repeated errors, lessons and open proposals, for any AI. `insight sessions` adds the costliest Claude
   sessions, `insight add "title | why | proof"` files a proposal (a proof is required) and `insight list` shows the
@@ -20,6 +27,8 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   `--unknown clear` empties the list, and a successful `--teach` removes the sentence. `--dry` never records.
 
 ### Fixed
+- `<cmd> --help` on a command the client runs (`uninstall`, `setup`, `doctor`, `update`) prints its help and never
+  runs it; `exec` no longer hints `expect`.
 - A local model counts as busy only while a request really runs (`local-url <asr|llm> begin|done`, capped at 180 s),
   not for 10 s after any use, so speech-to-text followed by the language model no longer answers "busy".
 - The local RAM limit follows the installed RAM (RAM/16, between 1 and 3 GB) unless `local_ram_mb` is set; the size
