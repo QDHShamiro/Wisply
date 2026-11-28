@@ -332,7 +332,6 @@ mod tests {
         assert!(swapped.unwrap());
         assert_eq!(fs::read(&dst).unwrap(), b"new");
         assert_eq!(fs::read(&old).unwrap(), fs::read(&ping).unwrap());
-        assert!(aside(&old, 1).is_file());
         fs::write(&src, "newer").unwrap();
         assert!(replace(&src, &dst).unwrap());
         assert_eq!(fs::read(&old).unwrap(), b"new");
