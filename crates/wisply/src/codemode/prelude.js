@@ -238,7 +238,7 @@
     return new ShellCall("sh", { parts }, label(parts));
   };
 
-  const wisply = (first, ...rest) => {
+  const command = (first, ...rest) => {
     if (tagged(first)) {
       const parts = pieces(first.raw, rest);
       return new WisplyCall("wisply", { parts }, "wisply " + label(parts));
@@ -249,6 +249,23 @@
     }
     return new WisplyCall("wisply", { line: str(first) }, "wisply " + str(first).slice(0, 160));
   };
+
+  const plain = (v) => !!v && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype;
+  const flag = (k) => (k.length === 1 ? "-" : "--") + k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+  const flags = (o) =>
+    Object.entries(o).flatMap(([k, v]) =>
+      v === false || v === null || v === undefined ? [] : v === true ? [flag(k)] : [flag(k), str(v)],
+    );
+  const verb = (name) => (...given) => {
+    const opts = given.length && plain(given[given.length - 1]) ? given.pop() : null;
+    const real = name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+    return command([real, ...given.map(str), ...(opts ? flags(opts) : [])]);
+  };
+  const OWN_KEYS = new Set(["apply", "bind", "toString", "constructor", "prototype", "length", "name", "then"]);
+  const wisply = new Proxy(command, {
+    get: (target, key, recv) =>
+      typeof key !== "string" || OWN_KEYS.has(key) ? Reflect.get(target, key, recv) : verb(key),
+  });
 
   const read = (path) => call("read", { path: str(path) });
   const write = (path, text) => call("write", { path: str(path), text: str(text) }).then(() => undefined);

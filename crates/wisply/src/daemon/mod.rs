@@ -200,6 +200,7 @@ pub use memory::bench::run as memory_bench;
 pub use memory::chat::api_key;
 pub use routines::{PRACTICE_ROUNDS, script_check, script_code, script_project};
 pub use squeeze::{MAX_BYTES as SQUEEZE_MAX_BYTES, USAGE as SQUEEZE_USAGE};
+pub(crate) use system::help as help_for;
 pub use web::installed_browsers;
 
 pub fn may_serve() -> bool {

@@ -232,3 +232,26 @@ const bad = await $`exit 4`.nothrow();
     assert_eq!(shared.finished.load(std::sync::atomic::Ordering::SeqCst), 6);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn wisply_commands_can_be_called_by_name_like_agents_write_them() {
+    let (_, seen) = run_for(
+        "await wisply.open('example.com'); await wisply.click('Merge', {f: 'merged', yes: true}); \
+         await wisply.extReload(); await wisply.snap(); await wisply.call('ask', 'ok?'); \
+         await wisply`tabs`; typeof wisply.then",
+        Duration::from_secs(20),
+    );
+    let argv: Vec<&str> = seen.iter().map(String::as_str).collect();
+    assert_eq!(
+        argv,
+        [
+            r#"wisply {"argv":["open","example.com"]}"#,
+            r#"wisply {"argv":["click","Merge","-f","merged","--yes"]}"#,
+            r#"wisply {"argv":["ext-reload"]}"#,
+            r#"wisply {"argv":["snap"]}"#,
+            r#"wisply {"argv":["call","ask","ok?"]}"#,
+            r#"wisply {"parts":[{"raw":"tabs"}]}"#,
+        ]
+    );
+    assert_eq!(value("typeof wisply.then + ' ' + typeof wisply.bind"), "undefined function");
+}

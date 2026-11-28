@@ -16,6 +16,7 @@ Calls (all return promises; start at once, run up to 8 in parallel):
     result: .stdout .stderr .exitCode .ok
   await wisply`snap -f login`              any wisply command, result is its text
     also wisply("open", url) / wisply(["recall", words]); .nothrow() -> {ok, code, out}
+    or by name: wisply.open(url), wisply.click("Merge", {f: "merged", yes: true}), wisply.recall("build")
   await read(path)   await write(path, text)   await edit(path, from, to, {all: true})
   await glob("src/**/*.rs")                 list of paths
   await sleep(ms)   setTimeout   console.log   shell   os   cwd
