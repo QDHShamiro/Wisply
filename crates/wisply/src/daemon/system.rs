@@ -142,14 +142,27 @@ pub fn run_one(d: &Daemon, ctx: &mut Ctx, argv: &[String]) -> Result<(Out, Strin
         }
         _ if asks_help => help(call.pos.first().map(String::as_str))?,
         _ => {
+            let again = call.flags.remove(super::repeat::AGAIN).is_some();
+            let key = super::repeat::key(&ctx.sid, argv);
+            if !again && let Some(fail) = super::repeat::stuck(&key, &call.name, call.pos.first().map(String::as_str)) {
+                return Err(fail);
+            }
             let out = match route::route(d, ctx, &call) {
-                Ok(out) => out,
+                Ok(out) => {
+                    super::repeat::ran(key, None);
+                    out
+                }
                 Err(fail) => match super::brain::retry(d, ctx, &call, &fail) {
                     Some((out, used)) => {
+                        super::repeat::ran(key, None);
                         ctx.retried = Some(used);
                         out
                     }
-                    None => return Err(super::brain::hint_for(d, ctx, &call, fail)),
+                    None => {
+                        let fail = super::brain::hint_for(d, ctx, &call, fail);
+                        super::repeat::ran(key, Some(&fail));
+                        return Err(fail);
+                    }
                 },
             };
             return Ok((route::with_view(d, ctx, &call, out), call.name));

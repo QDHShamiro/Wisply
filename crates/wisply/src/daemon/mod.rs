@@ -21,6 +21,7 @@ pub(crate) mod memory;
 mod pc;
 mod phone;
 mod record;
+mod repeat;
 mod research;
 mod route;
 mod routines;
