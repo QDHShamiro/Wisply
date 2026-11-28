@@ -27,6 +27,8 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
   `--unknown clear` empties the list, and a successful `--teach` removes the sentence. `--dry` never records.
 
 ### Fixed
+- `js` with `ReferenceError: x is not defined` and no backtick left in the code says the shell ate the backticks or
+  `$names` and names '...' quoting or `js --file`; `tabs -f <number>` explains that tabs go by ref (`t3`) or title.
 - `<cmd> --help` on a command the client runs (`uninstall`, `setup`, `doctor`, `update`) prints its help and never
   runs it; `exec` no longer hints `expect`.
 - `uninstall help`, `uninstall -h --purge` and `doctor --fix -h` print the help too; a lone `help` word or `-h`

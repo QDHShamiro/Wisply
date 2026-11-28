@@ -317,7 +317,7 @@ pub fn js(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
     if code.trim().is_empty() {
         return Err(Fail::hint("js needs code", "wisply js \"document.title\" or wisply js --file script.js"));
     }
-    out(d, ctx, "js", obj(json!({"code": code})), 25.0, 200)
+    out(d, ctx, "js", obj(json!({"code": &code})), 25.0, 200).map_err(|fail| super::hints::js(fail, &code))
 }
 
 fn reason(e: &std::io::Error) -> String {
@@ -406,7 +406,7 @@ pub fn tabs(d: &Daemon, ctx: &mut Ctx, c: &Call) -> Result<String, Fail> {
             .collect();
         let best = best_only(&rows);
         if best.is_empty() {
-            return Err(Fail::hint(format!("no tab matches \"{f}\""), "wisply tabs --all"));
+            return Err(Fail::hint(format!("no tab matches \"{f}\""), super::hints::tab_filter(f)));
         }
         text = best.join("\n");
     }

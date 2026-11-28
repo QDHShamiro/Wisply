@@ -2,6 +2,7 @@ mod clean;
 mod cmds;
 mod data;
 mod entity;
+mod hints;
 mod html;
 pub mod keys;
 mod launch;
