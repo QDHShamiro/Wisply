@@ -8,6 +8,9 @@ and `lighting.mcpb`, from 3.0.0 `wisply.exe`, `wisply-macos`, `wisply-linux-x64`
 ## [Unreleased]
 
 ### Added
+- A click, type or fill that missed (`nothing matches "Mum"`) three times in a row in one session within 10 minutes
+  answers at once with a hint instead of waiting again; `--again` runs it anyway, a success resets it. One session
+  looped `click "Mum"` 351 times at ~24 s each.
 - Names from other browser tools run the Wisply command (`screenshot`, `navigate`, `goto`, `evaluate_script`,
   `press_key`, Playwright and Chrome DevTools MCP names like `browser_take_screenshot`, `wisply_<cmd>`) with a
   `! screenshot is called shot in wisply, ran that` note; unclear words (`exec`, `shell`, `hear`, `new_tab`, `fix`,
