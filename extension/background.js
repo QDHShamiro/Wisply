@@ -3,6 +3,7 @@ import * as T from "./tabs.js";
 import * as A from "./actions.js";
 import { mediaAudio, shot, frames } from "./media.js";
 import { SETTLE_MAX_MS, stillBusy, withKeys, snap, text, table, wait, expect } from "./read.js";
+import { withDialog } from "./pagecall.js";
 import { net, webmcp, pageExtras, js, fetchJson, upload, dialog, downloads, viewport, consoleCmd, dismiss } from "./tools.js";
 
 const HOST = "dev.qdhshamiro.wisply";
@@ -110,7 +111,18 @@ async function openTab(a, tab) {
   lap("tab");
   await C.attach(tabId).catch(() => {});
   lap("attach");
-  const nav = await T.navigate(tabId, a.url, LOAD_MS, LOADING_WAIT_MS);
+  const going = T.navigate(tabId, a.url, LOAD_MS, LOADING_WAIT_MS);
+  going.catch(() => {});
+  let nav;
+  try {
+    nav = await withDialog(tabId, going, LOAD_MS + LOADING_WAIT_MS + 5000);
+  } catch (e) {
+    if (!C.dialog(tabId)) nav = await going;
+    else {
+      const t = await chrome.tabs.get(tabId);
+      return header(tabId, { title: t.title, url: t.url }) + "\n" + e.message;
+    }
+  }
   lap("load");
   const calm = await page(tabId, "act.settle", [300, SETTLE_MAX_MS, 0, 150], 0, 8000).catch(() => null);
   lap("settle");

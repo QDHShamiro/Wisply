@@ -13,6 +13,7 @@ const EXTRA: &[(&str, &str)] = &[
     ("/frame", "<title>Frame</title><button onclick=\"this.textContent='Frame clicked'\">Frame button</button>"),
     ("/second", "<title>Second</title><h1>Second page</h1><p>Opened in a new tab.</p>"),
     ("/quiet", "<title>Quiet</title><p>Only text here, nothing to click.</p>"),
+    ("/alert", "<title>Alert page</title><p>Alert page</p><script>alert('on load')</script>"),
     (
         "/finder",
         "<title>Finder</title><form action=/find method=get role=search><input name=q aria-label=Search></form>",

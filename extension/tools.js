@@ -1,6 +1,7 @@
 import * as C from "./cdp.js";
 import * as T from "./tabs.js";
 import { page, guard, tabOf, trunc } from "./actions.js";
+import { withDialog } from "./pagecall.js";
 
 async function net(a, tab) {
   const tabId = await tabOf(tab);
@@ -43,7 +44,9 @@ async function js(a, tab) {
   await guard(tabId, "js");
   await C.attach(tabId);
   const replMode = /\bawait\b/.test(a.code) && !/\breturn\b/.test(a.code);
-  const r = await C.send(tabId, "Runtime.evaluate", { expression: wrap(a.code), awaitPromise: true, returnByValue: true, userGesture: true, replMode, timeout: 15000 });
+  const run = C.send(tabId, "Runtime.evaluate", { expression: wrap(a.code), awaitPromise: true, returnByValue: true, userGesture: true, replMode, timeout: 15000 });
+  run.catch(() => {});
+  const r = await withDialog(tabId, run, 17000);
   if (r.exceptionDetails) {
     const d = r.exceptionDetails;
     throw new Error("js: " + String((d.exception && d.exception.description) || d.text).split("\n")[0]);

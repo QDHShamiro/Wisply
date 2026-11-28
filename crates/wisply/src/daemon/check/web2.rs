@@ -142,6 +142,10 @@ pub fn browser(r: &mut Run, srv: &Server, decoy: &str) {
     r.step("click opens confirm()", &["click", "Delete all", "--yes"], |o, _| o.contains("dialog"));
     r.step("accept dialog", &["dialog", "accept"], |o, e| !e && o.contains("accepted"));
     r.step("dialog result", &["expect", "Deleted"], ok);
+    r.step("js alert answers at once", &["js", "alert('from js'); 1"], |o, _| {
+        o.contains("dialog open") && o.contains("from js")
+    });
+    r.step("dismiss js alert", &["dialog", "dismiss"], ok);
     r.step("open modal (diff)", &["click", "Open modal"], |o, e| !e && o.contains("Close modal"));
     r.step("snap scopes to modal", &["snap"], |o, _| {
         o.contains("modal") && o.contains("Close modal") && !o.contains("Sign in")
@@ -247,6 +251,10 @@ pub fn browser(r: &mut Run, srv: &Server, decoy: &str) {
     r.step("no tab match is an error", &["tabs", "-f", "zzq-no-such-tab"], |o, e| e && o.contains("no tab matches"));
     let thrown = r.step("throwaway tab", &["open", &at("second"), "--new"], |o, e| !e && o.contains("Second"));
     let tref = tab_ref(&thrown);
+    r.step("open answers at once on a load alert", &["open", &at("alert")], |o, _| {
+        o.contains("dialog open") && o.contains("on load")
+    });
+    r.step("dismiss load alert", &["dialog", "dismiss"], ok);
     r.step("open a slow page", &["open", &at("slow")], |o, e| {
         !e && o.contains("Slow page") && o.contains("(still loading)")
     });
