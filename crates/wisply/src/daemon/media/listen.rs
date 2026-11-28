@@ -28,7 +28,7 @@ const LIVE_DEFAULT_S: f64 = 60.0;
 const LIVE_MIN_S: f64 = 5.0;
 const EMPTY_BYTES: usize = 1000;
 const NO_SPEECH: &str = "(no speech: only music or silence; on-screen text: wisply frames)";
-const NO_ASR: &str = "set GROQ_API_KEY (free key: console.groq.com/keys) or wisply config whisper_api <LocalAI url>";
+const NO_ASR: &str = "wisply listen <link|file> --local (on this PC, no key; once: wisply local get --only asr, default: wisply config audio local), or set GROQ_API_KEY (free key: console.groq.com/keys) or wisply config whisper_api <LocalAI url>";
 const ASK_AUDIO: &str = "Answer the question about this audio. Quote what is said with m:ss times where it helps. Plain text, short.\nQuestion: ";
 const ASK_TEXT: &str =
     "Answer the question about this transcript (lines start with m:ss). Plain text, short, cite times.\nQuestion: ";
